@@ -27,7 +27,14 @@ jobs:
           set -euo pipefail
           while IFS= read -r -d '' script; do
             sh -n "$script"
-          done < <(find . -type f \( -name '*.init' -o -name '*.cgi' -o -name '*.hotplug' -o -name '*.defaults' -o -name 'audiowrtctl' -o -name 'audiowrt-firstboot' -o -name 'audiowrt-provision' -o -name 'select-audio-output' -o -name 'audiowrt-storage' -o -name 'audiowrt-extensions' \) -print0)
+          done < <(find \
+            audiowrt-core \
+            audiowrt-usb-audio \
+            audiowrt-storage \
+            audiowrt-extensions \
+            audiowrt-mpd \
+            audiowrt-airplay \
+            -type f -perm /111 -print0)
 
       - name: Validate OpenWrt package metadata
         shell: bash
