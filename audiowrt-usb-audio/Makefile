@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-usb-audio
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_LICENSE:=GPL-2.0-only
 
 include $(INCLUDE_DIR)/package.mk
@@ -10,7 +10,7 @@ define Package/audiowrt-usb-audio
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT USB audio output manager
-  DEPENDS:=+audiowrt-core +kmod-usb-audio +alsa-utils
+  DEPENDS:=+audiowrt-core +kmod-usb-audio +alsa-lib
 endef
 
 define Package/audiowrt-usb-audio/description

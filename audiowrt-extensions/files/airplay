@@ -1,0 +1,25 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+case "${1:-}" in
+	configure)
+		name="$(uci -q get audiowrt.main.device_name || echo AudioWRT)"
+		uci -q set shairport-sync.shairport_sync.enabled='1'
+		uci -q set shairport-sync.shairport_sync.respawn='1'
+		uci -q set shairport-sync.shairport_sync.name="$name"
+		uci -q set shairport-sync.shairport_sync.output_backend='alsa'
+		uci -q set shairport-sync.shairport_sync.mdns_backend='tinysvcmdns'
+		uci -q set shairport-sync.shairport_sync.alsa_output_device='default'
+		uci -q set shairport-sync.shairport_sync.ignore_volume_control='no'
+		uci -q commit shairport-sync
+		/etc/init.d/shairport-sync enable >/dev/null 2>&1 || true
+		/etc/init.d/shairport-sync restart >/dev/null 2>&1 || true
+		;;
+	disable)
+		/etc/init.d/shairport-sync stop >/dev/null 2>&1 || true
+		/etc/init.d/shairport-sync disable >/dev/null 2>&1 || true
+		;;
+	*) echo "Usage: $0 {configure|disable}" >&2; exit 2 ;;
+esac

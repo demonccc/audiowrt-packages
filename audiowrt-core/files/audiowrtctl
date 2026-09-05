@@ -7,6 +7,11 @@ setup_ip() {
 	uci -q get audiowrt.main.setup_ip || echo "192.168.77.1"
 }
 
+sync_core_storage() {
+	[ -x /usr/sbin/audiowrt-storage ] || return 0
+	/usr/sbin/audiowrt-storage sync-core >/dev/null 2>&1 || true
+}
+
 setup_dns_enable() {
 	ip="$(setup_ip)"
 	uci -q del_list dhcp.@dnsmasq[0].address="/#/$ip" 2>/dev/null || true
@@ -38,6 +43,8 @@ sync_identity() {
 		uci -q commit shairport-sync
 		/etc/init.d/shairport-sync restart >/dev/null 2>&1 || true
 	fi
+
+	sync_core_storage
 }
 
 provisioning_start() {
@@ -70,6 +77,7 @@ provisioning_stop() {
 	uci -q commit audiowrt
 	setup_dns_disable
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
+	sync_core_storage
 }
 
 status() {

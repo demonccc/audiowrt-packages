@@ -1,0 +1,38 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+case "${1:-}" in
+	configure)
+		mkdir -p /mnt/music /tmp/mpd/playlists
+		chown -R mpd:mpd /tmp/mpd 2>/dev/null || true
+		cat > /etc/mpd.conf <<'EOF'
+music_directory "/mnt/music"
+playlist_directory "/tmp/mpd/playlists"
+db_file "/tmp/mpd/database"
+state_file "/tmp/mpd/state"
+sticker_file "/tmp/mpd/sticker.sql"
+
+bind_to_address "0.0.0.0"
+port "6600"
+
+auto_update "yes"
+restore_paused "yes"
+
+audio_output {
+	type "alsa"
+	name "AudioWRT USB Audio"
+	device "default"
+	mixer_type "software"
+}
+EOF
+		/etc/init.d/mpd enable >/dev/null 2>&1 || true
+		/etc/init.d/mpd restart >/dev/null 2>&1 || true
+		;;
+	disable)
+		/etc/init.d/mpd stop >/dev/null 2>&1 || true
+		/etc/init.d/mpd disable >/dev/null 2>&1 || true
+		;;
+	*) echo "Usage: $0 {configure|disable}" >&2; exit 2 ;;
+esac

@@ -1,0 +1,3 @@
+# id|OpenWrt package|title|description
+mpd|mpd-mini|Local Music|Play local and network audio through MPD using the selected AudioWRT USB output.
+airplay|shairport-sync-mini|AirPlay|Receive AirPlay audio and send it to the selected AudioWRT USB output.

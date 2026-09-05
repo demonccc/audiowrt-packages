@@ -1,60 +1,70 @@
 # AudioWRT Packages
 
-Reusable OpenWrt packages and LuCI applications that provide the audio capabilities used by AudioWRT and can also be installed on standard OpenWrt systems.
+Reusable OpenWrt packages and LuCI applications that provide AudioWRT runtime capabilities. The repository is consumed as an OpenWrt package feed and the packages remain usable on standard OpenWrt installations.
 
-This repository is intended to be consumed as an OpenWrt package feed.
+## Package model
 
-## MVP package set
+AudioWRT separates the small always-present core from optional audio engines.
 
-### `audiowrt-core`
+### Core packages
 
-Provides the AudioWRT runtime and first-boot provisioning flow:
+- `audiowrt-core`: device identity, Ethernet DHCP-client defaults, first-boot Wi-Fi provisioning, recovery and lightweight setup UI.
+- `audiowrt-usb-audio`: USB Audio Class support and automatic ALSA output selection. It intentionally depends on `alsa-lib`, not the full `alsa-utils` package.
+- `audiowrt-storage`: optional external extension storage backed by OpenWrt extroot. The internal firmware remains the boot fallback when the external device is removed.
+- `audiowrt-extensions`: runtime extension catalog and installer using OpenWrt's `apk` package manager.
+- `luci-app-audiowrt`: focused LuCI pages for AudioWRT status, storage and extensions.
 
-- derives a device name such as `AudioWRT-A4F2` from the device MAC address
-- changes the normal OpenWrt LAN from router-side static addressing to DHCP client mode
-- disables DHCP server behavior on the normal LAN
-- creates a temporary isolated `AudioWRT-XXXX` Wi-Fi setup AP when a radio is available
-- serves a lightweight first-boot setup page at `http://192.168.77.1/`
-- configures a Wi-Fi STA connection from that setup page
-- restores the setup AP automatically when a Wi-Fi connection attempt fails
-- never automatically reopens the setup AP after successful provisioning
-- supports explicitly re-entering provisioning mode by holding a WPS button for at least five seconds
+### Optional audio engines
 
-Ethernet remains usable as a DHCP client and provides the fallback setup path on devices without Wi-Fi.
+- `audiowrt-mpd`: preinstalls `mpd-mini` and applies the AudioWRT MPD integration.
+- `audiowrt-airplay`: preinstalls `shairport-sync-mini` and applies the AudioWRT AirPlay integration.
 
-### `audiowrt-usb-audio`
+The same MPD and AirPlay integrations are available at runtime through `audiowrt-extensions`, so constrained devices do not need to include these engines in the firmware image.
 
-Provides USB Audio Class support and runtime output management:
+## External extension storage
 
-- depends on `kmod-usb-audio` and ALSA utilities
-- detects the first USB Audio playback device
-- generates `/etc/asound.conf`
-- exposes a shared ALSA `default` output through `dmix`
-- updates AudioWRT runtime status
-- reacts to USB hotplug events
-- restarts audio services after the output changes
+Small routers may not have enough internal flash for every audio engine. AudioWRT can prepare an unused USB partition as ext4 extension storage. After reboot, OpenWrt uses it as the writable overlay, so `apk` installs additional packages there transparently.
 
-### `audiowrt-mpd`
+The design keeps the internal AudioWRT core bootable. If external storage is absent, OpenWrt falls back to the internal overlay. AudioWRT also attempts to synchronize critical network and AudioWRT configuration back to the internal overlay while external storage is active.
 
-Provides a functional MPD configuration for local and HTTP playback through the AudioWRT ALSA output. Music is expected at `/mnt/music`, while MPD database and playlist state stay in `/tmp` to avoid unnecessary flash writes.
+Normal audio runtime state is kept in RAM where practical. For example, MPD database, playlists and state live under `/tmp`; local music is expected under `/mnt/music`.
 
-### `audiowrt-airplay`
+`audiowrt-storage enable` is intentionally destructive and always requires an explicit `--yes` confirmation.
 
-Provides a functional AirPlay receiver using the minimal Shairport Sync variant and the AudioWRT ALSA output. The AirPlay receiver name follows the AudioWRT device name.
+## First-boot flow
 
-### `luci-app-audiowrt`
+1. The normal Ethernet interface becomes a DHCP client.
+2. AudioWRT creates a temporary isolated `AudioWRT-XXXX` setup AP when Wi-Fi is available.
+3. The setup page is served at `http://192.168.77.1/`.
+4. The user selects the home Wi-Fi network and AudioWRT switches to STA mode.
+5. A failed Wi-Fi attempt restores the setup AP.
+6. After successful provisioning the setup AP does not automatically reopen. Holding the WPS button for at least five seconds explicitly re-enters provisioning mode.
 
-Provides an authenticated LuCI overview for device, network and audio status. First-boot Wi-Fi setup intentionally uses the much smaller dedicated setup page rather than requiring LuCI authentication.
+## USB audio
+
+`audiowrt-usb-audio` detects the first USB Audio playback device from the kernel ALSA metadata, writes `/etc/asound.conf`, exposes an ALSA `default` device through `dmix`, reacts to USB hotplug and restarts installed audio services after the output changes.
+
+## Runtime extensions
+
+The initial catalog contains only extensions that are functional and backed by packages available from OpenWrt:
+
+```sh
+audiowrt-extensions list
+audiowrt-extensions install mpd
+audiowrt-extensions install airplay
+```
+
+Spotify Connect is intentionally not advertised yet because AudioWRT does not currently provide a maintained `librespot` binary package feed.
 
 ## Use as an OpenWrt feed
 
-Add this repository to `feeds.conf` or `feeds.conf.default`:
+Add the repository to `feeds.conf`:
 
 ```text
 src-git audiowrt https://github.com/demonccc/audiowrt-packages.git
 ```
 
-For development branches, append the branch after a semicolon using OpenWrt feed syntax:
+For a development branch:
 
 ```text
 src-git audiowrt https://github.com/demonccc/audiowrt-packages.git;feat/mvp-runtime
@@ -67,9 +77,13 @@ Then run:
 ./scripts/feeds install -a -p audiowrt
 ```
 
+## CI policy
+
+GitHub Actions in this repository are manual-only. They never run on push or pull request events. Run `Validate AudioWRT packages` with `workflow_dispatch` only when package metadata validation is needed.
+
 ## Compatibility
 
-Development targets the OpenWrt 25.12 stable line first. AudioWRT packages avoid board-specific assumptions; board drivers, firmware and device topology remain OpenWrt responsibilities.
+Development targets the OpenWrt 25.12 stable line first. Board drivers, firmware, USB host controllers and device topology remain OpenWrt responsibilities.
 
 ## License
 

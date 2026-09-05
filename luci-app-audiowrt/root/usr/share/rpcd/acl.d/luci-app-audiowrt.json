@@ -2,10 +2,20 @@
 	"luci-app-audiowrt": {
 		"description": "Grant access to the AudioWRT web interface",
 		"read": {
-			"uci": [ "audiowrt" ]
+			"uci": [ "audiowrt" ],
+			"file": {
+				"/usr/sbin/audiowrtctl": [ "exec" ],
+				"/usr/sbin/audiowrt-storage": [ "exec" ],
+				"/usr/sbin/audiowrt-extensions": [ "exec" ]
+			}
 		},
 		"write": {
-			"uci": [ "audiowrt" ]
+			"uci": [ "audiowrt" ],
+			"file": {
+				"/usr/sbin/audiowrtctl": [ "exec" ],
+				"/usr/sbin/audiowrt-storage": [ "exec" ],
+				"/usr/sbin/audiowrt-extensions": [ "exec" ]
+			}
 		}
 	}
 }

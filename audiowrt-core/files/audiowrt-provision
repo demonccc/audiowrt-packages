@@ -88,6 +88,7 @@ if [ "$connected" -eq 1 ]; then
 	uci -q set audiowrt.main.wifi_ssid="$ssid"
 	uci -q set audiowrt.main.last_error=''
 	uci -q commit audiowrt
+	[ -x /usr/sbin/audiowrt-storage ] && /usr/sbin/audiowrt-storage sync-core >/dev/null 2>&1 || true
 	logger -t audiowrt "Wi-Fi provisioning completed for SSID $ssid"
 	exit 0
 fi
