@@ -1,0 +1,45 @@
+name: Validate AudioWRT Packages
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout package feed
+        uses: actions/checkout@v4
+
+      - name: Validate shell scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' script; do
+            sh -n "$script"
+          done < <(find . -type f \( -name '*.init' -o -name '*.cgi' -o -name '*.hotplug' -o -name '*.defaults' -o -name 'audiowrtctl' -o -name 'audiowrt-firstboot' -o -name 'audiowrt-provision' -o -name 'select-audio-output' \) -print0)
+
+      - name: Validate OpenWrt package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="$PWD"
+          git clone --depth=1 --branch openwrt-25.12 https://github.com/openwrt/openwrt.git /tmp/openwrt
+          cd /tmp/openwrt
+          cp feeds.conf.default feeds.conf
+          printf '\nsrc-link audiowrt %s\n' "$workspace" >> feeds.conf
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          make -s prepare-tmpinfo
+
+          for package in audiowrt-core audiowrt-usb-audio audiowrt-mpd audiowrt-airplay luci-app-audiowrt; do
+            grep -q "^Package: $package$" tmp/.packageinfo || {
+              echo "Package metadata missing: $package" >&2
+              exit 1
+            }
+          done

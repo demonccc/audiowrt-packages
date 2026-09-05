@@ -54,10 +54,10 @@ Add this repository to `feeds.conf` or `feeds.conf.default`:
 src-git audiowrt https://github.com/demonccc/audiowrt-packages.git
 ```
 
-For development branches:
+For development branches, append the branch after a semicolon using OpenWrt feed syntax:
 
 ```text
-src-git audiowrt https://github.com/demonccc/audiowrt-packages.git;branch=feat/mvp-runtime
+src-git audiowrt https://github.com/demonccc/audiowrt-packages.git;feat/mvp-runtime
 ```
 
 Then run:
