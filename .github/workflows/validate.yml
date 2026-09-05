@@ -29,12 +29,19 @@ jobs:
         run: |
           set -euo pipefail
           workspace="$PWD"
-          git clone --depth=1 --branch openwrt-25.12 https://github.com/openwrt/openwrt.git /tmp/openwrt
-          cd /tmp/openwrt
-          cp feeds.conf.default feeds.conf
-          printf '\nsrc-cpy audiowrt %s\n' "$workspace" >> feeds.conf
+          openwrt=/tmp/openwrt
+
+          git clone --depth=1 --branch openwrt-25.12 https://github.com/openwrt/openwrt.git "$openwrt"
+
+          cd "$openwrt"
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+
+          for package in audiowrt-core audiowrt-usb-audio audiowrt-mpd audiowrt-airplay luci-app-audiowrt; do
+            mkdir -p "package/$package"
+            rsync -a --delete "$workspace/$package/" "package/$package/"
+          done
+
           make -s prepare-tmpinfo
 
           for package in audiowrt-core audiowrt-usb-audio audiowrt-mpd audiowrt-airplay luci-app-audiowrt; do
