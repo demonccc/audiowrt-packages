@@ -1,10 +1,13 @@
-name: Validate AudioWRT Packages
+name: Validate AudioWRT packages
 
 on:
-  pull_request:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      openwrt_ref:
+        description: OpenWrt branch or tag used for package metadata validation
+        required: true
+        default: openwrt-25.12
+        type: string
 
 permissions:
   contents: read
@@ -12,8 +15,10 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
     steps:
-      - name: Checkout package feed
+      - name: Checkout AudioWRT packages
         uses: actions/checkout@v4
 
       - name: Validate shell scripts
@@ -22,7 +27,7 @@ jobs:
           set -euo pipefail
           while IFS= read -r -d '' script; do
             sh -n "$script"
-          done < <(find . -type f \( -name '*.init' -o -name '*.cgi' -o -name '*.hotplug' -o -name '*.defaults' -o -name 'audiowrtctl' -o -name 'audiowrt-firstboot' -o -name 'audiowrt-provision' -o -name 'select-audio-output' \) -print0)
+          done < <(find . -type f \( -name '*.init' -o -name '*.cgi' -o -name '*.hotplug' -o -name '*.defaults' -o -name 'audiowrtctl' -o -name 'audiowrt-firstboot' -o -name 'audiowrt-provision' -o -name 'select-audio-output' -o -name 'audiowrt-storage' -o -name 'audiowrt-extensions' \) -print0)
 
       - name: Validate OpenWrt package metadata
         shell: bash
@@ -31,20 +36,23 @@ jobs:
           workspace="$PWD"
           openwrt=/tmp/openwrt
 
-          git clone --depth=1 --branch openwrt-25.12 https://github.com/openwrt/openwrt.git "$openwrt"
-
+          git clone --depth=1 --branch '${{ inputs.openwrt_ref }}' https://github.com/openwrt/openwrt.git "$openwrt"
           cd "$openwrt"
+
+          cp feeds.conf.default feeds.conf
+          printf '\nsrc-link audiowrt %s\n' "$workspace" >> feeds.conf
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-
-          for package in audiowrt-core audiowrt-usb-audio audiowrt-mpd audiowrt-airplay luci-app-audiowrt; do
-            mkdir -p "package/$package"
-            rsync -a --delete "$workspace/$package/" "package/$package/"
-          done
-
           make -s prepare-tmpinfo
 
-          for package in audiowrt-core audiowrt-usb-audio audiowrt-mpd audiowrt-airplay luci-app-audiowrt; do
+          for package in \
+            audiowrt-core \
+            audiowrt-usb-audio \
+            audiowrt-storage \
+            audiowrt-extensions \
+            audiowrt-mpd \
+            audiowrt-airplay \
+            luci-app-audiowrt; do
             grep -q "^Package: $package$" tmp/.packageinfo || {
               echo "Package metadata missing: $package" >&2
               exit 1
