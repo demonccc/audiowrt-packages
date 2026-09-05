@@ -1,0 +1,102 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+[ "$(uci -q get audiowrt.main.initialized || echo 0)" = "1" ] && exit 0
+
+mac=""
+for path in /sys/class/net/*/address; do
+	[ -r "$path" ] || continue
+	value="$(cat "$path" 2>/dev/null || true)"
+	[ "$value" = "00:00:00:00:00:00" ] && continue
+	[ "$value" = "ff:ff:ff:ff:ff:ff" ] && continue
+	mac="$value"
+	break
+done
+
+suffix="$(printf '%s' "$mac" | tr -d ':' | tail -c 4 | tr '[:lower:]' '[:upper:]')"
+[ -n "$suffix" ] || suffix="SETUP"
+name="AudioWRT-$suffix"
+setup_ip="$(uci -q get audiowrt.main.setup_ip || echo 192.168.77.1)"
+
+uci -q set audiowrt.main.device_name="$name"
+uci -q set audiowrt.main.provisioning='1'
+uci -q set audiowrt.main.last_error=''
+
+if uci -q get system.@system[0] >/dev/null 2>&1; then
+	uci -q set system.@system[0].hostname="$name"
+fi
+
+# Keep OpenWrt's board-specific Ethernet topology, but make the normal LAN
+# interface a client instead of a router-side static network.
+if uci -q get network.lan >/dev/null 2>&1; then
+	uci -q set network.lan.proto='dhcp'
+	uci -q delete network.lan.ipaddr 2>/dev/null || true
+	uci -q delete network.lan.netmask 2>/dev/null || true
+	uci -q delete network.lan.ip6assign 2>/dev/null || true
+	uci -q delete network.lan.gateway 2>/dev/null || true
+	uci -q delete network.lan.dns 2>/dev/null || true
+fi
+
+if uci -q get dhcp.lan >/dev/null 2>&1; then
+	uci -q set dhcp.lan.ignore='1'
+fi
+
+radio="$(uci -q show wireless 2>/dev/null | sed -n "s/^wireless\.\([^.=]*\)=wifi-device.*/\1/p" | head -n 1)"
+
+if [ -n "$radio" ]; then
+	# Disable OpenWrt's default APs on the selected radio.
+	for section in $(uci -q show wireless 2>/dev/null | sed -n "s/^wireless\.\([^.=]*\)=wifi-iface.*/\1/p"); do
+		[ "$(uci -q get wireless."$section".device || true)" = "$radio" ] || continue
+		uci -q set wireless."$section".disabled='1'
+	done
+
+	uci -q set wireless."$radio".disabled='0'
+
+	uci -q delete network.audiowrt_setup 2>/dev/null || true
+	uci -q set network.audiowrt_setup='interface'
+	uci -q set network.audiowrt_setup.proto='static'
+	uci -q set network.audiowrt_setup.ipaddr="$setup_ip"
+	uci -q set network.audiowrt_setup.netmask='255.255.255.0'
+
+	uci -q delete dhcp.audiowrt_setup 2>/dev/null || true
+	uci -q set dhcp.audiowrt_setup='dhcp'
+	uci -q set dhcp.audiowrt_setup.interface='audiowrt_setup'
+	uci -q set dhcp.audiowrt_setup.start='100'
+	uci -q set dhcp.audiowrt_setup.limit='100'
+	uci -q set dhcp.audiowrt_setup.leasetime='10m'
+	uci -q set dhcp.audiowrt_setup.ignore='0'
+
+	uci -q delete wireless.audiowrt_setup 2>/dev/null || true
+	uci -q set wireless.audiowrt_setup='wifi-iface'
+	uci -q set wireless.audiowrt_setup.device="$radio"
+	uci -q set wireless.audiowrt_setup.mode='ap'
+	uci -q set wireless.audiowrt_setup.network='audiowrt_setup'
+	uci -q set wireless.audiowrt_setup.ssid="$name"
+	uci -q set wireless.audiowrt_setup.encryption='none'
+	uci -q set wireless.audiowrt_setup.isolate='1'
+	uci -q set wireless.audiowrt_setup.disabled='0'
+
+	uci -q del_list dhcp.@dnsmasq[0].address="/#/$setup_ip" 2>/dev/null || true
+	uci -q add_list dhcp.@dnsmasq[0].address="/#/$setup_ip"
+else
+	logger -t audiowrt "No Wi-Fi radio found; initial setup is available over Ethernet only"
+fi
+
+# AudioWRT owns the root landing page. LuCI stays available at /cgi-bin/luci.
+if uci -q get uhttpd.main >/dev/null 2>&1; then
+	uci -q delete uhttpd.main.index_page 2>/dev/null || true
+	uci -q add_list uhttpd.main.index_page='audiowrt.html'
+fi
+
+uci -q set audiowrt.main.initialized='1'
+uci -q commit audiowrt
+uci -q commit system
+uci -q commit network
+uci -q commit dhcp
+uci -q commit wireless
+uci -q commit uhttpd
+
+/etc/init.d/audiowrt enable >/dev/null 2>&1 || true
+exit 0

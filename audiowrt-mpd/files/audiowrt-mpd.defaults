@@ -1,0 +1,8 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+mkdir -p /mnt/music /tmp/mpd/playlists
+chown -R mpd:mpd /tmp/mpd 2>/dev/null || true
+cp /usr/share/audiowrt/mpd.conf /etc/mpd.conf
+/etc/init.d/mpd enable >/dev/null 2>&1 || true
+exit 0

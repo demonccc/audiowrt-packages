@@ -1,0 +1,75 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+card=""
+if [ -r /proc/asound/cards ]; then
+	card="$(awk '
+		/USB-Audio/ {
+			line=$0
+			sub(/^[[:space:]]*/, "", line)
+			split(line, fields, /[[:space:]]+/)
+			print fields[1]
+			exit
+		}
+	' /proc/asound/cards)"
+fi
+
+if [ -z "$card" ]; then
+	uci -q set audiowrt.main.audio_ready='0'
+	uci -q set audiowrt.main.audio_device=''
+	uci -q set audiowrt.main.audio_card=''
+	uci -q set audiowrt.main.audio_pcm=''
+	uci -q commit audiowrt
+	rm -f /etc/asound.conf
+	logger -t audiowrt-audio "No USB audio playback device detected"
+	exit 0
+fi
+
+pcm=""
+if [ -r /proc/asound/pcm ]; then
+	pcm="$(awk -v card="$card" '
+		$0 ~ "^[[:space:]]*" card "-[0-9][0-9]:" && /playback/ {
+			line=$0
+			sub(/^[[:space:]]*/, "", line)
+			split(line, parts, /[-:]/)
+			print parts[2] + 0
+			exit
+		}
+	' /proc/asound/pcm)"
+fi
+[ -n "$pcm" ] || pcm="0"
+
+cat > /etc/asound.conf <<EOF
+pcm.audiowrt_dmix {
+	type dmix
+	ipc_key 2468
+	ipc_perm 0666
+	slave {
+		pcm "hw:${card},${pcm}"
+		rate 44100
+	}
+}
+
+pcm.!default {
+	type plug
+	slave.pcm "audiowrt_dmix"
+}
+
+ctl.!default {
+	type hw
+	card ${card}
+}
+EOF
+
+uci -q set audiowrt.main.audio_ready='1'
+uci -q set audiowrt.main.audio_device='default'
+uci -q set audiowrt.main.audio_card="$card"
+uci -q set audiowrt.main.audio_pcm="$pcm"
+uci -q commit audiowrt
+
+logger -t audiowrt-audio "Selected USB audio card ${card}, PCM ${pcm}"
+
+/etc/init.d/mpd restart >/dev/null 2>&1 || true
+/etc/init.d/shairport-sync restart >/dev/null 2>&1 || true

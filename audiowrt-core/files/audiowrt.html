@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<title>AudioWRT Setup</title>
+	<style>
+		body{font-family:system-ui,sans-serif;max-width:560px;margin:3rem auto;padding:0 1rem;background:#f6f7f8;color:#1b1f23}
+		.card{background:#fff;border-radius:12px;padding:1.4rem;box-shadow:0 1px 4px #0002}
+		label{display:block;margin-top:1rem;font-weight:600}
+		input,select,button{box-sizing:border-box;width:100%;padding:.75rem;margin-top:.35rem;font:inherit}
+		button{margin-top:1.2rem;cursor:pointer}
+		.muted{color:#667085}.ok{color:#087a2d}.error{color:#b42318}
+	</style>
+</head>
+<body>
+<div class="card">
+	<h1 id="title">AudioWRT</h1>
+	<p id="state" class="muted">Loading device status…</p>
+
+	<form id="setup" hidden>
+		<label for="ssid">Wi-Fi network name</label>
+		<input id="ssid" name="ssid" required autocomplete="off">
+
+		<label for="encryption">Security</label>
+		<select id="encryption" name="encryption">
+			<option value="sae-mixed">WPA2/WPA3 Personal</option>
+			<option value="psk2">WPA2 Personal</option>
+			<option value="sae">WPA3 Personal</option>
+			<option value="none">Open network</option>
+		</select>
+
+		<label for="key">Password</label>
+		<input id="key" name="key" type="password" minlength="8" autocomplete="new-password">
+
+		<button type="submit">Connect AudioWRT</button>
+	</form>
+
+	<p id="message"></p>
+	<p id="admin" hidden><a href="/cgi-bin/luci/admin/audiowrt/overview">Open AudioWRT administration</a></p>
+</div>
+
+<script>
+const state = document.getElementById('state');
+const form = document.getElementById('setup');
+const message = document.getElementById('message');
+const admin = document.getElementById('admin');
+const encryption = document.getElementById('encryption');
+const key = document.getElementById('key');
+
+function syncPasswordState() {
+	const open = encryption.value === 'none';
+	key.disabled = open;
+	key.required = !open;
+	if (open) key.value = '';
+}
+encryption.addEventListener('change', syncPasswordState);
+syncPasswordState();
+
+async function refresh() {
+	try {
+		const r = await fetch('/cgi-bin/audiowrt-status', {cache:'no-store'});
+		const s = await r.json();
+		document.getElementById('title').textContent = s.device_name || 'AudioWRT';
+
+		if (s.provisioning) {
+			state.textContent = 'Connect this device to your home Wi-Fi.';
+			form.hidden = false;
+			admin.hidden = true;
+			if (s.last_error) {
+				message.className = 'error';
+				message.textContent = s.last_error;
+			}
+		} else {
+			form.hidden = true;
+			admin.hidden = false;
+			state.textContent = s.wifi_ssid ? `Connected to ${s.wifi_ssid}.` : 'Network configuration complete.';
+			message.className = s.audio_ready ? 'ok' : 'muted';
+			message.textContent = s.audio_ready
+				? `USB audio ready: ${s.audio_device || 'default'}`
+				: 'Connect a USB DAC or USB audio interface to enable playback.';
+		}
+	} catch (e) {
+		state.textContent = 'Unable to read AudioWRT status.';
+	}
+}
+
+form.addEventListener('submit', async (event) => {
+	event.preventDefault();
+	message.className = 'muted';
+	message.textContent = 'Applying Wi-Fi configuration…';
+	const body = new URLSearchParams(new FormData(form));
+	try {
+		const r = await fetch('/cgi-bin/audiowrt-provision', {
+			method: 'POST',
+			headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+			body
+		});
+		const result = await r.json();
+		if (!r.ok && r.status !== 202) throw new Error(result.message || 'Provisioning failed');
+		message.textContent = result.message + ' The setup network may disappear while the device connects.';
+		setTimeout(refresh, 12000);
+	} catch (e) {
+		message.className = 'error';
+		message.textContent = e.message;
+	}
+});
+
+refresh();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+case "${ACTION:-}" in
+	add|remove)
+		(
+			sleep 2
+			/usr/libexec/audiowrt/select-audio-output
+		) &
+		;;
+esac

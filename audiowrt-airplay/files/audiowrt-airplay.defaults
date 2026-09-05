@@ -1,0 +1,16 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+name="$(uci -q get audiowrt.main.device_name || echo AudioWRT)"
+
+uci -q set shairport-sync.shairport_sync.enabled='1'
+uci -q set shairport-sync.shairport_sync.respawn='1'
+uci -q set shairport-sync.shairport_sync.name="$name"
+uci -q set shairport-sync.shairport_sync.output_backend='alsa'
+uci -q set shairport-sync.shairport_sync.mdns_backend='tinysvcmdns'
+uci -q set shairport-sync.shairport_sync.alsa_output_device='default'
+uci -q set shairport-sync.shairport_sync.ignore_volume_control='no'
+uci -q commit shairport-sync
+
+/etc/init.d/shairport-sync enable >/dev/null 2>&1 || true
+exit 0
