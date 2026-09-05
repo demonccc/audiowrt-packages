@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-core
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_LICENSE:=GPL-2.0-only
 
 include $(INCLUDE_DIR)/package.mk
@@ -39,6 +39,9 @@ define Package/audiowrt-core/install
 
 	$(INSTALL_DIR) $(1)/etc/hotplug.d/button
 	$(INSTALL_BIN) ./files/audiowrt-button.hotplug $(1)/etc/hotplug.d/button/90-audiowrt-provision
+
+	$(INSTALL_DIR) $(1)/etc/sysctl.d
+	$(INSTALL_CONF) ./files/99-audiowrt.conf $(1)/etc/sysctl.d/99-audiowrt.conf
 
 	$(INSTALL_DIR) $(1)/www
 	$(INSTALL_DATA) ./files/audiowrt.html $(1)/www/audiowrt.html

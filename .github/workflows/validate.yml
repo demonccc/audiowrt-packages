@@ -32,7 +32,7 @@ jobs:
           git clone --depth=1 --branch openwrt-25.12 https://github.com/openwrt/openwrt.git /tmp/openwrt
           cd /tmp/openwrt
           cp feeds.conf.default feeds.conf
-          printf '\nsrc-link audiowrt %s\n' "$workspace" >> feeds.conf
+          printf '\nsrc-cpy audiowrt %s\n' "$workspace" >> feeds.conf
           ./scripts/feeds update -a
           ./scripts/feeds install -a
           make -s prepare-tmpinfo
