@@ -1,90 +1,126 @@
 # AudioWRT Packages
 
-Reusable OpenWrt packages and LuCI applications that provide AudioWRT runtime capabilities. The repository is consumed as an OpenWrt package feed and the packages remain usable on standard OpenWrt installations.
+Reusable OpenWrt packages and LuCI applications that add music and audio capabilities **without changing OpenWrt's router, network, DHCP, firewall or first-boot behavior**.
 
-## Package model
+This repository is an OpenWrt package feed. Distribution-only behavior belongs in [`demonccc/audiowrt`](https://github.com/demonccc/audiowrt).
 
-AudioWRT separates the small always-present core from optional audio engines.
+## Responsibility boundary
 
-### Core packages
+`audiowrt-packages` is safe to use on an existing OpenWrt installation. It owns only audio functionality:
 
-- `audiowrt-core`: device identity, Ethernet DHCP-client defaults, first-boot Wi-Fi provisioning, recovery and lightweight setup UI.
-- `audiowrt-usb-audio`: USB Audio Class support and automatic ALSA output selection. It intentionally depends on `alsa-lib`, not the full `alsa-utils` package.
-- `audiowrt-storage`: optional external extension storage backed by OpenWrt extroot. The internal firmware remains the boot fallback when the external device is removed.
-- `audiowrt-extensions`: runtime extension catalog and installer using OpenWrt's `apk` package manager.
-- `luci-app-audiowrt`: focused LuCI pages for AudioWRT status, storage and extensions.
+- common audio state and naming;
+- USB DAC output management;
+- music-service installation and configuration;
+- Spotify Connect;
+- AirPlay;
+- MPD/local music;
+- Bluetooth A2DP output;
+- the reusable AudioWRT LuCI audio UI.
 
-### Optional audio engines
+It does **not** change LAN addressing, DHCP serving, Wi-Fi AP/STA topology, firewall behavior, provisioning or storage layout.
 
-- `audiowrt-mpd`: preinstalls `mpd-mini` and applies the AudioWRT MPD integration.
-- `audiowrt-airplay`: preinstalls `shairport-sync-mini` and applies the AudioWRT AirPlay integration.
+AudioWRT distribution packages such as first-boot provisioning, client-only network defaults and guided USB extroot management live in the `audiowrt` repository instead.
 
-The same MPD and AirPlay integrations are available at runtime through `audiowrt-extensions`, so constrained devices do not need to include these engines in the firmware image.
+## Packages
 
-## External extension storage
+### `audiowrt-audio`
 
-Small routers may not have enough internal flash for every audio engine. AudioWRT can prepare an unused USB partition as ext4 extension storage. After reboot, OpenWrt uses it as the writable overlay, so `apk` installs additional packages there transparently.
+Common reusable audio state and helper CLI. The effective audio name defaults to the existing OpenWrt hostname unless explicitly overridden.
 
-The design keeps the internal AudioWRT core bootable. If external storage is absent, OpenWrt falls back to the internal overlay. AudioWRT also attempts to synchronize critical network and AudioWRT configuration back to the internal overlay while external storage is active.
+### `audiowrt-usb-audio`
 
-Normal audio runtime state is kept in RAM where practical. For example, MPD database, playlists and state live under `/tmp`; local music is expected under `/mnt/music`.
+Detects the first USB Audio Class playback device, creates the ALSA `default` output and reacts to USB hotplug. It uses `alsa-lib` rather than the full `alsa-utils` package.
 
-`audiowrt-storage enable` is intentionally destructive and always requires an explicit `--yes` confirmation.
+### `audiowrt-extensions`
 
-## First-boot flow
+Runtime service manager using OpenWrt 25.12's `apk` package manager. The initial extension catalog contains:
 
-1. The normal Ethernet interface becomes a DHCP client.
-2. AudioWRT creates a temporary isolated `AudioWRT-XXXX` setup AP when Wi-Fi is available.
-3. The setup page is served at `http://192.168.77.1/`.
-4. The user selects the home Wi-Fi network and AudioWRT switches to STA mode.
-5. A failed Wi-Fi attempt restores the setup AP.
-6. After successful provisioning the setup AP does not automatically reopen. Holding the WPS button for at least five seconds explicitly re-enters provisioning mode.
+- `mpd` -> `audiowrt-mpd`
+- `airplay` -> `audiowrt-airplay`
+- `spotify` -> `audiowrt-spotify`
+- `bluetooth` -> `audiowrt-bluetooth`
 
-## USB audio
-
-`audiowrt-usb-audio` detects the first USB Audio playback device from the kernel ALSA metadata, writes `/etc/asound.conf`, exposes an ALSA `default` device through `dmix`, reacts to USB hotplug and restarts installed audio services after the output changes.
-
-## Runtime extensions
-
-The initial catalog contains only extensions that are functional and backed by packages available from OpenWrt:
+Example:
 
 ```sh
 audiowrt-extensions list
-audiowrt-extensions install mpd
-audiowrt-extensions install airplay
+audiowrt-extensions install spotify
+audiowrt-extensions install bluetooth
 ```
 
-Spotify Connect is intentionally not advertised yet because AudioWRT does not currently provide a maintained `librespot` binary package feed.
+The manager uses the existing OpenWrt writable overlay. It never formats or reconfigures storage.
+
+### `audiowrt-mpd`
+
+Installs `mpd-mini` and configures local/HTTP playback through ALSA `default`. MPD database, state and playlists stay under `/tmp`; local music is expected at `/mnt/music`.
+
+### `audiowrt-airplay`
+
+Installs `shairport-sync-mini`, uses the current AudioWRT audio name and sends playback to ALSA `default`.
+
+### `librespot` + `audiowrt-spotify`
+
+The feed packages librespot 0.8.0 for OpenWrt using the official OpenWrt Rust toolchain, the ALSA backend, rustls and pure-Rust mDNS. `audiowrt-spotify` configures it as a Spotify Connect speaker using ALSA `default` and disables the audio cache to reduce writes.
+
+librespot requires Spotify Premium.
+
+### `bluez-alsa` + `audiowrt-bluetooth`
+
+The feed packages the lightweight BlueALSA bridge and integrates it with OpenWrt's BlueZ packages. `audiowrt-bluetooth` supports discovery, pairing, connection and selecting an A2DP speaker/headset as ALSA `default`.
+
+The BlueALSA package carries the known big-endian fixes used by the OpenWrt community packaging, which matters for MIPS targets such as ath79.
+
+CLI examples:
+
+```sh
+audiowrt-bluetooth scan
+audiowrt-bluetooth pair AA:BB:CC:DD:EE:FF
+audiowrt-bluetooth select AA:BB:CC:DD:EE:FF
+audiowrt-bluetooth usb
+```
+
+### `luci-app-audiowrt`
+
+Reusable audio-only LuCI interface:
+
+```text
+AudioWRT
+├── Overview
+├── Output
+└── Extensions
+```
+
+The Output page can select USB audio and, when the Bluetooth extension is installed, scan/pair/select Bluetooth speakers. The Extensions page installs/removes music services with `apk`.
+
+When this app is used inside the full AudioWRT distribution, `luci-app-audiowrt-core` from the distribution repository adds the network/storage/system pages under the same `AudioWRT` menu.
 
 ## Use as an OpenWrt feed
-
-Add the repository to `feeds.conf`:
 
 ```text
 src-git audiowrt https://github.com/demonccc/audiowrt-packages.git
 ```
 
-For a development branch:
+Development branch example:
 
 ```text
 src-git audiowrt https://github.com/demonccc/audiowrt-packages.git;feat/mvp-runtime
 ```
 
-Then run:
+Then:
 
 ```sh
 ./scripts/feeds update audiowrt
 ./scripts/feeds install -a -p audiowrt
 ```
 
-## CI policy
+## GitHub Actions policy
 
-GitHub Actions in this repository are manual-only. They never run on push or pull request events. Run `Validate AudioWRT packages` with `workflow_dispatch` only when package metadata validation is needed.
+GitHub Actions are manual-only (`workflow_dispatch`). Pushes and pull requests do not consume hosted-runner time automatically.
 
 ## Compatibility
 
-Development targets the OpenWrt 25.12 stable line first. Board drivers, firmware, USB host controllers and device topology remain OpenWrt responsibilities.
+Development targets OpenWrt 25.12 first. Board drivers and device topology remain OpenWrt responsibilities.
 
 ## License
 
-The repository is distributed under GPL-2.0-only unless a package or file states a different license. LuCI components use Apache-2.0 where appropriate.
+AudioWRT-owned package code is GPL-2.0-only unless stated otherwise. LuCI components use Apache-2.0. Third-party sources such as librespot and BlueALSA retain their upstream licenses.

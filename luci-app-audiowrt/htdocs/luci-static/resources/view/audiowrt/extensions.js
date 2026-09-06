@@ -6,16 +6,12 @@
 
 return view.extend({
 	load: function() {
-		return Promise.all([
-			L.resolveDefault(fs.exec('/usr/sbin/audiowrt-extensions', [ 'list' ]), { stdout: '' }),
-			L.resolveDefault(fs.exec('/usr/sbin/audiowrt-storage', [ 'status' ]), { stdout: '' })
-		]);
+		return L.resolveDefault(fs.exec('/usr/sbin/audiowrt-extensions', [ 'list' ]), { stdout: '' });
 	},
 
 	render: function(data) {
 		var self = this;
-		var external = /(^|\n)active=1(\n|$)/.test(data[1].stdout || '');
-		var extensions = (data[0].stdout || '').trim().split(/\n/).filter(Boolean).map(function(line) {
+		var extensions = (data.stdout || '').trim().split(/\n/).filter(Boolean).map(function(line) {
 			var f = line.split('|');
 			return { id: f[0], package: f[1], state: f[2], title: f[3], description: f.slice(4).join('|') };
 		});
@@ -35,10 +31,7 @@ return view.extend({
 
 		return E('div', { 'class': 'cbi-map' }, [
 			E('h2', {}, _('AudioWRT Extensions')),
-			E('p', {}, external
-				? _('Extensions are currently installed on AudioWRT external USB storage.')
-				: _('Extensions are currently installed on internal flash. If space is insufficient, enable USB extension storage first.')),
-			E('p', {}, _('AudioWRT installs the underlying packages from the OpenWrt repositories and then applies AudioWRT-specific audio configuration.')),
+			E('p', {}, _('Extensions are installed with OpenWrt\'s package manager. AudioWRT does not alter your storage layout; if this OpenWrt system already uses extroot, packages naturally install into that writable overlay.')),
 			E('div', {}, cards)
 		]);
 	},

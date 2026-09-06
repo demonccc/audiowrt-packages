@@ -3,6 +3,9 @@
 
 set -eu
 
+output_type="$(uci -q get audiowrt-audio.main.output_type || echo auto)"
+[ "$output_type" = 'bluetooth' ] && exit 0
+
 card=""
 if [ -r /proc/asound/cards ]; then
 	card="$(awk '
@@ -17,11 +20,12 @@ if [ -r /proc/asound/cards ]; then
 fi
 
 if [ -z "$card" ]; then
-	uci -q set audiowrt.main.audio_ready='0'
-	uci -q set audiowrt.main.audio_device=''
-	uci -q set audiowrt.main.audio_card=''
-	uci -q set audiowrt.main.audio_pcm=''
-	uci -q commit audiowrt
+	uci -q set audiowrt-audio.main.ready='0'
+	uci -q set audiowrt-audio.main.device=''
+	uci -q set audiowrt-audio.main.card=''
+	uci -q set audiowrt-audio.main.pcm=''
+	uci -q set audiowrt-audio.main.last_error='No USB audio playback device detected.'
+	uci -q commit audiowrt-audio
 	rm -f /etc/asound.conf
 	logger -t audiowrt-audio "No USB audio playback device detected"
 	exit 0
@@ -63,13 +67,19 @@ ctl.!default {
 }
 EOF
 
-uci -q set audiowrt.main.audio_ready='1'
-uci -q set audiowrt.main.audio_device='default'
-uci -q set audiowrt.main.audio_card="$card"
-uci -q set audiowrt.main.audio_pcm="$pcm"
-uci -q commit audiowrt
+uci -q set audiowrt-audio.main.output_type='usb'
+uci -q set audiowrt-audio.main.ready='1'
+uci -q set audiowrt-audio.main.device='default'
+uci -q set audiowrt-audio.main.card="$card"
+uci -q set audiowrt-audio.main.pcm="$pcm"
+uci -q set audiowrt-audio.main.bluetooth_device=''
+uci -q set audiowrt-audio.main.bluetooth_name=''
+uci -q set audiowrt-audio.main.last_error=''
+uci -q commit audiowrt-audio
 
 logger -t audiowrt-audio "Selected USB audio card ${card}, PCM ${pcm}"
 
-/etc/init.d/mpd restart >/dev/null 2>&1 || true
-/etc/init.d/shairport-sync restart >/dev/null 2>&1 || true
+for service in mpd shairport-sync librespot; do
+	[ -x "/etc/init.d/$service" ] || continue
+	"/etc/init.d/$service" restart >/dev/null 2>&1 || true
+done

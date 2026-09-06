@@ -1,8 +1,0 @@
-#!/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
-
-uci -q get audiowrt.storage >/dev/null 2>&1 || uci -q set audiowrt.storage='storage'
-uci -q set audiowrt.storage.enabled="$(uci -q get audiowrt.storage.enabled || echo 0)"
-uci -q set audiowrt.storage.mode="$(uci -q get audiowrt.storage.mode || echo internal)"
-uci -q commit audiowrt
-exit 0

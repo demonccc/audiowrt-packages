@@ -27,14 +27,7 @@ jobs:
           set -euo pipefail
           while IFS= read -r -d '' script; do
             sh -n "$script"
-          done < <(find \
-            audiowrt-core \
-            audiowrt-usb-audio \
-            audiowrt-storage \
-            audiowrt-extensions \
-            audiowrt-mpd \
-            audiowrt-airplay \
-            -type f -perm /111 -print0)
+          done < <(find . -path './.git' -prune -o -type f -perm /111 -print0)
 
       - name: Validate OpenWrt package metadata
         shell: bash
@@ -45,7 +38,6 @@ jobs:
 
           git clone --depth=1 --branch '${{ inputs.openwrt_ref }}' https://github.com/openwrt/openwrt.git "$openwrt"
           cd "$openwrt"
-
           cp feeds.conf.default feeds.conf
           printf '\nsrc-link audiowrt %s\n' "$workspace" >> feeds.conf
           ./scripts/feeds update -a
@@ -53,12 +45,15 @@ jobs:
           make -s prepare-tmpinfo
 
           for package in \
-            audiowrt-core \
+            audiowrt-audio \
             audiowrt-usb-audio \
-            audiowrt-storage \
             audiowrt-extensions \
             audiowrt-mpd \
             audiowrt-airplay \
+            librespot \
+            audiowrt-spotify \
+            bluez-alsa \
+            audiowrt-bluetooth \
             luci-app-audiowrt; do
             grep -q "^Package: $package$" tmp/.packageinfo || {
               echo "Package metadata missing: $package" >&2

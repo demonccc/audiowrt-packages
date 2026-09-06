@@ -5,28 +5,29 @@
 
 return view.extend({
 	load: function() {
-		return uci.load('audiowrt');
+		return Promise.all([ uci.load('audiowrt-audio'), uci.load('system') ]);
 	},
 
 	render: function() {
-		const deviceName = uci.get('audiowrt', 'main', 'device_name') || 'AudioWRT';
-		const provisioning = uci.get('audiowrt', 'main', 'provisioning') === '1';
-		const audioReady = uci.get('audiowrt', 'main', 'audio_ready') === '1';
-		const audioDevice = uci.get('audiowrt', 'main', 'audio_device') || '-';
-		const audioCard = uci.get('audiowrt', 'main', 'audio_card') || '-';
-		const wifiSsid = uci.get('audiowrt', 'main', 'wifi_ssid') || '-';
-		const lastError = uci.get('audiowrt', 'main', 'last_error') || '';
+		var configuredName = uci.get('audiowrt-audio', 'main', 'device_name') || '';
+		var hostname = uci.get('system', '@system[0]', 'hostname') || 'OpenWrt';
+		var outputType = uci.get('audiowrt-audio', 'main', 'output_type') || 'auto';
+		var ready = uci.get('audiowrt-audio', 'main', 'ready') === '1';
+		var device = uci.get('audiowrt-audio', 'main', 'device') || '-';
+		var btName = uci.get('audiowrt-audio', 'main', 'bluetooth_name') || '';
+		var error = uci.get('audiowrt-audio', 'main', 'last_error') || '';
 
-		const rows = [
-			[ _('Device name'), deviceName ],
-			[ _('Wi-Fi'), provisioning ? _('Setup required') : wifiSsid ],
-			[ _('USB audio'), audioReady ? _('Ready') : _('Not detected') ],
-			[ _('ALSA device'), audioDevice ],
-			[ _('ALSA card'), audioCard ]
+		var rows = [
+			[ _('Audio name'), configuredName || hostname ],
+			[ _('Output type'), outputType ],
+			[ _('Output status'), ready ? _('Ready') : _('Not ready') ],
+			[ _('ALSA device'), device ],
+			[ _('Bluetooth device'), btName || '-' ]
 		];
 
 		return E('div', { 'class': 'cbi-map' }, [
-			E('h2', {}, _('AudioWRT')),
+			E('h2', {}, _('AudioWRT Audio')),
+			E('p', {}, _('AudioWRT adds audio outputs and music services without changing this OpenWrt device\'s router or network configuration.')),
 			E('div', { 'class': 'cbi-section' }, [
 				E('div', { 'class': 'table' }, rows.map(function(row) {
 					return E('div', { 'class': 'tr' }, [
@@ -34,17 +35,7 @@ return view.extend({
 						E('div', { 'class': 'td left' }, row[1])
 					]);
 				})),
-				lastError ? E('p', { 'class': 'alert-message warning' }, lastError) : '',
-				provisioning
-					? E('p', {}, [
-						_('Wi-Fi provisioning is active. Open '),
-						E('a', { 'href': '/audiowrt.html' }, _('AudioWRT Setup')),
-						_(' to configure the network.')
-					])
-					: E('p', {}, _('To re-enter provisioning mode, hold the WPS button for at least five seconds.')),
-				E('p', {}, audioReady
-					? _('Audio services use the selected USB DAC through the AudioWRT ALSA default device.')
-					: _('Connect a USB DAC or USB audio interface. AudioWRT will select it automatically.'))
+				error ? E('p', { 'class': 'alert-message warning' }, error) : ''
 			])
 		]);
 	},

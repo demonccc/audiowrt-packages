@@ -1,0 +1,132 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+valid_mac() {
+	printf '%s\n' "$1" | grep -Eq '^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$'
+}
+
+ensure_services() {
+	/etc/init.d/dbus start >/dev/null 2>&1 || true
+	/etc/init.d/bluetoothd start >/dev/null 2>&1 || true
+	/etc/init.d/bluealsa start >/dev/null 2>&1 || true
+	hciconfig hci0 up >/dev/null 2>&1 || true
+	bluetoothctl power on >/dev/null 2>&1 || true
+}
+
+selected() {
+	uci -q get audiowrt-audio.main.bluetooth_device || true
+}
+
+devices() {
+	ensure_services
+	selected_mac="$(selected)"
+	bluetoothctl devices 2>/dev/null | while read -r prefix mac rest; do
+		[ "$prefix" = 'Device' ] || continue
+		valid_mac "$mac" || continue
+		info="$(bluetoothctl info "$mac" 2>/dev/null || true)"
+		name="$(printf '%s\n' "$info" | sed -n 's/^[[:space:]]*Name:[[:space:]]*//p' | head -n 1)"
+		[ -n "$name" ] || name="$rest"
+		paired=0
+		connected=0
+		printf '%s\n' "$info" | grep -q 'Paired: yes' && paired=1
+		printf '%s\n' "$info" | grep -q 'Connected: yes' && connected=1
+		is_selected=0
+		[ "$(printf '%s' "$mac" | tr '[:lower:]' '[:upper:]')" = "$(printf '%s' "$selected_mac" | tr '[:lower:]' '[:upper:]')" ] && is_selected=1
+		printf '%s|%s|%s|%s|%s\n' "$mac" "$name" "$paired" "$connected" "$is_selected"
+	done
+}
+
+scan() {
+	seconds="${1:-8}"
+	case "$seconds" in ''|*[!0-9]*) seconds=8 ;; esac
+	[ "$seconds" -ge 2 ] || seconds=2
+	[ "$seconds" -le 30 ] || seconds=30
+	ensure_services
+	bluetoothctl --timeout "$seconds" scan on >/dev/null 2>&1 || true
+	devices
+}
+
+select_device() {
+	mac="${1:-}"
+	valid_mac "$mac" || { echo 'ERROR: invalid Bluetooth MAC address.' >&2; exit 2; }
+	ensure_services
+	bluetoothctl connect "$mac" >/dev/null 2>&1 || {
+		echo "ERROR: could not connect to Bluetooth device $mac." >&2
+		exit 3
+	}
+	info="$(bluetoothctl info "$mac" 2>/dev/null || true)"
+	name="$(printf '%s\n' "$info" | sed -n 's/^[[:space:]]*Name:[[:space:]]*//p' | head -n 1)"
+
+	cat > /etc/asound.conf <<EOF
+defaults.bluealsa.service "org.bluealsa"
+defaults.bluealsa.device "$mac"
+defaults.bluealsa.profile "a2dp"
+
+pcm.!default {
+	type plug
+	slave.pcm "bluealsa"
+}
+
+ctl.!default {
+	type bluealsa
+}
+EOF
+
+	uci -q set audiowrt-audio.main.output_type='bluetooth'
+	uci -q set audiowrt-audio.main.ready='1'
+	uci -q set audiowrt-audio.main.device='bluealsa'
+	uci -q set audiowrt-audio.main.card=''
+	uci -q set audiowrt-audio.main.pcm=''
+	uci -q set audiowrt-audio.main.bluetooth_device="$mac"
+	uci -q set audiowrt-audio.main.bluetooth_name="$name"
+	uci -q set audiowrt-audio.main.last_error=''
+	uci -q commit audiowrt-audio
+
+	for service in mpd shairport-sync librespot; do
+		[ -x "/etc/init.d/$service" ] || continue
+		"/etc/init.d/$service" restart >/dev/null 2>&1 || true
+	done
+}
+
+pair() {
+	mac="${1:-}"
+	valid_mac "$mac" || { echo 'ERROR: invalid Bluetooth MAC address.' >&2; exit 2; }
+	ensure_services
+	bluetoothctl --agent NoInputNoOutput pair "$mac"
+	bluetoothctl trust "$mac" >/dev/null
+	select_device "$mac"
+}
+
+disconnect() {
+	mac="${1:-$(selected)}"
+	[ -n "$mac" ] || exit 0
+	valid_mac "$mac" || { echo 'ERROR: invalid Bluetooth MAC address.' >&2; exit 2; }
+	bluetoothctl disconnect "$mac" >/dev/null 2>&1 || true
+	if [ "$(printf '%s' "$mac" | tr '[:lower:]' '[:upper:]')" = "$(printf '%s' "$(selected)" | tr '[:lower:]' '[:upper:]')" ]; then
+		uci -q set audiowrt-audio.main.ready='0'
+		uci -q set audiowrt-audio.main.last_error='Selected Bluetooth output is disconnected.'
+		uci -q commit audiowrt-audio
+	fi
+}
+
+status() {
+	printf 'selected=%s\n' "$(selected)"
+	printf 'output_type=%s\n' "$(uci -q get audiowrt-audio.main.output_type || echo auto)"
+	printf 'ready=%s\n' "$(uci -q get audiowrt-audio.main.ready || echo 0)"
+}
+
+case "${1:-}" in
+	status) status ;;
+	devices) devices ;;
+	scan) scan "${2:-8}" ;;
+	pair) pair "${2:-}" ;;
+	select) select_device "${2:-}" ;;
+	disconnect) disconnect "${2:-}" ;;
+	usb) /usr/sbin/audiowrt-audio output usb ;;
+	*)
+		echo 'Usage: audiowrt-bluetooth {status|devices|scan [seconds]|pair <MAC>|select <MAC>|disconnect [MAC]|usb}' >&2
+		exit 2
+		;;
+esac

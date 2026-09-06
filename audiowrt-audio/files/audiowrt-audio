@@ -1,0 +1,76 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+name() {
+	configured="$(uci -q get audiowrt-audio.main.device_name || true)"
+	if [ -n "$configured" ]; then
+		printf '%s\n' "$configured"
+		return
+	fi
+	hostname="$(uci -q get system.@system[0].hostname || true)"
+	[ -n "$hostname" ] || hostname='AudioWRT'
+	printf '%s\n' "$hostname"
+}
+
+restart_engines() {
+	for service in mpd shairport-sync librespot; do
+		[ -x "/etc/init.d/$service" ] || continue
+		"/etc/init.d/$service" restart >/dev/null 2>&1 || true
+	done
+}
+
+status() {
+	printf 'device_name=%s\n' "$(name)"
+	printf 'output_type=%s\n' "$(uci -q get audiowrt-audio.main.output_type || echo auto)"
+	printf 'ready=%s\n' "$(uci -q get audiowrt-audio.main.ready || echo 0)"
+	printf 'device=%s\n' "$(uci -q get audiowrt-audio.main.device || true)"
+	printf 'card=%s\n' "$(uci -q get audiowrt-audio.main.card || true)"
+	printf 'pcm=%s\n' "$(uci -q get audiowrt-audio.main.pcm || true)"
+	printf 'bluetooth_device=%s\n' "$(uci -q get audiowrt-audio.main.bluetooth_device || true)"
+	printf 'bluetooth_name=%s\n' "$(uci -q get audiowrt-audio.main.bluetooth_name || true)"
+	printf 'last_error=%s\n' "$(uci -q get audiowrt-audio.main.last_error || true)"
+}
+
+set_name() {
+	value="${1:-}"
+	uci -q set audiowrt-audio.main.device_name="$value"
+	uci -q commit audiowrt-audio
+	[ -x /usr/sbin/audiowrt-extensions ] && {
+		/usr/sbin/audiowrt-extensions configure airplay >/dev/null 2>&1 || true
+		/usr/sbin/audiowrt-extensions configure spotify >/dev/null 2>&1 || true
+	}
+}
+
+set_usb() {
+	uci -q set audiowrt-audio.main.output_type='usb'
+	uci -q set audiowrt-audio.main.bluetooth_device=''
+	uci -q set audiowrt-audio.main.bluetooth_name=''
+	uci -q commit audiowrt-audio
+	if [ -x /usr/libexec/audiowrt/select-audio-output ]; then
+		/usr/libexec/audiowrt/select-audio-output
+	else
+		uci -q set audiowrt-audio.main.ready='0'
+		uci -q set audiowrt-audio.main.last_error='AudioWRT USB audio support is not installed.'
+		uci -q commit audiowrt-audio
+		echo 'ERROR: audiowrt-usb-audio is not installed.' >&2
+		exit 3
+	fi
+}
+
+case "${1:-}" in
+	name) name ;;
+	status) status ;;
+	set-name) set_name "${2:-}" ;;
+	output)
+		case "${2:-}" in
+			usb) set_usb ;;
+			*) echo 'Usage: audiowrt-audio output usb' >&2; exit 2 ;;
+		esac
+		;;
+	*)
+		echo 'Usage: audiowrt-audio {name|status|set-name <name>|output usb}' >&2
+		exit 2
+		;;
+esac

@@ -1,8 +1,9 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-airplay
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 PKG_LICENSE:=GPL-2.0-only
+PKGARCH:=all
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -14,7 +15,7 @@ define Package/audiowrt-airplay
 endef
 
 define Package/audiowrt-airplay/description
- Preinstalls Shairport Sync and applies the same AudioWRT integration used by the runtime extension manager.
+ Installs Shairport Sync and configures it to use the AudioWRT-selected ALSA output without changing OpenWrt networking.
 endef
 
 define Package/audiowrt-airplay/install

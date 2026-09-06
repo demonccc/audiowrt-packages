@@ -1,20 +1,21 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-extensions
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-2.0-only
+PKGARCH:=all
 
 include $(INCLUDE_DIR)/package.mk
 
 define Package/audiowrt-extensions
   SECTION:=sound
   CATEGORY:=Sound
-  TITLE:=AudioWRT extension manager
-  DEPENDS:=+audiowrt-core +audiowrt-storage +apk-mbedtls
+  TITLE:=AudioWRT audio extension manager
+  DEPENDS:=+audiowrt-audio +apk-mbedtls
 endef
 
 define Package/audiowrt-extensions/description
- Installs and configures optional audio engines using OpenWrt packages. External AudioWRT storage is used transparently when extroot is active.
+ Installs, removes and configures optional AudioWRT music services without changing OpenWrt network or router configuration.
 endef
 
 define Package/audiowrt-extensions/install
@@ -27,6 +28,8 @@ define Package/audiowrt-extensions/install
 	$(INSTALL_DIR) $(1)/usr/libexec/audiowrt/extensions
 	$(INSTALL_BIN) ./files/mpd $(1)/usr/libexec/audiowrt/extensions/mpd
 	$(INSTALL_BIN) ./files/airplay $(1)/usr/libexec/audiowrt/extensions/airplay
+	$(INSTALL_BIN) ./files/spotify $(1)/usr/libexec/audiowrt/extensions/spotify
+	$(INSTALL_BIN) ./files/bluetooth $(1)/usr/libexec/audiowrt/extensions/bluetooth
 endef
 
 $(eval $(call BuildPackage,audiowrt-extensions))
