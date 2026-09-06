@@ -1,0 +1,22 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+case "${1:-}" in
+	configure)
+		name="$(/usr/sbin/audiowrt-audio name)"
+		uci -q set librespot.main.enabled='1'
+		uci -q set librespot.main.name="$name"
+		uci -q set librespot.main.backend='alsa'
+		uci -q set librespot.main.device='default'
+		uci -q commit librespot
+		/etc/init.d/librespot enable >/dev/null 2>&1 || true
+		/etc/init.d/librespot restart >/dev/null 2>&1 || true
+		;;
+	disable)
+		/etc/init.d/librespot stop >/dev/null 2>&1 || true
+		/etc/init.d/librespot disable >/dev/null 2>&1 || true
+		;;
+	*) echo "Usage: $0 {configure|disable}" >&2; exit 2 ;;
+esac

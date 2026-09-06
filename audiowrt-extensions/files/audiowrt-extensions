@@ -1,0 +1,110 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+catalog='/usr/share/audiowrt/extensions.catalog'
+hook_dir='/usr/libexec/audiowrt/extensions'
+
+usage() {
+	cat <<'EOF'
+Usage:
+  audiowrt-extensions list
+  audiowrt-extensions refresh
+  audiowrt-extensions install <extension>
+  audiowrt-extensions remove <extension>
+  audiowrt-extensions configure <extension>
+EOF
+}
+
+catalog_line() {
+	id="$1"
+	awk -F '|' -v id="$id" '$0 !~ /^[[:space:]]*#/ && $1 == id { print; exit }' "$catalog"
+}
+
+package_for() {
+	printf '%s\n' "$1" | cut -d '|' -f 2
+}
+
+installed() {
+	apk info -e "$1" >/dev/null 2>&1
+}
+
+list_extensions() {
+	while IFS='|' read -r id package title description; do
+		case "$id" in ''|'#'*) continue ;; esac
+		state='available'
+		installed "$package" && state='installed'
+		printf '%s|%s|%s|%s|%s\n' "$id" "$package" "$state" "$title" "$description"
+	done < "$catalog"
+}
+
+run_hook() {
+	id="$1"
+	action="$2"
+	hook="$hook_dir/$id"
+	[ -x "$hook" ] || {
+		echo "ERROR: AudioWRT integration hook is missing for extension '$id'." >&2
+		exit 5
+	}
+	"$hook" "$action"
+}
+
+install_extension() {
+	id="${1:-}"
+	line="$(catalog_line "$id")"
+	[ -n "$line" ] || {
+		echo "ERROR: unknown AudioWRT extension: $id" >&2
+		exit 2
+	}
+	package="$(package_for "$line")"
+
+	if ! installed "$package"; then
+		apk update
+		apk add "$package" || {
+			echo "ERROR: OpenWrt could not install $package. Check repository availability and free storage." >&2
+			exit 3
+		}
+	fi
+
+	run_hook "$id" configure
+	echo "AudioWRT extension '$id' is installed."
+}
+
+remove_extension() {
+	id="${1:-}"
+	line="$(catalog_line "$id")"
+	[ -n "$line" ] || {
+		echo "ERROR: unknown AudioWRT extension: $id" >&2
+		exit 2
+	}
+	package="$(package_for "$line")"
+
+	run_hook "$id" disable || true
+	installed "$package" && apk del "$package"
+	echo "AudioWRT extension '$id' was removed."
+}
+
+configure_extension() {
+	id="${1:-}"
+	line="$(catalog_line "$id")"
+	[ -n "$line" ] || {
+		echo "ERROR: unknown AudioWRT extension: $id" >&2
+		exit 2
+	}
+	package="$(package_for "$line")"
+	installed "$package" || {
+		echo "ERROR: required AudioWRT package is not installed: $package" >&2
+		exit 4
+	}
+	run_hook "$id" configure
+}
+
+case "${1:-}" in
+	list) list_extensions ;;
+	refresh) apk update ;;
+	install) install_extension "${2:-}" ;;
+	remove) remove_extension "${2:-}" ;;
+	configure) configure_extension "${2:-}" ;;
+	*) usage; exit 2 ;;
+esac

@@ -1,0 +1,5 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+/usr/sbin/audiowrt-extensions configure mpd >/dev/null 2>&1 || true
+exit 0

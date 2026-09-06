@@ -1,0 +1,62 @@
+name: Validate AudioWRT packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      openwrt_ref:
+        description: OpenWrt branch or tag used for package metadata validation
+        required: true
+        default: openwrt-25.12
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout AudioWRT packages
+        uses: actions/checkout@v4
+
+      - name: Validate shell scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' script; do
+            sh -n "$script"
+          done < <(find . -path './.git' -prune -o -type f -perm /111 -print0)
+
+      - name: Validate OpenWrt package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="$PWD"
+          openwrt=/tmp/openwrt
+
+          git clone --depth=1 --branch '${{ inputs.openwrt_ref }}' https://github.com/openwrt/openwrt.git "$openwrt"
+          cd "$openwrt"
+          cp feeds.conf.default feeds.conf
+          printf '\nsrc-link audiowrt %s\n' "$workspace" >> feeds.conf
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          make -s prepare-tmpinfo
+
+          for package in \
+            audiowrt-audio \
+            audiowrt-usb-audio \
+            audiowrt-extensions \
+            audiowrt-mpd \
+            audiowrt-airplay \
+            librespot \
+            audiowrt-spotify \
+            bluez-alsa \
+            audiowrt-bluetooth \
+            luci-app-audiowrt; do
+            grep -q "^Package: $package$" tmp/.packageinfo || {
+              echo "Package metadata missing: $package" >&2
+              exit 1
+            }
+          done
