@@ -40,7 +40,8 @@ jobs:
             audiowrt-mpd \
             audiowrt-airplay \
             audiowrt-spotify \
-            audiowrt-bluetooth; do
+            audiowrt-bluetooth \
+            luci-app-audiowrt; do
             makefile="$package/Makefile"
             for phase in Prepare Configure Compile; do
               grep -q "^define Build/$phase$" "$makefile" || {
