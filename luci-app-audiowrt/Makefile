@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-audiowrt
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
 
@@ -17,6 +17,12 @@ endef
 
 define Package/luci-app-audiowrt/description
  Reusable LuCI interface for AudioWRT audio outputs and music-service extensions. It does not modify OpenWrt router or network configuration.
+endef
+
+define Build/Prepare
+endef
+
+define Build/Configure
 endef
 
 define Build/Compile
