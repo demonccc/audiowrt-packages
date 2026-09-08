@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-bluetooth
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 
@@ -16,6 +16,15 @@ endef
 
 define Package/audiowrt-bluetooth/description
  Adds Bluetooth speaker/headset pairing and A2DP output selection through BlueZ and BlueALSA.
+endef
+
+define Build/Prepare
+endef
+
+define Build/Configure
+endef
+
+define Build/Compile
 endef
 
 define Package/audiowrt-bluetooth/install
