@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-usb-audio
-PKG_RELEASE:=5
+PKG_RELEASE:=6
 PKG_LICENSE:=GPL-2.0-only
 
 include $(INCLUDE_DIR)/package.mk
@@ -15,6 +15,15 @@ endef
 
 define Package/audiowrt-usb-audio/description
  USB Audio Class support plus automatic ALSA default-device selection. It does not alter OpenWrt networking or router behavior. Userspace ALSA libraries are pulled only by audio engines that actually need them.
+endef
+
+define Build/Prepare
+endef
+
+define Build/Configure
+endef
+
+define Build/Compile
 endef
 
 define Package/audiowrt-usb-audio/install

@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       openwrt_ref:
-        description: OpenWrt branch or tag used for package metadata validation
+        description: Exact OpenWrt release tag used for package metadata validation
         required: true
-        default: openwrt-25.12
+        default: v25.12.5
         type: string
 
 permissions:
@@ -28,6 +28,28 @@ jobs:
           while IFS= read -r -d '' script; do
             sh -n "$script"
           done < <(find . -path './.git' -prune -o -type f -perm /111 -print0)
+
+      - name: Validate file-only package build phases
+        shell: bash
+        run: |
+          set -euo pipefail
+          for package in \
+            audiowrt-audio \
+            audiowrt-usb-audio \
+            audiowrt-extensions \
+            audiowrt-mpd \
+            audiowrt-airplay \
+            audiowrt-spotify \
+            audiowrt-bluetooth \
+            luci-app-audiowrt; do
+            makefile="$package/Makefile"
+            for phase in Prepare Configure Compile; do
+              grep -q "^define Build/$phase$" "$makefile" || {
+                echo "Missing explicit Build/$phase in file-only package: $package" >&2
+                exit 1
+              }
+            done
+          done
 
       - name: Validate OpenWrt package metadata
         shell: bash

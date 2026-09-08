@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-extensions
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 
@@ -16,6 +16,15 @@ endef
 
 define Package/audiowrt-extensions/description
  Installs, removes and configures optional AudioWRT music services without changing OpenWrt network or router configuration.
+endef
+
+define Build/Prepare
+endef
+
+define Build/Configure
+endef
+
+define Build/Compile
 endef
 
 define Package/audiowrt-extensions/install

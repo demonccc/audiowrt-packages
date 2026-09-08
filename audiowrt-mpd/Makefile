@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-mpd
-PKG_RELEASE:=4
+PKG_RELEASE:=5
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 
@@ -16,6 +16,15 @@ endef
 
 define Package/audiowrt-mpd/description
  Installs MPD and configures it to use the AudioWRT-selected ALSA output without changing OpenWrt networking.
+endef
+
+define Build/Prepare
+endef
+
+define Build/Configure
+endef
+
+define Build/Compile
 endef
 
 define Package/audiowrt-mpd/install
