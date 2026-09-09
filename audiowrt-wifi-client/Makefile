@@ -11,7 +11,7 @@ define Package/audiowrt-wifi-client
   SECTION:=net
   CATEGORY:=Network
   TITLE:=AudioWRT reusable Wi-Fi client manager
-  DEPENDS:=+uci +ubus +iwinfo +netifd +wifi-scripts +wpad-basic-mbedtls +dnsmasq +umdns
+  DEPENDS:=+uci +ubus +rpcd-mod-iwinfo +netifd +wifi-scripts +wpad-basic-mbedtls +dnsmasq +umdns
 endef
 
 define Package/audiowrt-wifi-client/description
