@@ -37,11 +37,13 @@ jobs:
             audiowrt-audio \
             audiowrt-usb-audio \
             audiowrt-extensions \
+            audiowrt-wifi-client \
             audiowrt-mpd \
             audiowrt-airplay \
             audiowrt-spotify \
             audiowrt-bluetooth \
-            luci-app-audiowrt; do
+            luci-app-audiowrt \
+            luci-app-audiowrt-wifi-client; do
             makefile="$package/Makefile"
             for phase in Prepare Configure Compile; do
               grep -q "^define Build/$phase$" "$makefile" || {
@@ -70,6 +72,8 @@ jobs:
             audiowrt-audio \
             audiowrt-usb-audio \
             audiowrt-extensions \
+            audiowrt-wifi-client \
+            luci-app-audiowrt-wifi-client \
             audiowrt-mpd \
             audiowrt-airplay \
             librespot \
