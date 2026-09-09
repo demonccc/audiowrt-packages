@@ -1,0 +1,17 @@
+{
+	"luci-app-audiowrt-wifi-client": {
+		"description": "Grant access to the AudioWRT Wi-Fi client interface",
+		"read": {
+			"uci": [ "audiowrt-wifi-client", "wireless", "network", "system" ],
+			"file": {
+				"/usr/sbin/audiowrt-wifi-client": [ "exec" ]
+			}
+		},
+		"write": {
+			"uci": [ "audiowrt-wifi-client", "wireless", "network" ],
+			"file": {
+				"/usr/sbin/audiowrt-wifi-client": [ "exec" ]
+			}
+		}
+	}
+}

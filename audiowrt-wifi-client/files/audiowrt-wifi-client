@@ -1,0 +1,305 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+CONFIG='audiowrt-wifi-client'
+
+cfg() {
+	uci -q get "$CONFIG.main.$1" 2>/dev/null || printf '%s\n' "${2:-}"
+}
+
+wifi_devices() {
+	uci -q show wireless 2>/dev/null |
+		sed -n "s/^wireless\.\([^.=]*\)=wifi-device.*/\1/p"
+}
+
+json_escape() {
+	printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\t/\\t/g'
+}
+
+setup_ip() {
+	cfg setup_ip '192.168.77.1'
+}
+
+setup_timeout() {
+	cfg setup_timeout '45'
+}
+
+setup_radio() {
+	configured="$(cfg setup_radio '')"
+	if [ -n "$configured" ] && uci -q get "wireless.$configured" >/dev/null 2>&1; then
+		printf '%s\n' "$configured"
+		return
+	fi
+	wifi_devices | head -n 1
+}
+
+set_umdns_networks() {
+	uci -q get umdns.@umdns[0] >/dev/null 2>&1 || return 0
+	for network in lan audiowrt_wifi audiowrt_setup; do
+		uci -q del_list umdns.@umdns[0].network="$network" 2>/dev/null || true
+		uci -q add_list umdns.@umdns[0].network="$network"
+	done
+	uci -q commit umdns
+}
+
+restart_umdns() {
+	[ -x /etc/init.d/umdns ] || return 0
+	/etc/init.d/umdns enable >/dev/null 2>&1 || true
+	/etc/init.d/umdns restart >/dev/null 2>&1 || true
+}
+
+setup_dns_enable() {
+	ip="$(setup_ip)"
+	uci -q get dhcp.@dnsmasq[0] >/dev/null 2>&1 || return 0
+	uci -q del_list dhcp.@dnsmasq[0].address="/#/$ip" 2>/dev/null || true
+	uci -q add_list dhcp.@dnsmasq[0].address="/#/$ip"
+	uci -q commit dhcp
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+}
+
+setup_dns_disable() {
+	ip="$(setup_ip)"
+	uci -q get dhcp.@dnsmasq[0] >/dev/null 2>&1 || return 0
+	uci -q del_list dhcp.@dnsmasq[0].address="/#/$ip" 2>/dev/null || true
+	uci -q commit dhcp
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+}
+
+ensure_setup_network() {
+	name="${1:-AudioWRT}"
+	radio="$(setup_radio)"
+	[ -n "$radio" ] || {
+		echo 'ERROR: no Wi-Fi radio is available.' >&2
+		exit 3
+	}
+	ip="$(setup_ip)"
+
+	uci -q set "$CONFIG.main.enabled"='1'
+	uci -q set "$CONFIG.main.setup_radio"="$radio"
+
+	uci -q delete network.audiowrt_setup 2>/dev/null || true
+	uci -q set network.audiowrt_setup='interface'
+	uci -q set network.audiowrt_setup.proto='static'
+	uci -q set network.audiowrt_setup.ipaddr="$ip"
+	uci -q set network.audiowrt_setup.netmask='255.255.255.0'
+
+	uci -q delete dhcp.audiowrt_setup 2>/dev/null || true
+	uci -q set dhcp.audiowrt_setup='dhcp'
+	uci -q set dhcp.audiowrt_setup.interface='audiowrt_setup'
+	uci -q set dhcp.audiowrt_setup.start='100'
+	uci -q set dhcp.audiowrt_setup.limit='100'
+	uci -q set dhcp.audiowrt_setup.leasetime='10m'
+	uci -q set dhcp.audiowrt_setup.ignore='0'
+
+	uci -q delete wireless.audiowrt_setup 2>/dev/null || true
+	uci -q set wireless.audiowrt_setup='wifi-iface'
+	uci -q set wireless.audiowrt_setup.device="$radio"
+	uci -q set wireless.audiowrt_setup.mode='ap'
+	uci -q set wireless.audiowrt_setup.network='audiowrt_setup'
+	uci -q set wireless.audiowrt_setup.ssid="$name"
+	uci -q set wireless.audiowrt_setup.encryption='none'
+	uci -q set wireless.audiowrt_setup.isolate='1'
+	uci -q set wireless.audiowrt_setup.disabled='0'
+	uci -q set "wireless.$radio.disabled"='0'
+
+	uci -q commit "$CONFIG"
+	uci -q commit network
+	uci -q commit dhcp
+	uci -q commit wireless
+	set_umdns_networks
+	setup_dns_enable
+	restart_umdns
+}
+
+bootstrap() {
+	name="${1:-AudioWRT}"
+
+	# Preserve OpenWrt's board-defined wifi-device sections. Existing wifi-iface
+	# sections remain present but disabled; the AudioWRT distro then owns only
+	# audiowrt_setup and audiowrt_client.
+	for section in $(uci -q show wireless 2>/dev/null |
+		sed -n "s/^wireless\.\([^.=]*\)=wifi-iface.*/\1/p"); do
+		uci -q set "wireless.$section.disabled"='1'
+	done
+	uci -q commit wireless
+
+	ensure_setup_network "$name"
+	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
+}
+
+setup_start() {
+	name="${1:-$(uci -q get system.@system[0].hostname || echo AudioWRT)}"
+	if ! uci -q get wireless.audiowrt_setup >/dev/null 2>&1; then
+		ensure_setup_network "$name"
+	else
+		uci -q set wireless.audiowrt_client.disabled='1' 2>/dev/null || true
+		uci -q set wireless.audiowrt_setup.ssid="$name"
+		uci -q set wireless.audiowrt_setup.disabled='0'
+		uci -q commit wireless
+		set_umdns_networks
+		setup_dns_enable
+		restart_umdns
+	fi
+	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
+}
+
+setup_stop() {
+	uci -q set wireless.audiowrt_setup.disabled='1' 2>/dev/null || true
+	uci -q commit wireless
+	setup_dns_disable
+	restart_umdns
+	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
+}
+
+scan() {
+	first=1
+	printf '{"radios":['
+	for radio in $(wifi_devices); do
+		result="$(ubus call iwinfo scan "{\"device\":\"$radio\"}" 2>/dev/null || printf '{"results":[]}')"
+		[ "$first" -eq 1 ] || printf ','
+		first=0
+		printf '{"device":"%s","band":"%s","scan":%s}' \
+			"$(json_escape "$radio")" \
+			"$(json_escape "$(uci -q get "wireless.$radio.band" || true)")" \
+			"$result"
+	done
+	printf ']}\n'
+}
+
+configure_client() {
+	radio="${1:-}"
+	ssid="${2:-}"
+	encryption="${3:-sae-mixed}"
+	key="${4:-}"
+
+	[ -n "$radio" ] && uci -q get "wireless.$radio" >/dev/null 2>&1 || {
+		echo 'ERROR: invalid Wi-Fi radio.' >&2
+		exit 4
+	}
+	[ -n "$ssid" ] || {
+		echo 'ERROR: SSID is required.' >&2
+		exit 5
+	}
+	case "$encryption" in
+		none) key='' ;;
+		psk2|sae|sae-mixed)
+			[ "${#key}" -ge 8 ] || {
+				echo 'ERROR: Wi-Fi password must contain at least 8 characters.' >&2
+				exit 6
+			}
+			;;
+		*)
+			echo 'ERROR: unsupported Wi-Fi security mode.' >&2
+			exit 7
+			;;
+	esac
+
+	uci -q delete network.audiowrt_wifi 2>/dev/null || true
+	uci -q set network.audiowrt_wifi='interface'
+	uci -q set network.audiowrt_wifi.proto='dhcp'
+
+	uci -q delete wireless.audiowrt_client 2>/dev/null || true
+	uci -q set wireless.audiowrt_client='wifi-iface'
+	uci -q set wireless.audiowrt_client.device="$radio"
+	uci -q set wireless.audiowrt_client.mode='sta'
+	uci -q set wireless.audiowrt_client.network='audiowrt_wifi'
+	uci -q set wireless.audiowrt_client.ssid="$ssid"
+	uci -q set wireless.audiowrt_client.encryption="$encryption"
+	uci -q set wireless.audiowrt_client.disabled='0'
+	[ "$encryption" = 'none' ] || uci -q set wireless.audiowrt_client.key="$key"
+	uci -q set "wireless.$radio.disabled"='0'
+
+	uci -q commit network
+	uci -q commit wireless
+}
+
+wait_connected() {
+	timeout="$(setup_timeout)"
+	elapsed=0
+	while [ "$elapsed" -lt "$timeout" ]; do
+		status="$(ubus call network.interface.audiowrt_wifi status 2>/dev/null || true)"
+		if printf '%s\n' "$status" | grep -q '"up":[[:space:]]*true'; then
+			return 0
+		fi
+		sleep 2
+		elapsed=$((elapsed + 2))
+	done
+	return 1
+}
+
+connect_client() {
+	radio="${1:-}"
+	ssid="${2:-}"
+	encryption="${3:-sae-mixed}"
+	key="${4:-}"
+
+	configure_client "$radio" "$ssid" "$encryption" "$key"
+	uci -q set wireless.audiowrt_setup.disabled='1' 2>/dev/null || true
+	uci -q commit wireless
+	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
+
+	if wait_connected; then
+		uci -q set "$CONFIG.main.enabled"='1'
+		uci -q set "$CONFIG.main.last_error"=''
+		uci -q commit "$CONFIG"
+		setup_dns_disable
+		set_umdns_networks
+		restart_umdns
+		return 0
+	fi
+
+	uci -q set wireless.audiowrt_client.disabled='1' 2>/dev/null || true
+	uci -q set wireless.audiowrt_setup.disabled='0' 2>/dev/null || true
+	uci -q set "$CONFIG.main.last_error"='Could not connect to the selected Wi-Fi network.'
+	uci -q commit wireless
+	uci -q commit "$CONFIG"
+	setup_dns_enable
+	restart_umdns
+	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
+	return 8
+}
+
+status() {
+	hostname="$(uci -q get system.@system[0].hostname || echo AudioWRT)"
+	ssid="$(uci -q get wireless.audiowrt_client.ssid || true)"
+	radio="$(uci -q get wireless.audiowrt_client.device || true)"
+	up='0'
+	if ubus call network.interface.audiowrt_wifi status 2>/dev/null |
+		grep -q '"up":[[:space:]]*true'; then
+		up='1'
+	fi
+	printf 'hostname=%s\n' "$hostname"
+	printf 'enabled=%s\n' "$(cfg enabled 0)"
+	printf 'connected=%s\n' "$up"
+	printf 'ssid=%s\n' "$ssid"
+	printf 'radio=%s\n' "$radio"
+	printf 'last_error=%s\n' "$(cfg last_error '')"
+}
+
+case "${1:-}" in
+	scan)
+		scan
+		;;
+	bootstrap)
+		bootstrap "${2:-}"
+		;;
+	setup)
+		case "${2:-}" in
+			start) setup_start "${3:-}" ;;
+			stop) setup_stop ;;
+			*) echo 'Usage: audiowrt-wifi-client setup {start [name]|stop}' >&2; exit 2 ;;
+		esac
+		;;
+	connect)
+		connect_client "${2:-}" "${3:-}" "${4:-}" "${5:-}"
+		;;
+	status)
+		status
+		;;
+	*)
+		echo 'Usage: audiowrt-wifi-client {scan|bootstrap [name]|setup start [name]|setup stop|connect <radio> <ssid> <encryption> <key>|status}' >&2
+		exit 2
+		;;
+esac

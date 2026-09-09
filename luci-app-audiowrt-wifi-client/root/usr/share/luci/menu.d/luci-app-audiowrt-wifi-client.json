@@ -1,0 +1,14 @@
+{
+	"admin/network": {
+		"title": "Network",
+		"order": 50,
+		"action": { "type": "firstchild" },
+		"depends": { "acl": [ "luci-app-audiowrt-wifi-client" ] }
+	},
+	"admin/network/audiowrt-wifi-client": {
+		"title": "Wi-Fi Client",
+		"order": 10,
+		"action": { "type": "view", "path": "network/audiowrt-wifi-client" },
+		"depends": { "acl": [ "luci-app-audiowrt-wifi-client" ] }
+	}
+}

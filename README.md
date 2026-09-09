@@ -1,31 +1,22 @@
 # AudioWRT Packages
 
-Reusable OpenWrt packages and LuCI applications that add music and audio capabilities **without changing OpenWrt's router, network, DHCP, firewall or first-boot behavior**.
+Reusable OpenWrt packages and LuCI applications used by AudioWRT.
 
-This repository is an OpenWrt package feed. Distribution-only behavior belongs in [`demonccc/audiowrt`](https://github.com/demonccc/audiowrt).
+This repository is an OpenWrt package feed. Distribution-only appliance policy belongs in [`demonccc/audiowrt`](https://github.com/demonccc/audiowrt).
 
 ## Responsibility boundary
 
-`audiowrt-packages` is safe to use on an existing OpenWrt installation. It owns only audio functionality:
+Packages in this repository are safe to install on an existing OpenWrt system. Installing them must not silently replace the device's existing router, DHCP, firewall, storage or first-boot policy.
 
-- common audio state and naming;
-- USB DAC output management;
-- music-service installation and configuration;
-- Spotify Connect;
-- AirPlay;
-- MPD/local music;
-- Bluetooth A2DP output;
-- the reusable AudioWRT LuCI audio UI.
+Most packages are audio-only. Reusable system helpers such as `audiowrt-wifi-client` are **opt-in**: they install disabled and change configuration only after an explicit user or distribution action.
 
-It does **not** change LAN addressing, DHCP serving, Wi-Fi AP/STA topology, firewall behavior, provisioning or storage layout.
-
-AudioWRT distribution packages such as first-boot provisioning, client-only network defaults and guided USB extroot management live in the `audiowrt` repository instead.
+The AudioWRT firmware repository is responsible for deciding which reusable components are enabled during first boot.
 
 ## Packages
 
 ### `audiowrt-audio`
 
-Common reusable audio state and helper CLI. The effective audio name defaults to the existing OpenWrt hostname unless explicitly overridden.
+Common reusable audio state and helper CLI. The OpenWrt system hostname (`system.@system[0].hostname`) is the canonical AudioWRT device/audio name; it is not duplicated in AudioWRT UCI state.
 
 ### `audiowrt-usb-audio`
 
@@ -50,13 +41,29 @@ audiowrt-extensions install bluetooth
 
 The manager uses the existing OpenWrt writable overlay. It never formats or reconfigures storage.
 
+### `audiowrt-wifi-client`
+
+Reusable Wi-Fi STA/setup-AP helper. It can scan every OpenWrt `wifi-device`, configure an `audiowrt_client` STA on the selected radio, provide an explicit setup/recovery AP and keep mDNS enabled on the AudioWRT client/setup interfaces.
+
+The package is disabled by default. Installing it on normal OpenWrt does not modify `/etc/config/network`, `/etc/config/wireless`, DHCP or mDNS until the user explicitly invokes it.
+
+Examples:
+
+```sh
+audiowrt-wifi-client scan
+audiowrt-wifi-client status
+audiowrt-wifi-client connect radio1 'My Wi-Fi' sae-mixed 'password'
+```
+
+`luci-app-audiowrt-wifi-client` exposes the same opt-in capability as **Network -> Wi-Fi Client**.
+
 ### `audiowrt-mpd`
 
 Installs `mpd-mini` and configures local/HTTP playback through ALSA `default`. MPD database, state and playlists stay under `/tmp`; local music is expected at `/mnt/music`.
 
 ### `audiowrt-airplay`
 
-Installs `shairport-sync-mini`, uses the current AudioWRT audio name and sends playback to ALSA `default`.
+Installs `shairport-sync-mini`, uses the current OpenWrt hostname as the AudioWRT audio name and sends playback to ALSA `default`.
 
 ### `librespot` + `audiowrt-spotify`
 
@@ -81,18 +88,21 @@ audiowrt-bluetooth usb
 
 ### `luci-app-audiowrt`
 
-Reusable audio-only LuCI interface:
+Reusable audio LuCI interface:
 
 ```text
 AudioWRT
-├── Overview
 ├── Output
 └── Extensions
 ```
 
-The Output page can select USB audio and, when the Bluetooth extension is installed, scan/pair/select Bluetooth speakers. The Extensions page installs/removes music services with `apk`.
+When OpenWrt's `luci-mod-status` is installed, the package also adds an **AudioWRT** section to the native **Status -> Overview** page instead of maintaining a duplicate AudioWRT overview page.
 
-When this app is used inside the full AudioWRT distribution, `luci-app-audiowrt-core` from the distribution repository adds the network/storage/system pages under the same `AudioWRT` menu.
+## Architecture
+
+File-only AudioWRT packages use `PKGARCH:=all` and can be reused across CPU architectures for the same compatible OpenWrt release. Packages that compile native software, notably `librespot` and `bluez-alsa`, remain architecture-specific.
+
+`PKGARCH:=all` does not mean release-independent: development currently targets OpenWrt 25.12 and its `apk` package manager and package ABI.
 
 ## Use as an OpenWrt feed
 
@@ -103,7 +113,7 @@ src-git audiowrt https://github.com/demonccc/audiowrt-packages.git
 Development branch example:
 
 ```text
-src-git audiowrt https://github.com/demonccc/audiowrt-packages.git;feat/mvp-runtime
+src-git audiowrt https://github.com/demonccc/audiowrt-packages.git;feat/reusable-wifi-client
 ```
 
 Then:
@@ -112,6 +122,8 @@ Then:
 ./scripts/feeds update audiowrt
 ./scripts/feeds install -a -p audiowrt
 ```
+
+Installing feed metadata does not activate `audiowrt-wifi-client`; network changes remain opt-in.
 
 ## GitHub Actions policy
 

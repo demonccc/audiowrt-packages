@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-audio
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 
@@ -15,7 +15,7 @@ define Package/audiowrt-audio
 endef
 
 define Package/audiowrt-audio/description
- Common AudioWRT audio state and output helpers. This package does not modify OpenWrt networking, firewall, DHCP or first-boot behavior.
+ Common AudioWRT audio state and output helpers. This package does not modify OpenWrt networking, firewall, DHCP or first-boot behavior. The OpenWrt system hostname is the canonical AudioWRT device name.
 endef
 
 define Package/audiowrt-audio/conffiles

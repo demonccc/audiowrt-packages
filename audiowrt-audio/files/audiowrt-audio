@@ -4,11 +4,6 @@
 set -eu
 
 name() {
-	configured="$(uci -q get audiowrt-audio.main.device_name || true)"
-	if [ -n "$configured" ]; then
-		printf '%s\n' "$configured"
-		return
-	fi
 	hostname="$(uci -q get system.@system[0].hostname || true)"
 	[ -n "$hostname" ] || hostname='AudioWRT'
 	printf '%s\n' "$hostname"
@@ -35,12 +30,18 @@ status() {
 
 set_name() {
 	value="${1:-}"
-	uci -q set audiowrt-audio.main.device_name="$value"
-	uci -q commit audiowrt-audio
+	[ -n "$value" ] || { echo 'ERROR: device name is required.' >&2; exit 2; }
+	case "$value" in
+		*[!A-Za-z0-9-]*|-*|*-) echo 'ERROR: device name must contain only letters, numbers and hyphens.' >&2; exit 2 ;;
+	esac
+	uci -q set system.@system[0].hostname="$value"
+	uci -q commit system
+	[ -x /etc/init.d/umdns ] && /etc/init.d/umdns restart >/dev/null 2>&1 || true
 	[ -x /usr/sbin/audiowrt-extensions ] && {
 		/usr/sbin/audiowrt-extensions configure airplay >/dev/null 2>&1 || true
 		/usr/sbin/audiowrt-extensions configure spotify >/dev/null 2>&1 || true
 	}
+	restart_engines
 }
 
 set_usb() {
