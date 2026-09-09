@@ -1,23 +1,18 @@
 {
 	"admin/audiowrt": {
 		"title": "AudioWRT",
-		"order": 5,
+		"order": 20,
 		"action": { "type": "firstchild" },
 		"depends": { "acl": [ "luci-app-audiowrt" ] }
 	},
-	"admin/audiowrt/overview": {
-		"title": "Overview",
-		"order": 10,
-		"action": { "type": "view", "path": "audiowrt/overview" }
-	},
 	"admin/audiowrt/output": {
 		"title": "Output",
-		"order": 20,
+		"order": 10,
 		"action": { "type": "view", "path": "audiowrt/output" }
 	},
 	"admin/audiowrt/extensions": {
 		"title": "Extensions",
-		"order": 30,
+		"order": 20,
 		"action": { "type": "view", "path": "audiowrt/extensions" }
 	}
 }
