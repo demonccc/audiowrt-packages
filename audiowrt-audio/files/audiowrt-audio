@@ -4,11 +4,6 @@
 set -eu
 
 name() {
-	configured="$(uci -q get audiowrt-audio.main.device_name || true)"
-	if [ -n "$configured" ]; then
-		printf '%s\n' "$configured"
-		return
-	fi
 	hostname="$(uci -q get system.@system[0].hostname || true)"
 	[ -n "$hostname" ] || hostname='AudioWRT'
 	printf '%s\n' "$hostname"
@@ -33,16 +28,6 @@ status() {
 	printf 'last_error=%s\n' "$(uci -q get audiowrt-audio.main.last_error || true)"
 }
 
-set_name() {
-	value="${1:-}"
-	uci -q set audiowrt-audio.main.device_name="$value"
-	uci -q commit audiowrt-audio
-	[ -x /usr/sbin/audiowrt-extensions ] && {
-		/usr/sbin/audiowrt-extensions configure airplay >/dev/null 2>&1 || true
-		/usr/sbin/audiowrt-extensions configure spotify >/dev/null 2>&1 || true
-	}
-}
-
 set_usb() {
 	uci -q set audiowrt-audio.main.output_type='usb'
 	uci -q set audiowrt-audio.main.bluetooth_device=''
@@ -62,7 +47,6 @@ set_usb() {
 case "${1:-}" in
 	name) name ;;
 	status) status ;;
-	set-name) set_name "${2:-}" ;;
 	output)
 		case "${2:-}" in
 			usb) set_usb ;;
@@ -70,7 +54,7 @@ case "${1:-}" in
 		esac
 		;;
 	*)
-		echo 'Usage: audiowrt-audio {name|status|set-name <name>|output usb}' >&2
+		echo 'Usage: audiowrt-audio {name|status|output usb}' >&2
 		exit 2
 		;;
 esac
