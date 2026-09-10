@@ -29,6 +29,10 @@ jobs:
             sh -n "$script"
           done < <(find . -path './.git' -prune -o -type f -perm /111 -print0)
 
+      - name: Validate reusable Wi-Fi client contract
+        shell: bash
+        run: bash tests/test-wifi-client-package.sh
+
       - name: Validate file-only package build phases
         shell: bash
         run: |
