@@ -29,6 +29,10 @@ jobs:
             sh -n "$script"
           done < <(find . -path './.git' -prune -o -type f -perm /111 -print0)
 
+      - name: Validate reusable Wi-Fi client contract
+        shell: bash
+        run: bash tests/test-wifi-client-package.sh
+
       - name: Validate file-only package build phases
         shell: bash
         run: |
@@ -41,7 +45,9 @@ jobs:
             audiowrt-airplay \
             audiowrt-spotify \
             audiowrt-bluetooth \
-            luci-app-audiowrt; do
+            audiowrt-wifi-client \
+            luci-app-audiowrt \
+            luci-app-audiowrt-wifi-client; do
             makefile="$package/Makefile"
             for phase in Prepare Configure Compile; do
               grep -q "^define Build/$phase$" "$makefile" || {
@@ -76,7 +82,9 @@ jobs:
             audiowrt-spotify \
             bluez-alsa \
             audiowrt-bluetooth \
-            luci-app-audiowrt; do
+            audiowrt-wifi-client \
+            luci-app-audiowrt \
+            luci-app-audiowrt-wifi-client; do
             grep -q "^Package: $package$" tmp/.packageinfo || {
               echo "Package metadata missing: $package" >&2
               exit 1
