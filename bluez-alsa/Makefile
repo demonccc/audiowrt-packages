@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bluez-alsa
 PKG_VERSION:=4.1.1
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/Arkq/bluez-alsa/archive/v$(PKG_VERSION)
@@ -25,10 +25,33 @@ define Package/bluez-alsa
 endef
 
 define Package/bluez-alsa/description
- Lightweight BlueZ-to-ALSA bridge with A2DP source support, suitable for embedded audio systems.
+ Minimal BlueZ-to-ALSA bridge for AudioWRT Bluetooth A2DP Source output.
 endef
 
-CONFIGURE_ARGS += --enable-a2dpconf --disable-rfcomm --disable-debug
+# AudioWRT sends audio to Bluetooth speakers/headsets. Keep only the daemon,
+# ALSA plugins and mandatory SBC codec path; receiver-side utilities and
+# unrelated profiles/codecs are intentionally disabled for the 8 MB baseline.
+CONFIGURE_ARGS += \
+	--disable-aac \
+	--disable-a2dpconf \
+	--disable-aplay \
+	--disable-aptx \
+	--disable-aptx-hd \
+	--disable-cli \
+	--disable-debug \
+	--disable-faststream \
+	--disable-hcitop \
+	--disable-lc3plus \
+	--disable-ldac \
+	--disable-manpages \
+	--disable-mp3lame \
+	--disable-mpg123 \
+	--disable-msbc \
+	--disable-ofono \
+	--disable-rfcomm \
+	--disable-systemd \
+	--disable-test \
+	--disable-upower
 
 define Package/bluez-alsa/install
 	$(INSTALL_DIR) $(1)/etc/alsa/conf.d
@@ -37,7 +60,6 @@ define Package/bluez-alsa/install
 	$(CP) $(PKG_BUILD_DIR)/src/asound/.libs/libasound_module_*_bluealsa.so $(1)/usr/lib/alsa-lib/
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/src/bluealsa $(1)/usr/bin/bluealsa
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/utils/aplay/bluealsa-aplay $(1)/usr/bin/bluealsa-aplay
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/bluealsa.init $(1)/etc/init.d/bluealsa
 	$(INSTALL_DIR) $(1)/etc/dbus-1/system.d
