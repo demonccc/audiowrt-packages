@@ -9,6 +9,10 @@ patch="$repo_root/bluez-alsa/patches/005-fix-gcc14-musl-basename.patch"
 # GCC 14 + musl rejects the legacy basename() declaration used by BlueALSA 4.1.1.
 grep -q '^+#include <libgen.h>$' "$patch"
 
+# BlueALSA configure requires gdbus-codegen. Runtime +glib2 is not sufficient:
+# the OpenWrt SDK must build glib2's host tools as a build dependency.
+grep -q '^PKG_BUILD_DEPENDS:=glib2/host$' "$makefile"
+
 # The 8 MB baseline only needs the A2DP Source path. Do not build receiver-side
 # utilities or optional codecs/tools that increase compile and firmware size.
 for option in \
