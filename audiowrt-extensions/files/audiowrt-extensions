@@ -30,11 +30,20 @@ installed() {
 	apk info -e "$1" >/dev/null 2>&1
 }
 
+installable() {
+	package="$1"
+	apk search "$package" 2>/dev/null | grep -Eq "^${package}(-[0-9]|$)"
+}
+
 list_extensions() {
 	while IFS='|' read -r id package title description; do
 		case "$id" in ''|'#'*) continue ;; esac
-		state='available'
-		installed "$package" && state='installed'
+		state='unavailable'
+		if installed "$package"; then
+			state='installed'
+		elif installable "$package"; then
+			state='installable'
+		fi
 		printf '%s|%s|%s|%s|%s\n' "$id" "$package" "$state" "$title" "$description"
 	done < "$catalog"
 }
@@ -60,9 +69,13 @@ install_extension() {
 	package="$(package_for "$line")"
 
 	if ! installed "$package"; then
-		apk update
+		apk update >/dev/null
+		installable "$package" || {
+			echo "ERROR: $package is not available in the configured repositories." >&2
+			exit 3
+		}
 		apk add "$package" || {
-			echo "ERROR: OpenWrt could not install $package. Check repository availability and free storage." >&2
+			echo "ERROR: OpenWrt could not install $package. Check free storage and repository health." >&2
 			exit 3
 		}
 	fi

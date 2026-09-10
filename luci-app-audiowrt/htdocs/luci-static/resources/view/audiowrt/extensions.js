@@ -16,22 +16,38 @@ return view.extend({
 			return { id: f[0], package: f[1], state: f[2], title: f[3], description: f.slice(4).join('|') };
 		});
 
+		function statusLabel(state) {
+			if (state === 'installed') return _('Installed');
+			if (state === 'installable') return _('Available in configured repositories');
+			return _('Not available in configured repositories');
+		}
+
 		var cards = extensions.map(function(ext) {
 			var installed = ext.state === 'installed';
+			var installable = ext.state === 'installable';
+			var actions = [];
+			if (installed) {
+				actions.push(E('button', {
+					'class': 'btn cbi-button-negative',
+					'click': function() { self.changeExtension(ext.id, 'remove'); }
+				}, _('Remove')));
+			} else if (installable) {
+				actions.push(E('button', {
+					'class': 'btn cbi-button-action',
+					'click': function() { self.changeExtension(ext.id, 'install'); }
+				}, _('Install')));
+			}
 			return E('div', { 'class': 'cbi-section' }, [
 				E('h3', {}, ext.title),
 				E('p', {}, ext.description),
-				E('p', {}, [ E('strong', {}, _('Status: ')), installed ? _('Installed') : _('Available') ]),
-				E('button', {
-					'class': installed ? 'btn cbi-button-negative' : 'btn cbi-button-action',
-					'click': function() { self.changeExtension(ext.id, installed ? 'remove' : 'install'); }
-				}, installed ? _('Remove') : _('Install'))
+				E('p', {}, [ E('strong', {}, _('Status: ')), statusLabel(ext.state) ]),
+				actions.length ? E('div', {}, actions) : E('p', { 'class': 'text-muted' }, _('Configure an AudioWRT package repository to install this service later.'))
 			]);
 		});
 
 		return E('div', { 'class': 'cbi-map' }, [
 			E('h2', {}, _('AudioWRT Extensions')),
-			E('p', {}, _('Extensions are installed with OpenWrt\'s package manager. AudioWRT does not alter your storage layout; if this OpenWrt system already uses extroot, packages naturally install into that writable overlay.')),
+			E('p', {}, _('Extensions are optional audio services. Availability is based on the package repositories currently configured on this device.')),
 			E('div', {}, cards)
 		]);
 	},

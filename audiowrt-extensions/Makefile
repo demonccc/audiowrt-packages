@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-extensions
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 
@@ -15,7 +15,7 @@ define Package/audiowrt-extensions
 endef
 
 define Package/audiowrt-extensions/description
- Installs, removes and configures optional AudioWRT music services without changing OpenWrt network or router configuration.
+ Installs, removes and configures optional AudioWRT audio services without changing OpenWrt network or router configuration.
 endef
 
 define Build/Prepare
@@ -38,7 +38,6 @@ define Package/audiowrt-extensions/install
 	$(INSTALL_BIN) ./files/mpd $(1)/usr/libexec/audiowrt/extensions/mpd
 	$(INSTALL_BIN) ./files/airplay $(1)/usr/libexec/audiowrt/extensions/airplay
 	$(INSTALL_BIN) ./files/spotify $(1)/usr/libexec/audiowrt/extensions/spotify
-	$(INSTALL_BIN) ./files/bluetooth $(1)/usr/libexec/audiowrt/extensions/bluetooth
 endef
 
 $(eval $(call BuildPackage,audiowrt-extensions))

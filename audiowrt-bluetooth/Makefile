@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-bluetooth
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 
@@ -11,11 +11,11 @@ define Package/audiowrt-bluetooth
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT Bluetooth output integration
-  DEPENDS:=+audiowrt-extensions +bluez-alsa +kmod-btusb
+  DEPENDS:=+audiowrt-audio +bluez-alsa +kmod-btusb
 endef
 
 define Package/audiowrt-bluetooth/description
- Adds Bluetooth speaker/headset pairing and A2DP output selection through BlueZ and BlueALSA.
+ Adds Bluetooth speaker/headset pairing and A2DP Source output selection through BlueZ and BlueALSA.
 endef
 
 define Build/Prepare

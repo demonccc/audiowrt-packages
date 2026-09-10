@@ -2,4 +2,3 @@
 mpd|audiowrt-mpd|Local Music|Play local files and HTTP streams with MPD through the selected ALSA output.
 airplay|audiowrt-airplay|AirPlay|Receive AirPlay audio through Shairport Sync and the selected ALSA output.
 spotify|audiowrt-spotify|Spotify Connect|Expose this OpenWrt device as a Spotify Connect speaker through librespot. Spotify Premium is required by librespot.
-bluetooth|audiowrt-bluetooth|Bluetooth Audio|Pair with a Bluetooth speaker or headset and use it as the AudioWRT ALSA output through BlueALSA.
