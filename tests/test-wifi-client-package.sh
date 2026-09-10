@@ -18,8 +18,13 @@ fi
 grep -q '+rpcd-mod-iwinfo' "$makefile"
 grep -q '+dnsmasq' "$makefile"
 grep -q 'ubus call iwinfo scan' "$script"
-grep -q "network='audiowrt_wifi'\|network.audiowrt_wifi" "$script" || true
-grep -q "audiowrt_setup" "$script"
+grep -q "network.audiowrt_wifi='interface'" "$script"
+grep -q "wireless.audiowrt_client='wifi-iface'" "$script"
+grep -q 'audiowrt_setup' "$script"
+
+# WPA personal credentials must be bounded to the normal 8..63 character PSK range.
+grep -q '\${#key}.*-lt 8' "$script"
+grep -q '\${#key}.*-gt 63' "$script"
 
 # mDNS integration must preserve unrelated pre-existing interface entries.
 if grep -q 'delete umdns.@umdns\[0\].network' "$script"; then
