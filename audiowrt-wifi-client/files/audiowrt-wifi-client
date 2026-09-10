@@ -65,8 +65,8 @@ connect_wifi() {
 	[ -n "$radio" ] && uci -q get wireless."$radio" >/dev/null 2>&1 || { echo 'ERROR: valid radio is required.' >&2; exit 2; }
 	[ -n "$ssid" ] || { echo 'ERROR: SSID is required.' >&2; exit 3; }
 	validate_encryption "$encryption"
-	if [ "$encryption" != 'none' ] && [ "${#key}" -lt 8 ]; then
-		echo 'ERROR: Wi-Fi password must contain at least 8 characters.' >&2
+	if [ "$encryption" != 'none' ] && { [ "${#key}" -lt 8 ] || [ "${#key}" -gt 63 ]; }; then
+		echo 'ERROR: Wi-Fi password must contain between 8 and 63 characters.' >&2
 		exit 5
 	fi
 
