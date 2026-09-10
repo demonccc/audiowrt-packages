@@ -35,9 +35,10 @@ radios() {
 
 scan() {
 	for radio in $(wifi_devices); do
+		band="$(uci -q get wireless."$radio".band || true)"
 		result="$(ubus call iwinfo scan "{\"device\":\"$radio\"}" 2>/dev/null || true)"
 		[ -n "$result" ] || continue
-		printf '%s\n' "@@RADIO:$radio"
+		printf '%s\n' "@@RADIO:$radio|$band"
 		printf '%s\n' "$result"
 	done
 }
@@ -98,6 +99,22 @@ disconnect_wifi() {
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
 }
 
+setup_dns_enable() {
+	setup_ip="$1"
+	uci -q del_list dhcp.@dnsmasq[0].address="/#/$setup_ip" 2>/dev/null || true
+	uci -q add_list dhcp.@dnsmasq[0].address="/#/$setup_ip"
+	uci -q commit dhcp
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+}
+
+setup_dns_disable() {
+	setup_ip="${1:-}"
+	[ -n "$setup_ip" ] || return 0
+	uci -q del_list dhcp.@dnsmasq[0].address="/#/$setup_ip" 2>/dev/null || true
+	uci -q commit dhcp
+	/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+}
+
 setup_start() {
 	radio="${1:-}"; ssid="${2:-AudioWRT-Setup}"; setup_ip="${3:-192.168.77.1}"
 	[ -n "$radio" ] && uci -q get wireless."$radio" >/dev/null 2>&1 || { echo 'ERROR: valid radio is required.' >&2; exit 2; }
@@ -130,27 +147,28 @@ setup_start() {
 	uci -q commit network
 	uci -q commit dhcp
 	uci -q commit wireless
-	/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+	setup_dns_enable "$setup_ip"
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
 	mdns_sync
 }
 
 setup_stop() {
+	setup_ip="$(uci -q get network.audiowrt_setup.ipaddr || true)"
 	uci -q set wireless.audiowrt_setup.disabled='1' 2>/dev/null || true
 	uci -q set dhcp.audiowrt_setup.ignore='1' 2>/dev/null || true
 	uci -q commit wireless
 	uci -q commit dhcp
-	/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+	setup_dns_disable "$setup_ip"
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
 	mdns_sync
 }
 
 mdns_sync() {
 	uci -q get umdns.@umdns[0] >/dev/null 2>&1 || uci -q add umdns umdns >/dev/null
-	uci -q delete umdns.@umdns[0].network 2>/dev/null || true
-	uci -q add_list umdns.@umdns[0].network='lan'
-	uci -q add_list umdns.@umdns[0].network='audiowrt_wifi'
-	uci -q add_list umdns.@umdns[0].network='audiowrt_setup'
+	for network in lan audiowrt_wifi audiowrt_setup; do
+		uci -q del_list umdns.@umdns[0].network="$network" 2>/dev/null || true
+		uci -q add_list umdns.@umdns[0].network="$network"
+	done
 	uci -q commit umdns
 	/etc/init.d/umdns enable >/dev/null 2>&1 || true
 	/etc/init.d/umdns restart >/dev/null 2>&1 || true
