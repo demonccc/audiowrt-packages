@@ -11,31 +11,27 @@ ensure_services() {
 	/etc/init.d/dbus start >/dev/null 2>&1 || true
 	/etc/init.d/bluetoothd start >/dev/null 2>&1 || true
 	/etc/init.d/bluealsa start >/dev/null 2>&1 || true
-	hciconfig hci0 up >/dev/null 2>&1 || true
-	bluetoothctl power on >/dev/null 2>&1 || true
+	/usr/bin/audiowrt-btctl power >/dev/null 2>&1 || true
 }
 
 selected() {
 	uci -q get audiowrt-audio.main.bluetooth_device || true
 }
 
-devices() {
-	ensure_services
+format_devices() {
 	selected_mac="$(selected)"
-	bluetoothctl devices 2>/dev/null | while read -r prefix mac rest; do
-		[ "$prefix" = 'Device' ] || continue
+	while IFS='|' read -r mac name paired connected; do
+		[ -n "$mac" ] || continue
 		valid_mac "$mac" || continue
-		info="$(bluetoothctl info "$mac" 2>/dev/null || true)"
-		name="$(printf '%s\n' "$info" | sed -n 's/^[[:space:]]*Name:[[:space:]]*//p' | head -n 1)"
-		[ -n "$name" ] || name="$rest"
-		paired=0
-		connected=0
-		printf '%s\n' "$info" | grep -q 'Paired: yes' && paired=1
-		printf '%s\n' "$info" | grep -q 'Connected: yes' && connected=1
 		is_selected=0
 		[ "$(printf '%s' "$mac" | tr '[:lower:]' '[:upper:]')" = "$(printf '%s' "$selected_mac" | tr '[:lower:]' '[:upper:]')" ] && is_selected=1
-		printf '%s|%s|%s|%s|%s\n' "$mac" "$name" "$paired" "$connected" "$is_selected"
+		printf '%s|%s|%s|%s|%s\n' "$mac" "$name" "${paired:-0}" "${connected:-0}" "$is_selected"
 	done
+}
+
+devices() {
+	ensure_services
+	/usr/bin/audiowrt-btctl devices | format_devices
 }
 
 scan() {
@@ -44,20 +40,12 @@ scan() {
 	[ "$seconds" -ge 2 ] || seconds=2
 	[ "$seconds" -le 30 ] || seconds=30
 	ensure_services
-	bluetoothctl --timeout "$seconds" scan on >/dev/null 2>&1 || true
-	devices
+	/usr/bin/audiowrt-btctl scan "$seconds" | format_devices
 }
 
-select_device() {
-	mac="${1:-}"
-	valid_mac "$mac" || { echo 'ERROR: invalid Bluetooth MAC address.' >&2; exit 2; }
-	ensure_services
-	bluetoothctl connect "$mac" >/dev/null 2>&1 || {
-		echo "ERROR: could not connect to Bluetooth device $mac." >&2
-		exit 3
-	}
-	info="$(bluetoothctl info "$mac" 2>/dev/null || true)"
-	name="$(printf '%s\n' "$info" | sed -n 's/^[[:space:]]*Name:[[:space:]]*//p' | head -n 1)"
+configure_device() {
+	mac="$1"
+	name="$(/usr/bin/audiowrt-btctl name "$mac" 2>/dev/null || printf '%s' "$mac")"
 
 	cat > /etc/asound.conf <<EOF
 defaults.bluealsa.service "org.bluealsa"
@@ -90,20 +78,30 @@ EOF
 	done
 }
 
+select_device() {
+	mac="${1:-}"
+	valid_mac "$mac" || { echo 'ERROR: invalid Bluetooth MAC address.' >&2; exit 2; }
+	ensure_services
+	/usr/bin/audiowrt-btctl connect "$mac" >/dev/null || {
+		echo "ERROR: could not connect to Bluetooth device $mac." >&2
+		exit 3
+	}
+	configure_device "$mac"
+}
+
 pair() {
 	mac="${1:-}"
 	valid_mac "$mac" || { echo 'ERROR: invalid Bluetooth MAC address.' >&2; exit 2; }
 	ensure_services
-	bluetoothctl --agent NoInputNoOutput pair "$mac"
-	bluetoothctl trust "$mac" >/dev/null
-	select_device "$mac"
+	/usr/bin/audiowrt-btctl pair "$mac"
+	configure_device "$mac"
 }
 
 disconnect() {
 	mac="${1:-$(selected)}"
 	[ -n "$mac" ] || exit 0
 	valid_mac "$mac" || { echo 'ERROR: invalid Bluetooth MAC address.' >&2; exit 2; }
-	bluetoothctl disconnect "$mac" >/dev/null 2>&1 || true
+	/usr/bin/audiowrt-btctl disconnect "$mac" >/dev/null 2>&1 || true
 	if [ "$(printf '%s' "$mac" | tr '[:lower:]' '[:upper:]')" = "$(printf '%s' "$(selected)" | tr '[:lower:]' '[:upper:]')" ]; then
 		uci -q set audiowrt-audio.main.ready='0'
 		uci -q set audiowrt-audio.main.last_error='Selected Bluetooth output is disconnected.'
