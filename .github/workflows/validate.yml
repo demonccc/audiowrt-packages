@@ -37,6 +37,10 @@ jobs:
         shell: bash
         run: bash tests/test-bluealsa-minimal.sh
 
+      - name: Validate minimal Bluetooth dependency contract
+        shell: bash
+        run: bash tests/test-bluetooth-minimal.sh
+
       - name: Validate file-only package build phases
         shell: bash
         run: |
@@ -84,6 +88,10 @@ jobs:
             audiowrt-airplay \
             librespot \
             audiowrt-spotify \
+            audiowrt-sbc \
+            audiowrt-bluez-libs \
+            audiowrt-bluez \
+            audiowrt-btctl \
             bluez-alsa \
             audiowrt-bluetooth \
             audiowrt-wifi-client \
