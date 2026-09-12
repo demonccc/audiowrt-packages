@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-audiowrt-wifi-client
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
 
@@ -16,7 +16,8 @@ define Package/luci-app-audiowrt-wifi-client
 endef
 
 define Package/luci-app-audiowrt-wifi-client/description
- Reusable LuCI page for scanning and configuring an opt-in Wi-Fi client.
+ Reusable LuCI page for scanning and configuring an opt-in Wi-Fi client,
+ including automatic DHCP or manual IPv4 address, netmask, gateway and DNS.
  Installing the package does not change OpenWrt networking until the user
  explicitly connects to a network.
 endef

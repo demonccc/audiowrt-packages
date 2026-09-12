@@ -9,15 +9,17 @@ Usage:
   audiowrt-wifi-client radios
   audiowrt-wifi-client scan
   audiowrt-wifi-client status
-  audiowrt-wifi-client connect <radio> <ssid> <encryption> [password] [bssid]
+  audiowrt-wifi-client connect <radio> <ssid> <encryption> [password] [bssid] [ip-mode] [ipaddr] [netmask] [gateway] [dns1] [dns2]
   audiowrt-wifi-client disconnect
   audiowrt-wifi-client setup-start <radio> <ssid> [setup-ip]
   audiowrt-wifi-client setup-stop
   audiowrt-wifi-client mdns-sync
 
 Encryption values: none, psk2, sae, sae-mixed
+IP modes: dhcp, static
 BSSID is optional. When omitted, wpa_supplicant may roam between access points
 advertising the selected SSID on the chosen radio.
+Static IPv4 mode requires IP address, netmask and gateway. DNS servers are optional.
 Installing this package alone does not modify OpenWrt networking.
 USAGE
 }
@@ -52,6 +54,11 @@ status() {
 	printf 'ssid=%s\n' "$(uci -q get wireless.audiowrt_client.ssid || true)"
 	printf 'bssid=%s\n' "$(uci -q get wireless.audiowrt_client.bssid || true)"
 	printf 'encryption=%s\n' "$(uci -q get wireless.audiowrt_client.encryption || true)"
+	printf 'ip_mode=%s\n' "$(uci -q get network.audiowrt_wifi.proto || echo dhcp)"
+	printf 'ipaddr=%s\n' "$(uci -q get network.audiowrt_wifi.ipaddr || true)"
+	printf 'netmask=%s\n' "$(uci -q get network.audiowrt_wifi.netmask || true)"
+	printf 'gateway=%s\n' "$(uci -q get network.audiowrt_wifi.gateway || true)"
+	printf 'dns=%s\n' "$(uci -q get network.audiowrt_wifi.dns || true)"
 	printf 'setup_enabled=%s\n' "$([ "$(uci -q get wireless.audiowrt_setup.disabled || echo 1)" = '0' ] && echo 1 || echo 0)"
 	printf 'network_up=%s\n' "$(ubus call network.interface.audiowrt_wifi status 2>/dev/null | grep -q '\"up\":[[:space:]]*true' && echo 1 || echo 0)"
 }
@@ -67,8 +74,67 @@ validate_bssid() {
 	[ -z "$1" ] || printf '%s\n' "$1" | grep -Eq '^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$'
 }
 
+validate_ipv4() {
+	printf '%s\n' "$1" | awk -F. '
+		NF != 4 { exit 1 }
+		{
+			for (i = 1; i <= 4; i++) {
+				if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1
+			}
+		}
+	' >/dev/null 2>&1
+}
+
+validate_netmask() {
+	case "$1" in
+		0.0.0.0|128.0.0.0|192.0.0.0|224.0.0.0|240.0.0.0|248.0.0.0|252.0.0.0|254.0.0.0|255.0.0.0|\
+		255.128.0.0|255.192.0.0|255.224.0.0|255.240.0.0|255.248.0.0|255.252.0.0|255.254.0.0|255.255.0.0|\
+		255.255.128.0|255.255.192.0|255.255.224.0|255.255.240.0|255.255.248.0|255.255.252.0|255.255.254.0|255.255.255.0|\
+		255.255.255.128|255.255.255.192|255.255.255.224|255.255.255.240|255.255.255.248|255.255.255.252|255.255.255.254|255.255.255.255) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+configure_ip() {
+	ip_mode="${1:-dhcp}"; ipaddr="${2:-}"; netmask="${3:-}"; gateway="${4:-}"; dns1="${5:-}"; dns2="${6:-}"
+
+	case "$ip_mode" in
+		dhcp)
+			uci -q set network.audiowrt_wifi.proto='dhcp'
+			uci -q delete network.audiowrt_wifi.ipaddr 2>/dev/null || true
+			uci -q delete network.audiowrt_wifi.netmask 2>/dev/null || true
+			uci -q delete network.audiowrt_wifi.gateway 2>/dev/null || true
+			uci -q delete network.audiowrt_wifi.dns 2>/dev/null || true
+			;;
+		static)
+			validate_ipv4 "$ipaddr" || { echo 'ERROR: invalid static IPv4 address.' >&2; exit 7; }
+			validate_netmask "$netmask" || { echo 'ERROR: invalid IPv4 netmask.' >&2; exit 8; }
+			validate_ipv4 "$gateway" || { echo 'ERROR: invalid IPv4 gateway.' >&2; exit 9; }
+			[ -z "$dns1" ] || validate_ipv4 "$dns1" || { echo 'ERROR: invalid primary DNS server.' >&2; exit 10; }
+			[ -z "$dns2" ] || validate_ipv4 "$dns2" || { echo 'ERROR: invalid secondary DNS server.' >&2; exit 11; }
+
+			uci -q set network.audiowrt_wifi.proto='static'
+			uci -q set network.audiowrt_wifi.ipaddr="$ipaddr"
+			uci -q set network.audiowrt_wifi.netmask="$netmask"
+			uci -q set network.audiowrt_wifi.gateway="$gateway"
+			uci -q delete network.audiowrt_wifi.dns 2>/dev/null || true
+			[ -z "$dns1" ] || uci -q add_list network.audiowrt_wifi.dns="$dns1"
+			[ -z "$dns2" ] || uci -q add_list network.audiowrt_wifi.dns="$dns2"
+			;;
+		*)
+			echo "ERROR: unsupported IP mode: $ip_mode" >&2
+			exit 12
+			;;
+	esac
+}
+
 connect_wifi() {
 	radio="${1:-}"; ssid="${2:-}"; encryption="${3:-sae-mixed}"; key="${4:-}"; bssid="${5:-}"
+	ip_mode="${6:-dhcp}"; ipaddr="${7:-}"; netmask="${8:-}"; gateway="${9:-}"
+	shift_count=9
+	if [ "$#" -ge "$shift_count" ]; then shift "$shift_count"; else set --; fi
+	dns1="${1:-}"; dns2="${2:-}"
+
 	[ -n "$radio" ] && uci -q get wireless."$radio" >/dev/null 2>&1 || { echo 'ERROR: valid radio is required.' >&2; exit 2; }
 	[ -n "$ssid" ] || { echo 'ERROR: SSID is required.' >&2; exit 3; }
 	validate_encryption "$encryption"
@@ -81,7 +147,7 @@ connect_wifi() {
 	uci -q set wireless."$radio".disabled='0'
 	uci -q delete network.audiowrt_wifi 2>/dev/null || true
 	uci -q set network.audiowrt_wifi='interface'
-	uci -q set network.audiowrt_wifi.proto='dhcp'
+	configure_ip "$ip_mode" "$ipaddr" "$netmask" "$gateway" "$dns1" "$dns2"
 	uci -q delete wireless.audiowrt_client 2>/dev/null || true
 	uci -q set wireless.audiowrt_client='wifi-iface'
 	uci -q set wireless.audiowrt_client.device="$radio"
