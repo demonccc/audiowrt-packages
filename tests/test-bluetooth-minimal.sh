@@ -3,6 +3,7 @@
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 bluez="$repo_root/audiowrt-bluez/Makefile"
+bluez_vcp_patch="$repo_root/audiowrt-bluez/patches/220-transport-fix-build-with-vcp-disabled.patch"
 sbc="$repo_root/audiowrt-sbc/Makefile"
 bluealsa="$repo_root/bluez-alsa/Makefile"
 bluetooth="$repo_root/audiowrt-bluetooth/Makefile"
@@ -24,6 +25,14 @@ if grep -Eq 'DEPENDS:=.*(libreadline|libncurses|libical|bluez-utils|\+bluez-libs
 fi
 grep -q '^define Package/audiowrt-bluez-libs$' "$bluez"
 grep -q 'libbluetooth.so' "$bluez"
+
+# BlueZ 5.83 has an upstream-confirmed link failure when VCP is disabled.
+# Keep VCP out of the minimal build and carry the upstream transport guard.
+grep -q -- '--disable-vcp' "$bluez"
+test -f "$bluez_vcp_patch"
+grep -q 'c6dcf6b714501768ab7ea293e75d945be0eec188' "$bluez_vcp_patch"
+grep -q '#ifdef HAVE_VCP' "$bluez_vcp_patch"
+grep -q 'return -ENODEV' "$bluez_vcp_patch"
 
 # Generic OpenWrt sbc depends on libsndfile, which pulls multiple audio codecs.
 # The AudioWRT package must ship only the SBC shared library.
