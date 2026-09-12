@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-bluez
 PKG_VERSION:=5.83
-PKG_RELEASE:=4
+PKG_RELEASE:=5
 
 PKG_SOURCE:=bluez-$(PKG_VERSION).tar.xz
 PKG_SOURCE_URL:=@KERNEL/linux/bluetooth/
@@ -52,6 +52,10 @@ endef
 # Keep bluetoothd, libbluetooth, classic A2DP/AVRCP and Bluetooth MIDI. AudioWRT
 # owns discovery/pair/connect UX through its compact D-Bus helper. Other modern
 # LE Audio profiles remain disabled until AudioWRT has a product use for them.
+#
+# Build the static libbluetooth archive as a development/staging artifact because
+# Build/InstallDev mirrors OpenWrt's BlueZ package and stages libbluetooth.a along
+# with the shared library. The static archive is not installed in the firmware.
 CONFIGURE_ARGS += \
 	--disable-android \
 	--disable-asha \
@@ -69,6 +73,7 @@ CONFIGURE_ARGS += \
 	--disable-hid \
 	--disable-hog \
 	--enable-library \
+	--enable-static \
 	--disable-manpages \
 	--disable-mcp \
 	--disable-mesh \
