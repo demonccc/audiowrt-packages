@@ -34,12 +34,16 @@ grep -q 'c6dcf6b714501768ab7ea293e75d945be0eec188' "$bluez_vcp_patch"
 grep -q '#ifdef HAVE_VCP' "$bluez_vcp_patch"
 grep -q 'return -ENODEV' "$bluez_vcp_patch"
 
-# Generic OpenWrt sbc depends on libsndfile, which pulls multiple audio codecs.
-# The AudioWRT package must ship only the SBC shared library.
+# Generic OpenWrt sbc depends on libsndfile for the upstream tester, which pulls
+# multiple audio codecs. AudioWRT disables the tester and ships only libsbc.
 if grep -Eq 'DEPENDS:=.*libsndfile' "$sbc"; then
     echo 'ERROR: minimal SBC must not depend on libsndfile.' >&2
     exit 1
 fi
+grep -q -- '--disable-tester' "$sbc" || {
+    echo 'ERROR: minimal SBC must disable the libsndfile-backed tester.' >&2
+    exit 1
+}
 if grep -q 'usr/bin' "$sbc"; then
     echo 'ERROR: minimal SBC must not install command-line utilities.' >&2
     exit 1
