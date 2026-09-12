@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AudioWRT Setup</title>
+<style>
+:root{color-scheme:light}*{box-sizing:border-box}body{font-family:system-ui,-apple-system,sans-serif;max-width:720px;margin:2.5rem auto;padding:0 1rem;background:#f6f7f8;color:#1b1f23}.card{background:#fff;border-radius:14px;padding:1.5rem;box-shadow:0 1px 5px #0002}.steps{display:flex;gap:.4rem;margin:0 0 1.5rem}.dot{height:6px;flex:1;background:#d0d5dd;border-radius:999px}.dot.active{background:#344054}h1{margin:.2rem 0 .3rem}h2{margin-top:.2rem}p{line-height:1.45}.muted{color:#667085}.ok{color:#087a2d}.error{color:#b42318}.network{border:1px solid #d0d5dd;border-radius:10px;margin:.6rem 0;background:#fff}.network-main{display:grid;grid-template-columns:1fr auto;gap:.4rem 1rem;padding:.85rem}.network-title{font-weight:600}.network-meta{font-size:.9rem;color:#667085}.network-actions{display:flex;align-items:center;gap:.4rem}.aps{border-top:1px solid #eaecf0;padding:.35rem .85rem .65rem}.ap{display:grid;grid-template-columns:1.1fr .7fr 1.3fr auto;gap:.5rem;padding:.55rem 0;border-bottom:1px solid #f1f2f4;font-size:.9rem}.ap:last-child{border-bottom:0}.field{margin-top:1rem}label{display:block;font-weight:600;margin-bottom:.35rem}input,select,button{font:inherit}input,select{width:100%;padding:.75rem;border:1px solid #98a2b3;border-radius:8px}.password-row{display:flex;gap:.5rem}.password-row input{flex:1}.password-row button{width:auto;margin:0}.actions{display:flex;justify-content:space-between;gap:.75rem;margin-top:1.4rem}button{padding:.7rem 1rem;border:1px solid #98a2b3;border-radius:8px;background:#fff;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}.primary{background:#202939;color:#fff;border-color:#202939}.actions button:last-child{margin-left:auto}.summary{padding:.8rem;background:#f9fafb;border-radius:9px}.summary div{margin:.35rem 0}.hidden{display:none!important}.spinner{display:inline-block;width:1rem;height:1rem;border:2px solid #d0d5dd;border-top-color:#344054;border-radius:50%;animation:spin .8s linear infinite;vertical-align:-.15rem;margin-right:.4rem}@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:620px){.ap{grid-template-columns:1fr auto}.ap .secondary{display:none}.network-main{grid-template-columns:1fr}.network-actions{justify-content:flex-end}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="progress" class="steps"></div>
+  <h1 id="title">AudioWRT</h1>
+  <p id="global-message" class="muted">Loading device status…</p>
+
+  <section id="step-1" class="hidden">
+    <h2>Welcome</h2>
+    <p class="muted">Choose the name this AudioWRT device will use on your network.</p>
+    <div class="field"><label for="hostname">Device name</label><input id="hostname" maxlength="63" autocomplete="off"><small class="muted">Used as the hostname and local network name.</small></div>
+    <div class="actions"><button class="primary" id="to-wifi">Next</button></div>
+  </section>
+
+  <section id="step-2" class="hidden">
+    <h2>Select Wi-Fi</h2>
+    <p class="muted">Networks are grouped by SSID. AudioWRT will normally use the strongest access point without pinning its BSSID.</p>
+    <div id="networks"><p class="muted">Press Scan to search for networks.</p></div>
+    <div class="actions"><button id="back-name">Back</button><button id="manual-network">Hidden / manual network</button><button class="primary" id="scan">Scan</button></div>
+    <div id="manual-fields" class="hidden">
+      <div class="field"><label for="manual-radio">Band</label><select id="manual-radio"></select></div>
+      <div class="field"><label for="manual-ssid">Network name (SSID)</label><input id="manual-ssid" maxlength="32" autocomplete="off"></div>
+      <div class="field"><label for="manual-encryption">Security</label><select id="manual-encryption"><option value="sae-mixed">WPA2/WPA3 Personal</option><option value="psk2">WPA2 Personal</option><option value="sae">WPA3 Personal</option><option value="none">Open network</option></select></div>
+      <div class="actions"><button class="primary" id="use-manual">Use this network</button></div>
+    </div>
+  </section>
+
+  <section id="step-3" class="hidden">
+    <h2>Wi-Fi password</h2>
+    <p id="selected-network" class="muted"></p>
+    <div id="wifi-password-field" class="field"><label for="wifi-key">Password</label><div class="password-row"><input id="wifi-key" type="password" minlength="8" maxlength="63" autocomplete="new-password"><button type="button" data-toggle="wifi-key">Show</button></div></div>
+    <p id="open-network" class="muted hidden">This network does not require a password.</p>
+    <div class="actions"><button id="back-wifi">Back</button><button class="primary" id="to-admin">Next</button></div>
+  </section>
+
+  <section id="step-4" class="hidden">
+    <h2>Administrator password</h2>
+    <p class="muted">Set the root password used by the AudioWRT administration UI and SSH.</p>
+    <div class="field"><label for="admin-password">Password</label><div class="password-row"><input id="admin-password" type="password" minlength="8" autocomplete="new-password"><button type="button" data-toggle="admin-password">Show</button></div></div>
+    <div class="field"><label for="admin-confirm">Confirm password</label><input id="admin-confirm" type="password" minlength="8" autocomplete="new-password"><small id="password-match" class="muted"></small></div>
+    <div class="actions"><button id="back-password">Back</button><button class="primary" id="to-connect" disabled>Next</button></div>
+  </section>
+
+  <section id="step-5" class="hidden">
+    <h2>Connect</h2>
+    <div id="summary" class="summary"></div>
+    <p id="connect-message" class="muted">AudioWRT will join the selected Wi-Fi network. The temporary setup network may move to another radio or briefly disappear while the connection is established.</p>
+    <div class="actions"><button id="back-admin">Back</button><button class="primary" id="connect">Connect AudioWRT</button></div>
+  </section>
+
+  <section id="step-6" class="hidden">
+    <h2>Done</h2>
+    <p class="ok">AudioWRT is connected and ready for administration.</p>
+    <div id="done-summary" class="summary"></div>
+    <p class="muted">Reconnect your computer to your normal network if the temporary setup Wi-Fi disappeared during provisioning.</p>
+    <p><a id="admin-link" href="/cgi-bin/luci/admin/status/overview">Open AudioWRT administration</a></p>
+  </section>
+</div>
+<script>
+const wizard={step:1,status:null,network:null,connecting:false};
+const $=id=>document.getElementById(id),steps=[1,2,3,4,5,6];
+const bandLabel=v=>v==='2g'?'2.4 GHz':v==='5g'?'5 GHz':v==='6g'?'6 GHz':(v||'-');
+function showStep(n){wizard.step=n;steps.forEach(i=>$('step-'+i).classList.toggle('hidden',i!==n));$('progress').innerHTML=steps.map(i=>`<span class="dot ${i<=n?'active':''}"></span>`).join('')}
+function validHostname(v){return /^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$/.test(v)}
+function encryptionFor(enc){if(!enc||!enc.enabled)return'none';const t=JSON.stringify(enc).toLowerCase();if(t.includes('sae')&&(t.includes('psk')||t.includes('wpa2')))return'sae-mixed';if(t.includes('sae'))return'sae';return'psk2'}
+function securityLabel(enc){return {none:'Open',psk2:'WPA2 Personal',sae:'WPA3 Personal','sae-mixed':'WPA2/WPA3 Personal'}[encryptionFor(enc)]||'Secured'}
+function parseScan(text){let out=[],radio=null,band='',json=[];function flush(){if(!radio||!json.length)return;try{const v=JSON.parse(json.join('\n'));(v.results||[]).forEach(n=>{if(n.ssid)out.push({radio,band,ssid:n.ssid,bssid:n.bssid||'',channel:n.channel||'',signal:Number(n.signal||-999),encryption:n.encryption||{}})})}catch(e){}}text.split(/\n/).forEach(line=>{if(line.startsWith('@@RADIO:')){flush();const p=line.substring(8).split('|');radio=p[0];band=p[1]||'';json=[]}else if(radio)json.push(line)});flush();return out.sort((a,b)=>b.signal-a.signal)}
+function groupNetworks(items){const map={};items.forEach(n=>(map[n.ssid]||(map[n.ssid]={ssid:n.ssid,aps:[]})).aps.push(n));return Object.values(map).map(g=>{g.aps.sort((a,b)=>b.signal-a.signal);g.best=g.aps[0];g.bands=[...new Set(g.aps.map(a=>a.band))];return g}).sort((a,b)=>b.best.signal-a.best.signal)}
+function setMessage(text,kind='muted'){$('global-message').className=kind;$('global-message').textContent=text}
+function setNetwork(n,pin=false){wizard.network={...n,pinBssid:pin,encryptionMode:encryptionFor(n.encryption)};$('selected-network').textContent=`${n.ssid} · ${bandLabel(n.band)} · Channel ${n.channel||'-'}${pin&&n.bssid?' · '+n.bssid:''} · ${securityLabel(n.encryption)}`;const open=wizard.network.encryptionMode==='none';$('wifi-password-field').classList.toggle('hidden',open);$('open-network').classList.toggle('hidden',!open);if(open)$('wifi-key').value='';showStep(3)}
+async function loadRadios(){const r=await fetch('/cgi-bin/audiowrt-radios',{cache:'no-store'}),lines=(await r.text()).trim().split(/\n/).filter(Boolean);$('manual-radio').innerHTML='';lines.forEach(line=>{const p=line.split('|'),o=document.createElement('option');o.value=p[0];o.textContent=bandLabel(p[1]||'');o.dataset.band=p[1]||'';$('manual-radio').appendChild(o)});return lines.length}
+function renderGroup(box,g){const wrap=document.createElement('div');wrap.className='network';const main=document.createElement('div');main.className='network-main';const left=document.createElement('div');left.innerHTML=`<div class="network-title"></div><div class="network-meta"></div>`;left.children[0].textContent=g.ssid;left.children[1].textContent=`${g.bands.map(bandLabel).join(' / ')} · Best: ${g.best.signal} dBm · ${g.aps.length} access point${g.aps.length===1?'':'s'} · ${securityLabel(g.best.encryption)}`;const actions=document.createElement('div');actions.className='network-actions';const select=document.createElement('button');select.className='primary';select.textContent='Select';select.onclick=()=>setNetwork(g.best,false);const toggle=document.createElement('button');toggle.textContent='▾';actions.append(select,toggle);main.append(left,actions);const aps=document.createElement('div');aps.className='aps hidden';g.aps.forEach(ap=>{const row=document.createElement('div');row.className='ap';const a=document.createElement('span');a.textContent=`${bandLabel(ap.band)} · ch ${ap.channel||'-'}`;const s=document.createElement('span');s.className='secondary';s.textContent=`${ap.signal} dBm`;const b=document.createElement('span');b.className='secondary';b.textContent=ap.bssid||'-';const choose=document.createElement('button');choose.textContent='Select';choose.onclick=()=>setNetwork(ap,true);row.append(a,s,b,choose);aps.appendChild(row)});toggle.onclick=()=>aps.classList.toggle('hidden');wrap.append(main,aps);box.appendChild(wrap)}
+async function scan(){const box=$('networks');box.innerHTML='<p class="muted"><span class="spinner"></span>Scanning all radios…</p>';try{await loadRadios();const r=await fetch('/cgi-bin/audiowrt-scan',{cache:'no-store'}),groups=groupNetworks(parseScan(await r.text()));box.innerHTML='';if(!groups.length){box.innerHTML='<p class="muted">No Wi-Fi networks were found.</p>';return}groups.forEach(g=>renderGroup(box,g))}catch(e){box.innerHTML=`<p class="error">Wi-Fi scan failed: ${e.message}</p>`}}
+function updateAdminValidation(){const p=$('admin-password').value,c=$('admin-confirm').value,m=$('password-match');if(!c){m.textContent='';m.className='muted'}else if(p===c&&p.length>=8){m.textContent='✓ Passwords match';m.className='ok'}else{m.textContent='✕ Passwords do not match';m.className='error'}$('to-connect').disabled=!(p.length>=8&&p===c)}
+function togglePassword(id,button){const input=$(id);input.type=input.type==='password'?'text':'password';button.textContent=input.type==='password'?'Show':'Hide'}
+document.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>togglePassword(b.dataset.toggle,b));$('admin-password').oninput=updateAdminValidation;$('admin-confirm').oninput=updateAdminValidation;
+async function refresh(){try{const r=await fetch('/cgi-bin/audiowrt-status',{cache:'no-store'}),s=await r.json();wizard.status=s;$('title').textContent=s.device_name||'AudioWRT';if(!$('hostname').value)$('hostname').value=s.device_name||'AudioWRT';if(!s.provisioning){showDone(s);return}if(wizard.connecting){if(s.last_error){wizard.connecting=false;$('connect').disabled=false;$('connect-message').className='error';$('connect-message').textContent=s.last_error}else{$('connect-message').className='muted';$('connect-message').innerHTML='<span class="spinner"></span>Connecting to Wi-Fi…';setTimeout(refresh,2000)}}else if(wizard.step===1)setMessage('Configure this device for first use.')}catch(e){if(wizard.connecting)setTimeout(refresh,2500);else setMessage('Unable to read AudioWRT status.','error')}}
+function showDone(s){wizard.connecting=false;showStep(6);const host=s.device_name||$('hostname').value;$('title').textContent=host;const rows=[['Device',host],['Wi-Fi',s.wifi_ssid||wizard.network?.ssid||'-'],['IP',s.ip_address||'Assigned by your network'],['Local name',host+'.local']];$('done-summary').innerHTML='';rows.forEach(([k,v])=>{const d=document.createElement('div'),strong=document.createElement('strong');strong.textContent=k+': ';d.append(strong,document.createTextNode(v));$('done-summary').appendChild(d)});const target=s.ip_address||host+'.local';$('admin-link').href='http://'+target+'/cgi-bin/luci/admin/status/overview';setMessage('Provisioning complete.','ok')}
+$('to-wifi').onclick=async()=>{const h=$('hostname').value.trim();if(!validHostname(h)){setMessage('Device name may contain letters, numbers and hyphens only.','error');return}setMessage('Select the Wi-Fi network AudioWRT should join.');showStep(2);await scan()};$('back-name').onclick=()=>showStep(1);$('scan').onclick=scan;
+$('manual-network').onclick=async()=>{if(!$('manual-radio').options.length)await loadRadios();$('manual-fields').classList.toggle('hidden')};$('use-manual').onclick=()=>{const radio=$('manual-radio'),ssid=$('manual-ssid').value.trim(),enc=$('manual-encryption').value;if(!radio.value||!ssid){setMessage('Band and SSID are required.','error');return}setNetwork({radio:radio.value,band:radio.selectedOptions[0]?.dataset.band||'',ssid,bssid:'',channel:'',signal:0,encryption:{enabled:enc!=='none',description:enc}},false)};$('back-wifi').onclick=()=>showStep(2);
+$('to-admin').onclick=()=>{if(wizard.network.encryptionMode!=='none'){const p=$('wifi-key').value;if(p.length<8||p.length>63){setMessage('Wi-Fi password must contain between 8 and 63 characters.','error');return}}setMessage('Set the administrator password for AudioWRT.');showStep(4);updateAdminValidation()};$('back-password').onclick=()=>showStep(3);
+$('to-connect').onclick=()=>{const n=wizard.network,rows=[['Device',$('hostname').value.trim()],['Wi-Fi',n.ssid],['Band',bandLabel(n.band)],['Channel',n.channel||'-'],['Security',securityLabel(n.encryption)]];if(n.pinBssid&&n.bssid)rows.push(['Access point',n.bssid]);$('summary').innerHTML='';rows.forEach(([k,v])=>{const d=document.createElement('div'),strong=document.createElement('strong');strong.textContent=k+': ';d.append(strong,document.createTextNode(v));$('summary').appendChild(d)});showStep(5)};$('back-admin').onclick=()=>showStep(4);
+$('connect').onclick=async()=>{const n=wizard.network,body=new URLSearchParams();body.set('hostname',$('hostname').value.trim());body.set('radio',n.radio);body.set('ssid',n.ssid);body.set('bssid',n.pinBssid?n.bssid:'');body.set('encryption',n.encryptionMode);body.set('wifi_key',n.encryptionMode==='none'?'':$('wifi-key').value);body.set('admin_password',$('admin-password').value);body.set('admin_confirm',$('admin-confirm').value);$('connect').disabled=true;wizard.connecting=true;$('connect-message').className='muted';$('connect-message').innerHTML='<span class="spinner"></span>Applying configuration…';try{const r=await fetch('/cgi-bin/audiowrt-provision',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body}),result=await r.json();if(!r.ok&&r.status!==202)throw new Error(result.message||'Provisioning failed');setTimeout(refresh,1500)}catch(e){wizard.connecting=false;$('connect').disabled=false;$('connect-message').className='error';$('connect-message').textContent=e.message}};
+refresh();showStep(1);
+</script>
+</body>
+</html>

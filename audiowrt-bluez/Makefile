@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-bluez
 PKG_VERSION:=5.83
-PKG_RELEASE:=6
+PKG_RELEASE:=7
 
 PKG_SOURCE:=bluez-$(PKG_VERSION).tar.xz
 PKG_SOURCE_URL:=@KERNEL/linux/bluetooth/
@@ -33,23 +33,22 @@ endef
 define Package/audiowrt-bluez
   SECTION:=utils
   CATEGORY:=Utilities
-  TITLE:=AudioWRT minimal BlueZ audio/MIDI daemon
+  TITLE:=AudioWRT minimal BlueZ audio daemon
   DEPENDS:=+audiowrt-bluez-libs +glib2 +dbus +alsa-lib
   URL:=https://www.bluez.org/
 endef
 
 define Package/audiowrt-bluez/description
- Minimal BlueZ daemon for AudioWRT A2DP Source output and Bluetooth MIDI via
- ALSA Sequencer. MIDI is included in the current 8 MB measurement; bluetoothctl,
- OBEX, generic command-line tools, monitor/debug tooling and unrelated Bluetooth
- profiles remain omitted.
+ Minimal BlueZ daemon for AudioWRT A2DP Source output. MIDI, bluetoothctl, OBEX,
+ generic command-line tools, monitor/debug tooling and unrelated Bluetooth
+ profiles are omitted.
 endef
 
 define Package/audiowrt-bluez/conffiles
 /etc/bluetooth/main.conf
 endef
 
-# Keep bluetoothd, libbluetooth, classic A2DP/AVRCP and Bluetooth MIDI. AudioWRT
+# Keep bluetoothd, libbluetooth and classic A2DP/AVRCP. AudioWRT
 # owns discovery/pair/connect UX through its compact D-Bus helper. Other modern
 # LE Audio profiles remain disabled until AudioWRT has a product use for them.
 #
@@ -78,7 +77,7 @@ CONFIGURE_ARGS += \
 	--disable-mcp \
 	--disable-mesh \
 	--disable-micp \
-	--enable-midi \
+	--disable-midi \
 	--disable-monitor \
 	--disable-network \
 	--disable-nfc \

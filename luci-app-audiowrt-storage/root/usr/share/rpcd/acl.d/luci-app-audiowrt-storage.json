@@ -1,0 +1,13 @@
+{
+	"luci-app-audiowrt-storage": {
+		"description": "Grant access to AudioWRT distribution storage management",
+		"read": {
+			"uci": [ "audiowrt-storage", "fstab" ],
+			"file": { "/usr/sbin/audiowrt-storage": [ "exec" ] }
+		},
+		"write": {
+			"uci": [ "audiowrt-storage", "fstab" ],
+			"file": { "/usr/sbin/audiowrt-storage": [ "exec" ] }
+		}
+	}
+}

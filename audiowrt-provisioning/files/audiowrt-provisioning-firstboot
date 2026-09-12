@@ -1,0 +1,56 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+[ "$(uci -q get audiowrt.main.provisioning_initialized || echo 0)" = '1' ] && exit 0
+
+name="$(uci -q get system.@system[0].hostname || echo AudioWRT)"
+setup_ip="$(uci -q get audiowrt.main.setup_ip || echo 192.168.77.1)"
+
+# Keep the board-specific Ethernet topology, but make normal Ethernet a DHCP
+# client rather than a router-side static LAN.
+if uci -q get network.lan >/dev/null 2>&1; then
+	uci -q set network.lan.proto='dhcp'
+	uci -q delete network.lan.ipaddr 2>/dev/null || true
+	uci -q delete network.lan.netmask 2>/dev/null || true
+	uci -q delete network.lan.ip6assign 2>/dev/null || true
+	uci -q delete network.lan.gateway 2>/dev/null || true
+	uci -q delete network.lan.dns 2>/dev/null || true
+fi
+if uci -q get dhcp.lan >/dev/null 2>&1; then
+	uci -q set dhcp.lan.ignore='1'
+fi
+
+# Preserve OpenWrt's wifi-device hardware definitions, but disable every
+# pre-existing wifi-iface. AudioWRT creates only its setup AP and client STA.
+for section in $(uci -q show wireless 2>/dev/null | sed -n "s/^wireless\.\([^.=]*\)=wifi-iface.*/\1/p"); do
+	uci -q set wireless."$section".disabled='1'
+done
+# Keep all discovered radio devices enabled so the provisioning scan can query
+# every band without rewriting any board-specific radio options.
+for radio_device in $(uci -q show wireless 2>/dev/null | sed -n "s/^wireless\.\([^.=]*\)=wifi-device.*/\1/p"); do
+	uci -q set wireless."$radio_device".disabled='0'
+done
+uci -q commit network
+uci -q commit dhcp
+uci -q commit wireless
+
+radio="$(/usr/sbin/audiowrt-wifi-client radios 2>/dev/null | sed -n '1s/|.*//p')"
+if [ -n "$radio" ]; then
+	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$name" "$setup_ip"
+else
+	logger -t audiowrt 'No Wi-Fi radio found; management remains available over Ethernet'
+fi
+
+if uci -q get uhttpd.main >/dev/null 2>&1; then
+	uci -q delete uhttpd.main.index_page 2>/dev/null || true
+	uci -q add_list uhttpd.main.index_page='audiowrt.html'
+	uci -q commit uhttpd
+fi
+
+uci -q set audiowrt.main.provisioning='1'
+uci -q set audiowrt.main.provisioning_initialized='1'
+uci -q set audiowrt.main.last_error=''
+uci -q commit audiowrt
+exit 0

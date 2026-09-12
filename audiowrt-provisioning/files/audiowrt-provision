@@ -1,0 +1,83 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+request_dir="${1:-}"
+[ -n "$request_dir" ] && [ -d "$request_dir" ] || exit 2
+trap 'rm -rf "$request_dir"' EXIT INT TERM
+radio="$(cat "$request_dir/radio" 2>/dev/null || true)"
+ssid="$(cat "$request_dir/ssid" 2>/dev/null || true)"
+bssid="$(cat "$request_dir/bssid" 2>/dev/null || true)"
+encryption="$(cat "$request_dir/encryption" 2>/dev/null || echo sae-mixed)"
+key="$(cat "$request_dir/wifi_key" 2>/dev/null || true)"
+
+[ -n "$radio" ] || exit 2
+[ -n "$ssid" ] || exit 3
+[ "$(uci -q get audiowrt.main.provisioning || echo 0)" = '1' ] || exit 4
+timeout="$(uci -q get audiowrt.main.setup_timeout || echo 45)"
+setup_radio="$(uci -q get wireless.audiowrt_setup.device || echo "$radio")"
+setup_ssid="$(uci -q get wireless.audiowrt_setup.ssid || uci -q get system.@system[0].hostname || echo AudioWRT)"
+setup_ip="$(uci -q get audiowrt.main.setup_ip || echo 192.168.77.1)"
+active_setup_radio="$setup_radio"
+
+uci -q set audiowrt.main.last_error=''
+uci -q commit audiowrt
+
+# Provisioning must not depend on AP+STA support on the same PHY. If the
+# target STA uses the setup radio, move the setup AP to another radio when one
+# exists; otherwise close the setup AP before switching the only radio to STA.
+if [ "$radio" = "$setup_radio" ]; then
+	alternate_radio="$(/usr/sbin/audiowrt-wifi-client radios 2>/dev/null | cut -d '|' -f 1 | grep -Fvx "$radio" | head -n 1 || true)"
+	if [ -n "$alternate_radio" ]; then
+		active_setup_radio="$alternate_radio"
+		/usr/sbin/audiowrt-wifi-client setup-start "$alternate_radio" "$setup_ssid" "$setup_ip" >/dev/null 2>&1 || true
+		logger -t audiowrt "Moved setup AP from $setup_radio to $alternate_radio before STA handoff"
+	else
+		/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
+		active_setup_radio=''
+		logger -t audiowrt "Single-radio provisioning: setup AP stopped before STA handoff"
+	fi
+fi
+
+if ! /usr/sbin/audiowrt-wifi-client connect "$radio" "$ssid" "$encryption" "$key" "$bssid"; then
+	[ -n "$active_setup_radio" ] || /usr/sbin/audiowrt-wifi-client setup-start "$setup_radio" "$setup_ssid" "$setup_ip" >/dev/null 2>&1 || true
+	uci -q set audiowrt.main.last_error='Could not apply the selected Wi-Fi configuration.'
+	uci -q commit audiowrt
+	exit 5
+fi
+
+elapsed=0
+connected=0
+while [ "$elapsed" -lt "$timeout" ]; do
+	status="$(ubus call network.interface.audiowrt_wifi status 2>/dev/null || true)"
+	if printf '%s\n' "$status" | grep -q '"up":[[:space:]]*true'; then
+		connected=1
+		break
+	fi
+	sleep 2
+	elapsed=$((elapsed + 2))
+done
+
+if [ "$connected" -eq 1 ]; then
+	uci -q set audiowrt.main.provisioning='0'
+	uci -q set audiowrt.main.last_error=''
+	uci -q commit audiowrt
+	/usr/sbin/audiowrt-wifi-client mdns-sync >/dev/null 2>&1 || true
+	[ -x /usr/sbin/audiowrt-storage ] && /usr/sbin/audiowrt-storage sync-core >/dev/null 2>&1 || true
+	logger -t audiowrt "Wi-Fi provisioning completed for SSID $ssid"
+	# Keep a surviving setup AP alive briefly so dual-radio browsers can render
+	# the Done step. Single-radio clients are expected to reconnect to the LAN.
+	if [ -n "$active_setup_radio" ]; then
+		sleep 5
+		/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
+	fi
+	exit 0
+fi
+
+/usr/sbin/audiowrt-wifi-client disconnect >/dev/null 2>&1 || true
+/usr/sbin/audiowrt-wifi-client setup-start "$setup_radio" "$setup_ssid" "$setup_ip" >/dev/null 2>&1 || true
+uci -q set audiowrt.main.provisioning='1'
+uci -q set audiowrt.main.last_error='Could not connect to the selected Wi-Fi network. The setup network has been restored; check the network and password.'
+uci -q commit audiowrt
+exit 7
