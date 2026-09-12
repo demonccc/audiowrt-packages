@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-bluez
 PKG_VERSION:=5.83
-PKG_RELEASE:=5
+PKG_RELEASE:=6
 
 PKG_SOURCE:=bluez-$(PKG_VERSION).tar.xz
 PKG_SOURCE_URL:=@KERNEL/linux/bluetooth/
