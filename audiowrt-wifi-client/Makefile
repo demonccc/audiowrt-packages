@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-wifi-client
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 
@@ -15,8 +15,9 @@ define Package/audiowrt-wifi-client
 endef
 
 define Package/audiowrt-wifi-client/description
- Reusable, opt-in Wi-Fi station and setup-AP manager for OpenWrt. Installing
- this package does not change the device network or wireless configuration.
+ Reusable, opt-in Wi-Fi station and setup-AP manager for OpenWrt. Supports
+ DHCP or manual IPv4 configuration without requiring the generic LuCI network
+ module. Installing this package does not change network or wireless settings.
 endef
 
 define Build/Prepare

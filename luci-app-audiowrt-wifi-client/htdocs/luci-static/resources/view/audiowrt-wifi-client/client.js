@@ -85,6 +85,48 @@ function passwordField(label) {
 	return { input: input, node: E('div', {}, [ E('label', {}, label), E('div', { 'style': 'display:flex;gap:.5rem' }, [ input, toggle ]) ]) };
 }
 
+function ipConfigFields(status) {
+	status = status || {};
+	var dns = (status.dns || '').trim().split(/\s+/).filter(Boolean);
+	var mode = E('select', {}, [
+		E('option', { 'value': 'dhcp' }, _('Automatic (DHCP)')),
+		E('option', { 'value': 'static' }, _('Manual'))
+	]);
+	var ipaddr = E('input', { 'type': 'text', 'placeholder': '192.168.1.50', 'value': status.ipaddr || '' });
+	var netmask = E('input', { 'type': 'text', 'placeholder': '255.255.255.0', 'value': status.netmask || '' });
+	var gateway = E('input', { 'type': 'text', 'placeholder': '192.168.1.1', 'value': status.gateway || '' });
+	var dns1 = E('input', { 'type': 'text', 'placeholder': '192.168.1.1', 'value': dns[0] || '' });
+	var dns2 = E('input', { 'type': 'text', 'placeholder': '1.1.1.1', 'value': dns[1] || '' });
+	var manual = E('div', { 'style': 'margin-top:.5rem' }, [
+		E('label', {}, _('IP address')), ipaddr,
+		E('label', {}, _('Netmask')), netmask,
+		E('label', {}, _('Gateway')), gateway,
+		E('label', {}, _('Primary DNS (optional)')), dns1,
+		E('label', {}, _('Secondary DNS (optional)')), dns2
+	]);
+	function sync() { manual.style.display = mode.value === 'static' ? '' : 'none'; }
+	mode.value = status.ip_mode === 'static' ? 'static' : 'dhcp';
+	mode.addEventListener('change', sync);
+	sync();
+	return {
+		mode: mode,
+		ipaddr: ipaddr,
+		netmask: netmask,
+		gateway: gateway,
+		dns1: dns1,
+		dns2: dns2,
+		node: E('div', {}, [ E('label', {}, _('IP configuration')), mode, manual ])
+	};
+}
+
+function ipStatusLabel(status) {
+	if (status.ip_mode !== 'static') return _('Automatic (DHCP)');
+	var value = _('Manual');
+	if (status.ipaddr) value += ' · ' + status.ipaddr;
+	if (status.gateway) value += ' · ' + _('Gateway %s').format(status.gateway);
+	return value;
+}
+
 return view.extend({
 	load: function() {
 		return L.resolveDefault(fs.exec('/usr/sbin/audiowrt-wifi-client', [ 'status' ]), { stdout: '' });
@@ -92,6 +134,7 @@ return view.extend({
 
 	render: function(data) {
 		var status = parseStatus(data.stdout), self = this;
+		this.status = status;
 		this.result = E('div', { 'class': 'cbi-section' }, [ E('em', {}, _('Press Scan to discover nearby Wi-Fi networks.')) ]);
 		return E('div', { 'class': 'cbi-map' }, [
 			E('h2', {}, _('Wi-Fi Client')),
@@ -99,6 +142,7 @@ return view.extend({
 				E('p', {}, _('Configure AudioWRT as a Wi-Fi client. Networks are grouped by SSID; expand a network only when you want to pin a specific access point.')),
 				E('p', {}, [ E('strong', {}, _('Current network: ')), status.ssid || _('Not connected') ]),
 				E('p', {}, [ E('strong', {}, _('Status: ')), status.network_up === '1' ? _('Connected') : _('Disconnected') ]),
+				E('p', {}, [ E('strong', {}, _('IP configuration: ')), ipStatusLabel(status) ]),
 				E('button', { 'class': 'btn cbi-button-action', 'click': function() { self.scan(); } }, _('Scan')), ' ',
 				E('button', { 'class': 'btn', 'click': function() { self.manualDialog(); } }, _('Hidden / manual network'))
 			]), this.result
@@ -139,17 +183,18 @@ return view.extend({
 
 	connectDialog: function(network, pinBssid) {
 		var encryption = encryptionMode(network.encryption), password = passwordField(_('Wi-Fi password'));
+		var ip = ipConfigFields(this.status);
 		var info = bandLabel(network.band) + ' · ' + _('Channel %s').format(network.channel || '-');
 		if (pinBssid && network.bssid) info += ' · ' + network.bssid;
 		var self = this;
 		ui.showModal(_('Connect to %s').format(network.ssid), [
 			E('p', {}, info),
 			encryption === 'none' ? E('p', {}, _('This is an open network.')) : password.node,
+			ip.node,
 			E('div', { 'class': 'right' }, [ E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel')), ' ',
 				E('button', { 'class': 'btn cbi-button-action', 'click': function() {
 					var key = encryption === 'none' ? '' : password.input.value;
-					var args = [ 'connect', network.radio, network.ssid, encryption, key ];
-					if (pinBssid && network.bssid) args.push(network.bssid);
+					var args = [ 'connect', network.radio, network.ssid, encryption, key, pinBssid && network.bssid ? network.bssid : '', ip.mode.value, ip.ipaddr.value, ip.netmask.value, ip.gateway.value, ip.dns1.value, ip.dns2.value ];
 					fs.exec('/usr/sbin/audiowrt-wifi-client', args).then(function(res) {
 						if (res.code) throw new Error(res.stderr || _('Could not connect to Wi-Fi.'));
 						ui.hideModal(); ui.addNotification(null, E('p', {}, _('Wi-Fi client configuration applied.')));
@@ -169,12 +214,13 @@ return view.extend({
 			var ssid = E('input', { 'type': 'text', 'autocomplete': 'off' });
 			var encryption = E('select', {}, [ E('option', { 'value': 'sae-mixed' }, _('WPA2/WPA3 Personal')), E('option', { 'value': 'psk2' }, _('WPA2 Personal')), E('option', { 'value': 'sae' }, _('WPA3 Personal')), E('option', { 'value': 'none' }, _('Open network')) ]);
 			var password = passwordField(_('Wi-Fi password'));
+			var ip = ipConfigFields(self.status);
 			function syncPassword() { password.node.style.display = encryption.value === 'none' ? 'none' : ''; }
 			encryption.addEventListener('change', syncPassword); syncPassword();
-			ui.showModal(_('Hidden / manual network'), [ E('label', {}, _('Band')), radio, E('label', {}, _('Network name (SSID)')), ssid, E('label', {}, _('Security')), encryption, password.node,
+			ui.showModal(_('Hidden / manual network'), [ E('label', {}, _('Band')), radio, E('label', {}, _('Network name (SSID)')), ssid, E('label', {}, _('Security')), encryption, password.node, ip.node,
 				E('div', { 'class': 'right' }, [ E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Cancel')), ' ', E('button', { 'class': 'btn cbi-button-action', 'click': function() {
 					var key = encryption.value === 'none' ? '' : password.input.value;
-					fs.exec('/usr/sbin/audiowrt-wifi-client', [ 'connect', radio.value, ssid.value, encryption.value, key ]).then(function(result) {
+					fs.exec('/usr/sbin/audiowrt-wifi-client', [ 'connect', radio.value, ssid.value, encryption.value, key, '', ip.mode.value, ip.ipaddr.value, ip.netmask.value, ip.gateway.value, ip.dns1.value, ip.dns2.value ]).then(function(result) {
 						if (result.code) throw new Error(result.stderr || _('Could not connect to Wi-Fi.'));
 						ui.hideModal(); ui.addNotification(null, E('p', {}, _('Wi-Fi client configuration applied.')));
 					}).catch(function(err) { ui.addNotification(null, E('p', {}, err.message || String(err)), 'error'); });
