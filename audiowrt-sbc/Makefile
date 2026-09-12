@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-sbc
 PKG_VERSION:=2.0
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_SOURCE:=sbc-$(PKG_VERSION).tar.xz
 PKG_SOURCE_URL:=@KERNEL/linux/bluetooth/
@@ -32,7 +32,12 @@ define Package/audiowrt-sbc/description
  not pull libsndfile or its MP3/audio-format dependency chain into firmware.
 endef
 
-CONFIGURE_ARGS += --disable-static
+# libsndfile is only required by the upstream SBC tester. AudioWRT needs the
+# codec library for BlueALSA, so disable the tester and keep the runtime free of
+# libsndfile/lame/mpg123.
+CONFIGURE_ARGS += \
+	--disable-static \
+	--disable-tester
 
 define Build/InstallDev
 	$(INSTALL_DIR) $(1)/usr/include/sbc
