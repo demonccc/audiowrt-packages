@@ -1,0 +1,29 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+usage(){ cat <<'EOF'
+Usage:
+  audiowrt-storage status
+  audiowrt-storage devices
+  audiowrt-storage enable <block-device> --yes
+  audiowrt-storage disable --yes
+  audiowrt-storage sync-core
+WARNING: enable formats the selected partition as ext4 and destroys its data.
+EOF
+}
+storage_get(){ uci -q get "audiowrt-storage.main.$1" 2>/dev/null || true; }
+storage_set(){ uci -q set "audiowrt-storage.main.$1=$2"; }
+overlay_source(){ awk '$2 == "/overlay" { print $1; exit }' /proc/mounts 2>/dev/null || true; }
+root_free_kb(){ df -Pk / 2>/dev/null | awk 'NR == 2 { print $4; exit }'; }
+internal_free_kb(){ grep -qE '[[:space:]]/rwm[[:space:]]' /proc/mounts 2>/dev/null && df -Pk /rwm 2>/dev/null | awk 'NR == 2 { print $4; exit }' || true; }
+is_external_overlay(){ source="$(overlay_source)"; case "$source" in /dev/sd*|/dev/mmcblk*p*|/dev/nvme*n*p*) return 0 ;; *) return 1 ;; esac; }
+status(){ mode=internal; active=0; if is_external_overlay; then mode=external; active=1; fi; printf 'mode=%s\nactive=%s\ndevice=%s\nuuid=%s\nroot_source=%s\nroot_free_kb=%s\ninternal_free_kb=%s\n' "$mode" "$active" "$(storage_get device)" "$(storage_get uuid)" "$(overlay_source)" "$(root_free_kb)" "$(internal_free_kb)"; }
+candidate_device(){ case "$1" in /dev/sd[a-z][0-9]*|/dev/mmcblk[0-9]*p[0-9]*|/dev/nvme[0-9]*n[0-9]*p[0-9]*) return 0 ;; *) return 1 ;; esac; }
+devices(){ for device in /dev/sd[a-z][0-9]* /dev/mmcblk[0-9]*p[0-9]* /dev/nvme[0-9]*n[0-9]*p[0-9]*; do [ -b "$device" ] || continue; candidate_device "$device" || continue; info="$(block info "$device" 2>/dev/null || true)"; fstype="$(printf '%s\n' "$info" | sed -n 's/.*TYPE="\([^"]*\)".*/\1/p')"; label="$(printf '%s\n' "$info" | sed -n 's/.*LABEL="\([^"]*\)".*/\1/p')"; uuid="$(printf '%s\n' "$info" | sed -n 's/.*UUID="\([^"]*\)".*/\1/p')"; mounted=0; grep -q "^$device " /proc/mounts 2>/dev/null && mounted=1; printf '%s|%s|%s|%s|%s\n' "$device" "$fstype" "$label" "$uuid" "$mounted"; done; }
+internal_overlay_device(){ block info 2>/dev/null | sed -n 's/^\([^:]*\):.*MOUNT="\/overlay".*/\1/p' | head -n 1; }
+configure_rwm(){ internal="$(internal_overlay_device)"; [ -n "$internal" ] || return 0; uci -q delete fstab.rwm 2>/dev/null || true; uci -q set fstab.rwm='mount'; uci -q set fstab.rwm.device="$internal"; uci -q set fstab.rwm.target='/rwm'; uci -q set fstab.rwm.enabled='1'; }
+enable_storage(){ device="${1:-}"; confirm="${2:-}"; [ "$confirm" = '--yes' ] || { echo 'ERROR: destructive operation requires --yes.' >&2; exit 2; }; [ -b "$device" ] || { echo "ERROR: not a block device: $device" >&2; exit 3; }; candidate_device "$device" || { echo "ERROR: unsupported block device: $device" >&2; exit 4; }; grep -q "^$device " /proc/mounts 2>/dev/null && { echo 'ERROR: device is mounted.' >&2; exit 5; }; is_external_overlay && { echo 'ERROR: external AudioWRT storage is already active.' >&2; exit 6; }; mkfs.ext4 -F -L AUDIOWRT "$device"; info="$(block info "$device" 2>/dev/null || true)"; uuid="$(printf '%s\n' "$info" | sed -n 's/.*UUID="\([^"]*\)".*/\1/p')"; [ -n "$uuid" ] || exit 7; uci -q delete fstab.extroot 2>/dev/null || true; uci -q set fstab.extroot='mount'; uci -q set fstab.extroot.uuid="$uuid"; uci -q set fstab.extroot.target='/overlay'; uci -q set fstab.extroot.fstype='ext4'; uci -q set fstab.extroot.enabled='1'; configure_rwm; uci -q commit fstab; storage_set enabled '1'; storage_set mode 'external-pending-reboot'; storage_set device "$device"; storage_set uuid "$uuid"; uci -q commit audiowrt-storage; tmp=/tmp/audiowrt-extension-storage; rm -rf "$tmp"; mkdir -p "$tmp"; mount "$device" "$tmp"; trap 'umount "$tmp" >/dev/null 2>&1 || true; rmdir "$tmp" >/dev/null 2>&1 || true' EXIT INT TERM; cp -a /overlay/. "$tmp/"; sync; umount "$tmp"; rmdir "$tmp"; trap - EXIT INT TERM; echo "AudioWRT extension storage prepared on $device. Reboot to activate it."; }
+disable_storage(){ [ "${1:-}" = '--yes' ] || { echo 'ERROR: disable requires --yes.' >&2; exit 2; }; uci -q set fstab.extroot.enabled='0' 2>/dev/null || true; uci -q commit fstab; storage_set enabled '0'; storage_set mode 'internal-pending-reboot'; uci -q commit audiowrt-storage; if [ -f /rwm/upper/etc/config/fstab ]; then uci -c /rwm/upper/etc/config -q set fstab.extroot.enabled='0' 2>/dev/null || true; uci -c /rwm/upper/etc/config -q commit fstab 2>/dev/null || true; fi; echo 'External AudioWRT storage disabled. Reboot to return to the internal core.'; }
+sync_core(){ is_external_overlay || exit 0; [ -d /rwm/upper/etc/config ] || { logger -t audiowrt-storage 'Internal overlay is not mounted at /rwm; sync skipped'; exit 0; }; for config in audiowrt audiowrt-storage audiowrt-audio system network wireless dhcp umdns uhttpd fstab; do [ -f "/etc/config/$config" ] || continue; cp -f "/etc/config/$config" "/rwm/upper/etc/config/$config"; done; sync; }
+case "${1:-}" in status) status ;; devices) devices ;; enable) enable_storage "${2:-}" "${3:-}" ;; disable) disable_storage "${2:-}" ;; sync-core) sync_core ;; *) usage; exit 2 ;; esac

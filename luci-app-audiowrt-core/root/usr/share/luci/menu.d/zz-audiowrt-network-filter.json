@@ -1,0 +1,8 @@
+{
+	"admin/network/network": { "depends": { "fs": { "/etc/audiowrt-enable-router-ui": "file" } } },
+	"admin/network/wireless": { "depends": { "fs": { "/etc/audiowrt-enable-router-ui": "file" } } },
+	"admin/network/switch": { "depends": { "fs": { "/etc/audiowrt-enable-router-ui": "file" } } },
+	"admin/network/routes": { "depends": { "fs": { "/etc/audiowrt-enable-router-ui": "file" } } },
+	"admin/network/dhcp": { "depends": { "fs": { "/etc/audiowrt-enable-router-ui": "file" } } },
+	"admin/network/dns": { "depends": { "fs": { "/etc/audiowrt-enable-router-ui": "file" } } }
+}

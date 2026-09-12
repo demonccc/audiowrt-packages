@@ -1,6 +1,7 @@
 name: Validate AudioWRT packages
 
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       openwrt_ref:
@@ -41,12 +42,25 @@ jobs:
         shell: bash
         run: bash tests/test-bluetooth-minimal.sh
 
+      - name: Validate minimal runtime libraries
+        run: bash tests/test-runtime-libraries-minimal.sh
+
+      - name: Validate appliance packages
+        shell: bash
+        run: |
+          bash tests/test-appliance-packages.sh
+          bash tests/test-provisioning-ownership.sh
+          bash tests/test-distribution-file-only-packages.sh
+
       - name: Validate file-only package build phases
         shell: bash
         run: |
           set -euo pipefail
           for package in \
             audiowrt-audio \
+            audiowrt-core \
+            audiowrt-provisioning \
+            audiowrt-storage \
             audiowrt-usb-audio \
             audiowrt-extensions \
             audiowrt-mpd \
@@ -55,7 +69,9 @@ jobs:
             audiowrt-bluetooth \
             audiowrt-wifi-client \
             luci-app-audiowrt \
-            luci-app-audiowrt-wifi-client; do
+            luci-app-audiowrt-wifi-client \
+            luci-app-audiowrt-core \
+            luci-app-audiowrt-storage; do
             makefile="$package/Makefile"
             for phase in Prepare Configure Compile; do
               grep -q "^define Build/$phase$" "$makefile" || {
@@ -72,7 +88,7 @@ jobs:
           workspace="$PWD"
           openwrt=/tmp/openwrt
 
-          git clone --depth=1 --branch '${{ inputs.openwrt_ref }}' https://github.com/openwrt/openwrt.git "$openwrt"
+          git clone --depth=1 --branch '${{ inputs.openwrt_ref || 'v25.12.5' }}' https://github.com/openwrt/openwrt.git "$openwrt"
           cd "$openwrt"
           cp feeds.conf.default feeds.conf
           printf '\nsrc-link audiowrt %s\n' "$workspace" >> feeds.conf
@@ -81,7 +97,12 @@ jobs:
           make -s prepare-tmpinfo
 
           for package in \
+            audiowrt-minimal-alsa \
+            audiowrt-minimal-mbedtls \
             audiowrt-audio \
+            audiowrt-core \
+            audiowrt-provisioning \
+            audiowrt-storage \
             audiowrt-usb-audio \
             audiowrt-extensions \
             audiowrt-mpd \
@@ -96,7 +117,10 @@ jobs:
             audiowrt-bluetooth \
             audiowrt-wifi-client \
             luci-app-audiowrt \
-            luci-app-audiowrt-wifi-client; do
+            luci-app-audiowrt-wifi-client \
+            luci-app-audiowrt-core \
+            audiowrt-storage-luci \
+            kmod-audiowrt-bluetooth; do
             grep -q "^Package: $package$" tmp/.packageinfo || {
               echo "Package metadata missing: $package" >&2
               exit 1

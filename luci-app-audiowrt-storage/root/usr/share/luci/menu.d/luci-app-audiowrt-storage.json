@@ -1,0 +1,7 @@
+{
+	"admin/audiowrt/storage": {
+		"title": "Storage",
+		"order": 50,
+		"action": { "type": "view", "path": "audiowrt-storage/storage" }
+	}
+}

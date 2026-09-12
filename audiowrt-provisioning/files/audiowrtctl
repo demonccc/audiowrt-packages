@@ -1,0 +1,46 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+setup_ip() { uci -q get audiowrt.main.setup_ip || echo '192.168.77.1'; }
+first_radio() { /usr/sbin/audiowrt-wifi-client radios 2>/dev/null | sed -n '1s/|.*//p'; }
+sync_internal() { [ -x /usr/sbin/audiowrt-storage ] && /usr/sbin/audiowrt-storage sync-core >/dev/null 2>&1 || true; }
+
+provisioning_start() {
+	radio="$(first_radio)"
+	[ -n "$radio" ] || { echo 'ERROR: no Wi-Fi radio is available.' >&2; exit 3; }
+	name="$(uci -q get system.@system[0].hostname || echo AudioWRT)"
+	/usr/sbin/audiowrt-wifi-client disconnect >/dev/null 2>&1 || true
+	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$name" "$(setup_ip)"
+	uci -q set audiowrt.main.provisioning='1'
+	uci -q set audiowrt.main.last_error=''
+	uci -q commit audiowrt
+	logger -t audiowrt "Provisioning mode enabled"
+}
+
+provisioning_stop() {
+	/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
+	uci -q set audiowrt.main.provisioning='0'
+	uci -q commit audiowrt
+	sync_internal
+}
+
+status() {
+	printf 'device_name=%s\n' "$(uci -q get system.@system[0].hostname || echo AudioWRT)"
+	printf 'provisioning=%s\n' "$(uci -q get audiowrt.main.provisioning || echo 1)"
+	printf 'wifi_ssid=%s\n' "$(uci -q get wireless.audiowrt_client.ssid || true)"
+	printf 'last_error=%s\n' "$(uci -q get audiowrt.main.last_error || true)"
+}
+
+case "${1:-}" in
+	status) status ;;
+	provisioning)
+		case "${2:-}" in
+			start) provisioning_start ;;
+			stop) provisioning_stop ;;
+			*) echo 'Usage: audiowrtctl provisioning {start|stop}' >&2; exit 2 ;;
+		esac
+		;;
+	*) echo 'Usage: audiowrtctl {status|provisioning start|provisioning stop}' >&2; exit 2 ;;
+esac

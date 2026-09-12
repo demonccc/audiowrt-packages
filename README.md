@@ -2,7 +2,20 @@
 
 Reusable OpenWrt packages and LuCI applications used by AudioWRT.
 
-This repository contains components that are safe to install on an existing OpenWrt installation. Audio packages do not change router/network behavior. Network-oriented components are explicitly opt-in and must not change configuration merely because they are installed. Distribution-only policy and first-boot behavior belong in [`demonccc/audiowrt`](https://github.com/demonccc/audiowrt).
+This repository is the single catalog of every package maintained by AudioWRT. It includes reusable capabilities and distribution packages such as first-boot provisioning. Installing a package provides capability; the [`demonccc/audiowrt`](https://github.com/demonccc/audiowrt) distribution selects packages through its `minimal`, `standard` and `full` profiles.
+
+The constrained AudioWRT baseline also builds two release-compatible runtime
+library replacements from this feed:
+
+- `audiowrt-minimal-alsa` replaces `alsa-lib`, keeping PCM, mixer/control and only the PCM plugins used by AudioWRT
+  USB Audio and BlueALSA; MIDI, Sequencer, topology, UCM and unrelated
+  interfaces are omitted;
+- `audiowrt-minimal-mbedtls` replaces `libmbedtls21`, keeping WPA2/WPA3 and modern HTTPS/package-verification support
+  while removing unused curves and TLS-PSK modes.
+
+Both packages retain the upstream ABI and use a higher package release than
+the corresponding OpenWrt 25.12 binaries so the ImageBuilder selects the
+AudioWRT implementation without changing consumers.
 
 ## Responsibility boundary
 
@@ -12,7 +25,7 @@ Audio capabilities include USB DAC output management, MPD/local music, AirPlay, 
 
 The reusable `audiowrt-wifi-client` capability can scan and configure Wi-Fi station mode and a temporary setup AP, but it is inert after installation until an explicit command or LuCI action enables it. The AudioWRT distribution owns the policy that activates this capability during first-boot provisioning.
 
-Distribution-only behavior such as first-boot provisioning, client-only appliance defaults and guided USB extroot management lives in the `audiowrt` repository.
+Distribution behavior such as first-boot provisioning, client-only appliance defaults and guided USB extroot management is packaged here. Profile selection and firmware policy remain in the `audiowrt` repository.
 
 ## Packages
 
@@ -22,7 +35,7 @@ Common reusable audio state and helper CLI. The device/audio name is derived fro
 
 ### `audiowrt-usb-audio`
 
-Detects the first USB Audio Class playback device, creates the ALSA `default` output and reacts to USB hotplug. It uses `alsa-lib` rather than the full `alsa-utils` package.
+Detects the first USB Audio Class playback device, creates the ALSA `default` output and reacts to USB hotplug. It uses the `audiowrt-minimal-alsa` replacement rather than the full upstream ALSA userspace package.
 
 ### `audiowrt-extensions`
 

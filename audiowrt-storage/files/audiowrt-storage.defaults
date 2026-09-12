@@ -1,0 +1,19 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+old_enabled="$(uci -q get audiowrt.storage.enabled || echo 0)"
+old_mode="$(uci -q get audiowrt.storage.mode || echo internal)"
+old_device="$(uci -q get audiowrt.storage.device || true)"
+old_uuid="$(uci -q get audiowrt.storage.uuid || true)"
+
+uci -q get audiowrt-storage.main >/dev/null 2>&1 || uci -q set audiowrt-storage.main='storage'
+uci -q set audiowrt-storage.main.enabled="$(uci -q get audiowrt-storage.main.enabled || echo "$old_enabled")"
+uci -q set audiowrt-storage.main.mode="$(uci -q get audiowrt-storage.main.mode || echo "$old_mode")"
+[ -n "$old_device" ] && uci -q set audiowrt-storage.main.device="$(uci -q get audiowrt-storage.main.device || echo "$old_device")"
+[ -n "$old_uuid" ] && uci -q set audiowrt-storage.main.uuid="$(uci -q get audiowrt-storage.main.uuid || echo "$old_uuid")"
+uci -q commit audiowrt-storage
+
+# Remove the legacy duplicate section after migration.
+uci -q delete audiowrt.storage 2>/dev/null || true
+uci -q commit audiowrt 2>/dev/null || true
+exit 0
