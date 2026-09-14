@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-bluetooth
-PKG_RELEASE:=6
+PKG_RELEASE:=7
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
 PKGARCH:=all
@@ -13,7 +13,7 @@ define Package/audiowrt-bluetooth
   CATEGORY:=Sound
   TITLE:=AudioWRT Bluetooth output integration
   DEPENDS:=+audiowrt-audio +audiowrt-bluez +audiowrt-btctl +bluez-alsa
-  EXTRA_DEPENDS:=kmod-bluetooth, kmod-btusb
+  EXTRA_DEPENDS:=kmod-bluetooth (>=0), kmod-btusb (>=0)
 endef
 
 define Package/audiowrt-bluetooth/description

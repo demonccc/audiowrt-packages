@@ -57,7 +57,7 @@ if grep -Eq 'DEPENDS:=.*(\+bluez-daemon|\+bluez-libs|\+sbc([[:space:]]|$))' "$bl
     exit 1
 fi
 grep -q 'DEPENDS:=.*+audiowrt-bluez.*+audiowrt-btctl' "$bluetooth"
-grep -q '^  EXTRA_DEPENDS:=kmod-bluetooth, kmod-btusb$' "$bluetooth"
+grep -q '^  EXTRA_DEPENDS:=kmod-bluetooth (>=0), kmod-btusb (>=0)$' "$bluetooth"
 if grep -q 'DEPENDS:=.*+kmod-bluetooth.*+kmod-btusb' "$bluetooth"; then
     echo 'ERROR: Bluetooth runtime kmods must not participate in Kconfig dependency expansion.' >&2
     exit 1

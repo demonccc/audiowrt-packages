@@ -60,7 +60,7 @@ fi
 # Kernel capabilities are firmware runtime requirements, not build inputs for
 # this file-only integration package. Keeping them in EXTRA_DEPENDS avoids
 # OpenWrt expanding both official and minimal providers into a Kconfig cycle.
-grep -q '^  EXTRA_DEPENDS:=kmod-bluetooth, kmod-btusb$' "$bluetooth_integration"
+grep -q '^  EXTRA_DEPENDS:=kmod-bluetooth (>=0), kmod-btusb (>=0)$' "$bluetooth_integration"
 if awk '/^define Package\/audiowrt-bluetooth$/{inside=1; next} /^endef$/{inside=0} inside && /^  DEPENDS:=/ && /kmod-(bluetooth|btusb)/{found=1} END{exit found ? 0 : 1}' "$bluetooth_integration"; then
 	echo 'ERROR: Bluetooth runtime kmods must not participate in Kconfig dependency expansion.' >&2
 	exit 1
