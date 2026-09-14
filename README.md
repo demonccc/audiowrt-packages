@@ -17,6 +17,12 @@ Both packages retain the upstream ABI and use a higher package release than
 the corresponding OpenWrt 25.12 binaries so the ImageBuilder selects the
 AudioWRT implementation without changing consumers.
 
+Release-specific kernel package replacements live under `packages/`. The
+constrained baseline uses `kmod-audiowrt-sound-core` and
+`kmod-audiowrt-usb-audio`; their module payload is taken from the exact OpenWrt
+release and repackaged without the unused OSS and compressed-offload sound-core
+modules.
+
 ## Responsibility boundary
 
 Reusable packages in this feed provide capabilities. They do not decide that an OpenWrt device should become an AudioWRT appliance.

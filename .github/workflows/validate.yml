@@ -42,6 +42,10 @@ jobs:
         shell: bash
         run: bash tests/test-bluetooth-minimal.sh
 
+      - name: Validate minimal USB Audio kernel contracts
+        shell: bash
+        run: bash tests/test-usb-audio-kmods-minimal.sh
+
       - name: Validate minimal runtime libraries
         run: bash tests/test-runtime-libraries-minimal.sh
 
@@ -120,7 +124,9 @@ jobs:
             luci-app-audiowrt-wifi-client \
             luci-app-audiowrt-core \
             audiowrt-storage-luci \
-            kmod-audiowrt-bluetooth; do
+            kmod-audiowrt-bluetooth \
+            kmod-audiowrt-sound-core \
+            kmod-audiowrt-usb-audio; do
             grep -q "^Package: $package$" tmp/.packageinfo || {
               echo "Package metadata missing: $package" >&2
               exit 1
