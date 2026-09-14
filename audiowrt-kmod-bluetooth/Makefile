@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-kmod-bluetooth
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
 
@@ -12,7 +12,6 @@ define KernelPackage/audiowrt-bluetooth
   SUBMENU:=Bluetooth Support
   TITLE:=AudioWRT minimal Bluetooth core and USB HCI support
   PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk
-  CONFLICTS:=kmod-bluetooth kmod-btusb kmod-btmtk
   DEPENDS:=@USB_SUPPORT +kmod-usb-core +kmod-crypto-hash +kmod-crypto-ecb \
 	+kmod-lib-crc16 +kmod-crypto-cmac +kmod-regmap-core +kmod-crypto-ecdh \
 	+USE_RFKILL:kmod-rfkill
@@ -33,6 +32,14 @@ define KernelPackage/audiowrt-bluetooth/description
  Repackages the exact-release OpenWrt Bluetooth core and USB HCI modules used
  by AudioWRT. RFCOMM, BNEP and HIDP are omitted; A2DP uses the retained
  Bluetooth core and HCI transport.
+endef
+
+# The distribution packages this prebuilt exact-release module set with
+# NO_DEPS=1. Model the provides closure of its declared official kmod
+# dependencies so OpenWrt can verify the imported modules without rebuilding
+# the release kernel. These names come from the modules' direct modinfo deps.
+define Package/kmod-audiowrt-bluetooth/extra_provides
+	printf '%s\n' crc16.ko ecdh_generic.ko kpp.ko usbcore.ko
 endef
 
 define Build/Prepare
