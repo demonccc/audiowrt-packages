@@ -1,17 +1,25 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-kmod-bluetooth
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
 
 include $(INCLUDE_DIR)/kernel.mk
 include $(INCLUDE_DIR)/package.mk
 
+# The flavor selects this package explicitly. Exposing cross-source kmod
+# providers while OpenWrt generates Kconfig makes every official consumer a
+# provider alternative and can create self-referential dependency conditions.
+# Keep the replacement contract in the generated APK, but out of DUMP metadata.
+ifneq ($(DUMP),1)
+AUDIOWRT_BLUETOOTH_PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk
+endif
+
 define KernelPackage/audiowrt-bluetooth
   SUBMENU:=Bluetooth Support
   TITLE:=AudioWRT minimal Bluetooth core and USB HCI support
-  PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk
+  PROVIDES:=$(AUDIOWRT_BLUETOOTH_PROVIDES)
   DEPENDS:=@USB_SUPPORT +kmod-usb-core +kmod-crypto-hash +kmod-crypto-ecb \
 	+kmod-lib-crc16 +kmod-crypto-cmac +kmod-regmap-core +kmod-crypto-ecdh \
 	+USE_RFKILL:kmod-rfkill

@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=alsa-lib
 PKG_VERSION:=1.2.11
-PKG_RELEASE:=101
+PKG_RELEASE:=102
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
 PKG_SOURCE_URL:=https://www.alsa-project.org/files/pub/lib/ \
@@ -54,7 +54,7 @@ CONFIGURE_ARGS += \
 	--disable-alisp \
 	--disable-old-symbols \
 	--with-pcm-plugins=linear,route,rate,plug,dmix \
-	--with-ctl-plugins= \
+	--with-ctl-plugins=ext \
 	--with-max-cards=8 \
 	$(SOFT_FLOAT_CONFIG_OPTION)
 

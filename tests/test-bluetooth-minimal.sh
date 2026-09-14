@@ -57,7 +57,11 @@ if grep -Eq 'DEPENDS:=.*(\+bluez-daemon|\+bluez-libs|\+sbc([[:space:]]|$))' "$bl
     exit 1
 fi
 grep -q 'DEPENDS:=.*+audiowrt-bluez.*+audiowrt-btctl' "$bluetooth"
-grep -q 'DEPENDS:=.*+kmod-bluetooth.*+kmod-btusb' "$bluetooth"
+grep -q '^  EXTRA_DEPENDS:=kmod-bluetooth, kmod-btusb$' "$bluetooth"
+if grep -q 'DEPENDS:=.*+kmod-bluetooth.*+kmod-btusb' "$bluetooth"; then
+    echo 'ERROR: Bluetooth runtime kmods must not participate in Kconfig dependency expansion.' >&2
+    exit 1
+fi
 grep -q '/usr/bin/audiowrt-btctl' "$wrapper"
 if grep -Eq '\b(bluetoothctl|hciconfig)\b' "$wrapper"; then
     echo 'ERROR: Bluetooth wrapper still requires generic BlueZ CLI utilities.' >&2
