@@ -22,40 +22,7 @@ if grep -q 'libatopology' "$alsa"; then
 fi
 grep -q 'libasound.so' "$alsa"
 grep -q '^define Package/audiowrt-minimal-alsa$' "$alsa"
-grep -q '^  PROVIDES:=alsa-lib
-
-# Mbed TLS preserves the modern TLS and WPA crypto contract. Only unused
-# curves and TLS-PSK modes are removed from the shared implementation.
-for keep in \
-	MBEDTLS_SSL_PROTO_TLS1_2 \
-	MBEDTLS_SSL_PROTO_TLS1_3 \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_EPHEMERAL_ENABLED \
-	MBEDTLS_ECP_DP_SECP256R1_ENABLED \
-	MBEDTLS_ECP_DP_SECP384R1_ENABLED \
-	MBEDTLS_ECP_DP_CURVE25519_ENABLED \
-	MBEDTLS_CMAC_C \
-	MBEDTLS_DES_C \
-	MBEDTLS_NIST_KW_C; do
-	awk '/^MBEDTLS_SET_OPTIONS:=/{inside=1} inside && $0 ~ token {found=1} /^$/{if (inside) exit} END{exit found ? 0 : 1}' token="$keep" "$mbedtls"
-done
-grep -q '^define Package/audiowrt-minimal-mbedtls$' "$mbedtls"
-grep -q '^  PROVIDES:=libmbedtls libmbedtls21
-if grep -Eq 'rfcomm\.ko|bnep\.ko|hidp\.ko|kmod-hid' "$bluetooth"; then
-	echo 'ERROR: minimal Bluetooth kernel package includes excluded profiles.' >&2
-	exit 1
-fi
-for drop in \
-	MBEDTLS_ECP_DP_SECP521R1_ENABLED \
-	MBEDTLS_ECP_DP_SECP256K1_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_PSK_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL_ENABLED; do
-	awk '/^MBEDTLS_UNSET_OPTIONS:=/{inside=1} inside && $0 ~ token {found=1} /^$/{if (inside) exit} END{exit found ? 0 : 1}' token="$drop" "$mbedtls"
-done
-
-echo 'Minimal runtime-library contracts passed.'
- "$alsa"
+grep -q '^  PROVIDES:=alsa-lib$' "$alsa"
 ! grep -q '^  CONFLICTS:=' "$alsa"
 
 # Mbed TLS preserves the modern TLS and WPA crypto contract. Only unused
@@ -74,180 +41,14 @@ for keep in \
 done
 grep -q '^define Package/audiowrt-minimal-mbedtls$' "$mbedtls"
 grep -q '^  PROVIDES:=libmbedtls libmbedtls21$' "$mbedtls"
-grep -q '^  CONFLICTS:=libmbedtls21$' "$mbedtls"
-
-grep -q '^  PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk$' "$bluetooth"
-grep -q '^  CONFLICTS:=kmod-bluetooth kmod-btusb kmod-btmtk$' "$bluetooth"
-if grep -Eq 'rfcomm\.ko|bnep\.ko|hidp\.ko|kmod-hid' "$bluetooth"; then
-	echo 'ERROR: minimal Bluetooth kernel package includes excluded profiles.' >&2
-	exit 1
-fi
-for drop in \
-	MBEDTLS_ECP_DP_SECP521R1_ENABLED \
-	MBEDTLS_ECP_DP_SECP256K1_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_PSK_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL_ENABLED; do
-	awk '/^MBEDTLS_UNSET_OPTIONS:=/{inside=1} inside && $0 ~ token {found=1} /^$/{if (inside) exit} END{exit found ? 0 : 1}' token="$drop" "$mbedtls"
-done
-
-echo 'Minimal runtime-library contracts passed.'
- "$mbedtls"
 ! grep -q '^  CONFLICTS:=' "$mbedtls"
 
-grep -q '^  PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk
-if grep -Eq 'rfcomm\.ko|bnep\.ko|hidp\.ko|kmod-hid' "$bluetooth"; then
-	echo 'ERROR: minimal Bluetooth kernel package includes excluded profiles.' >&2
-	exit 1
-fi
-for drop in \
-	MBEDTLS_ECP_DP_SECP521R1_ENABLED \
-	MBEDTLS_ECP_DP_SECP256K1_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_PSK_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL_ENABLED; do
-	awk '/^MBEDTLS_UNSET_OPTIONS:=/{inside=1} inside && $0 ~ token {found=1} /^$/{if (inside) exit} END{exit found ? 0 : 1}' token="$drop" "$mbedtls"
-done
-
-echo 'Minimal runtime-library contracts passed.'
- "$alsa"
-! grep -q '^  CONFLICTS:=' "$alsa"
-
-# Mbed TLS preserves the modern TLS and WPA crypto contract. Only unused
-# curves and TLS-PSK modes are removed from the shared implementation.
-for keep in \
-	MBEDTLS_SSL_PROTO_TLS1_2 \
-	MBEDTLS_SSL_PROTO_TLS1_3 \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_EPHEMERAL_ENABLED \
-	MBEDTLS_ECP_DP_SECP256R1_ENABLED \
-	MBEDTLS_ECP_DP_SECP384R1_ENABLED \
-	MBEDTLS_ECP_DP_CURVE25519_ENABLED \
-	MBEDTLS_CMAC_C \
-	MBEDTLS_DES_C \
-	MBEDTLS_NIST_KW_C; do
-	awk '/^MBEDTLS_SET_OPTIONS:=/{inside=1} inside && $0 ~ token {found=1} /^$/{if (inside) exit} END{exit found ? 0 : 1}' token="$keep" "$mbedtls"
-done
-grep -q '^define Package/audiowrt-minimal-mbedtls$' "$mbedtls"
-grep -q '^  PROVIDES:=libmbedtls libmbedtls21$' "$mbedtls"
-grep -q '^  CONFLICTS:=libmbedtls21$' "$mbedtls"
-
 grep -q '^  PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk$' "$bluetooth"
-grep -q '^  CONFLICTS:=kmod-bluetooth kmod-btusb kmod-btmtk$' "$bluetooth"
-if grep -Eq 'rfcomm\.ko|bnep\.ko|hidp\.ko|kmod-hid' "$bluetooth"; then
-	echo 'ERROR: minimal Bluetooth kernel package includes excluded profiles.' >&2
-	exit 1
-fi
-for drop in \
-	MBEDTLS_ECP_DP_SECP521R1_ENABLED \
-	MBEDTLS_ECP_DP_SECP256K1_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_PSK_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL_ENABLED; do
-	awk '/^MBEDTLS_UNSET_OPTIONS:=/{inside=1} inside && $0 ~ token {found=1} /^$/{if (inside) exit} END{exit found ? 0 : 1}' token="$drop" "$mbedtls"
-done
-
-echo 'Minimal runtime-library contracts passed.'
- "$bluetooth"
 ! grep -q '^  CONFLICTS:=' "$bluetooth"
-grep -q '^define Package/kmod-audiowrt-bluetooth/extra_provides
-if grep -Eq 'rfcomm\.ko|bnep\.ko|hidp\.ko|kmod-hid' "$bluetooth"; then
-	echo 'ERROR: minimal Bluetooth kernel package includes excluded profiles.' >&2
-	exit 1
-fi
-for drop in \
-	MBEDTLS_ECP_DP_SECP521R1_ENABLED \
-	MBEDTLS_ECP_DP_SECP256K1_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_PSK_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL_ENABLED; do
-	awk '/^MBEDTLS_UNSET_OPTIONS:=/{inside=1} inside && $0 ~ token {found=1} /^$/{if (inside) exit} END{exit found ? 0 : 1}' token="$drop" "$mbedtls"
-done
-
-echo 'Minimal runtime-library contracts passed.'
- "$alsa"
-! grep -q '^  CONFLICTS:=' "$alsa"
-
-# Mbed TLS preserves the modern TLS and WPA crypto contract. Only unused
-# curves and TLS-PSK modes are removed from the shared implementation.
-for keep in \
-	MBEDTLS_SSL_PROTO_TLS1_2 \
-	MBEDTLS_SSL_PROTO_TLS1_3 \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_EPHEMERAL_ENABLED \
-	MBEDTLS_ECP_DP_SECP256R1_ENABLED \
-	MBEDTLS_ECP_DP_SECP384R1_ENABLED \
-	MBEDTLS_ECP_DP_CURVE25519_ENABLED \
-	MBEDTLS_CMAC_C \
-	MBEDTLS_DES_C \
-	MBEDTLS_NIST_KW_C; do
-	awk '/^MBEDTLS_SET_OPTIONS:=/{inside=1} inside && $0 ~ token {found=1} /^$/{if (inside) exit} END{exit found ? 0 : 1}' token="$keep" "$mbedtls"
-done
-grep -q '^define Package/audiowrt-minimal-mbedtls$' "$mbedtls"
-grep -q '^  PROVIDES:=libmbedtls libmbedtls21$' "$mbedtls"
-grep -q '^  CONFLICTS:=libmbedtls21$' "$mbedtls"
-
-grep -q '^  PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk$' "$bluetooth"
-grep -q '^  CONFLICTS:=kmod-bluetooth kmod-btusb kmod-btmtk$' "$bluetooth"
-if grep -Eq 'rfcomm\.ko|bnep\.ko|hidp\.ko|kmod-hid' "$bluetooth"; then
-	echo 'ERROR: minimal Bluetooth kernel package includes excluded profiles.' >&2
-	exit 1
-fi
-for drop in \
-	MBEDTLS_ECP_DP_SECP521R1_ENABLED \
-	MBEDTLS_ECP_DP_SECP256K1_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_PSK_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL_ENABLED; do
-	awk '/^MBEDTLS_UNSET_OPTIONS:=/{inside=1} inside && $0 ~ token {found=1} /^$/{if (inside) exit} END{exit found ? 0 : 1}' token="$drop" "$mbedtls"
-done
-
-echo 'Minimal runtime-library contracts passed.'
- "$bluetooth"
+grep -q '^define Package/kmod-audiowrt-bluetooth/extra_provides$' "$bluetooth"
 for module in crc16.ko ecdh_generic.ko kpp.ko usbcore.ko; do
     grep -Fq "$module" "$bluetooth"
 done
-if grep -Eq 'rfcomm\.ko|bnep\.ko|hidp\.ko|kmod-hid' "$bluetooth"; then
-	echo 'ERROR: minimal Bluetooth kernel package includes excluded profiles.' >&2
-	exit 1
-fi
-for drop in \
-	MBEDTLS_ECP_DP_SECP521R1_ENABLED \
-	MBEDTLS_ECP_DP_SECP256K1_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_PSK_ENABLED \
-	MBEDTLS_KEY_EXCHANGE_ECDHE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_ENABLED \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_PSK_EPHEMERAL_ENABLED; do
-	awk '/^MBEDTLS_UNSET_OPTIONS:=/{inside=1} inside && $0 ~ token {found=1} /^$/{if (inside) exit} END{exit found ? 0 : 1}' token="$drop" "$mbedtls"
-done
-
-echo 'Minimal runtime-library contracts passed.'
- "$alsa"
-! grep -q '^  CONFLICTS:=' "$alsa"
-
-# Mbed TLS preserves the modern TLS and WPA crypto contract. Only unused
-# curves and TLS-PSK modes are removed from the shared implementation.
-for keep in \
-	MBEDTLS_SSL_PROTO_TLS1_2 \
-	MBEDTLS_SSL_PROTO_TLS1_3 \
-	MBEDTLS_SSL_TLS1_3_KEY_EXCHANGE_MODE_EPHEMERAL_ENABLED \
-	MBEDTLS_ECP_DP_SECP256R1_ENABLED \
-	MBEDTLS_ECP_DP_SECP384R1_ENABLED \
-	MBEDTLS_ECP_DP_CURVE25519_ENABLED \
-	MBEDTLS_CMAC_C \
-	MBEDTLS_DES_C \
-	MBEDTLS_NIST_KW_C; do
-	awk '/^MBEDTLS_SET_OPTIONS:=/{inside=1} inside && $0 ~ token {found=1} /^$/{if (inside) exit} END{exit found ? 0 : 1}' token="$keep" "$mbedtls"
-done
-grep -q '^define Package/audiowrt-minimal-mbedtls$' "$mbedtls"
-grep -q '^  PROVIDES:=libmbedtls libmbedtls21$' "$mbedtls"
-grep -q '^  CONFLICTS:=libmbedtls21$' "$mbedtls"
-
-grep -q '^  PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk$' "$bluetooth"
-grep -q '^  CONFLICTS:=kmod-bluetooth kmod-btusb kmod-btmtk$' "$bluetooth"
 if grep -Eq 'rfcomm\.ko|bnep\.ko|hidp\.ko|kmod-hid' "$bluetooth"; then
 	echo 'ERROR: minimal Bluetooth kernel package includes excluded profiles.' >&2
 	exit 1
