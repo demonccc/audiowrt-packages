@@ -4,6 +4,7 @@
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 makefile="$repo_root/bluez-alsa/Makefile"
+alsa_makefile="$repo_root/audiowrt-minimal-alsa/Makefile"
 patch="$repo_root/bluez-alsa/patches/005-fix-gcc14-musl-basename.patch"
 
 # GCC 14 + musl rejects the legacy basename() declaration used by BlueALSA 4.1.1.
@@ -39,5 +40,10 @@ fi
 
 grep -q 'src/bluealsa.*usr/bin/bluealsa' "$makefile"
 grep -q 'libasound_module_.*_bluealsa' "$makefile"
+
+# BlueALSA builds external PCM and control plugins. Its PCM implementation uses
+# ALSA ioplug and its control implementation uses the external control API.
+grep -q -- '--with-pcm-plugins=.*ioplug' "$alsa_makefile"
+grep -q -- '--with-ctl-plugins=ext' "$alsa_makefile"
 
 echo 'Minimal BlueALSA build contract tests passed.'
