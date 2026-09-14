@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=alsa-lib
 PKG_VERSION:=1.2.11
-PKG_RELEASE:=100
+PKG_RELEASE:=101
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
 PKG_SOURCE_URL:=https://www.alsa-project.org/files/pub/lib/ \
@@ -26,7 +26,6 @@ define Package/audiowrt-minimal-alsa
   URL:=https://www.alsa-project.org/
   DEPENDS:=@AUDIO_SUPPORT +kmod-sound-core +libpthread +librt
   PROVIDES:=alsa-lib
-  CONFLICTS:=alsa-lib
 endef
 
 define Package/audiowrt-minimal-alsa/description

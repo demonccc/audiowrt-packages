@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=mbedtls
 PKG_VERSION:=3.6.7
-PKG_RELEASE:=100
+PKG_RELEASE:=101
 PKG_BUILD_FLAGS:=no-mips16 gc-sections no-lto
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
@@ -24,7 +24,6 @@ define Package/audiowrt-minimal-mbedtls
   TITLE:=AudioWRT minimal Mbed TLS library
   URL:=https://www.trustedfirmware.org/projects/mbed-tls/
   PROVIDES:=libmbedtls libmbedtls21
-  CONFLICTS:=libmbedtls21
 endef
 
 define Package/audiowrt-minimal-mbedtls/description

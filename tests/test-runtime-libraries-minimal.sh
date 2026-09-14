@@ -23,7 +23,7 @@ fi
 grep -q 'libasound.so' "$alsa"
 grep -q '^define Package/audiowrt-minimal-alsa$' "$alsa"
 grep -q '^  PROVIDES:=alsa-lib$' "$alsa"
-grep -q '^  CONFLICTS:=alsa-lib$' "$alsa"
+! grep -q '^  CONFLICTS:=' "$alsa"
 
 # Mbed TLS preserves the modern TLS and WPA crypto contract. Only unused
 # curves and TLS-PSK modes are removed from the shared implementation.
@@ -41,10 +41,14 @@ for keep in \
 done
 grep -q '^define Package/audiowrt-minimal-mbedtls$' "$mbedtls"
 grep -q '^  PROVIDES:=libmbedtls libmbedtls21$' "$mbedtls"
-grep -q '^  CONFLICTS:=libmbedtls21$' "$mbedtls"
+! grep -q '^  CONFLICTS:=' "$mbedtls"
 
 grep -q '^  PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk$' "$bluetooth"
-grep -q '^  CONFLICTS:=kmod-bluetooth kmod-btusb kmod-btmtk$' "$bluetooth"
+! grep -q '^  CONFLICTS:=' "$bluetooth"
+grep -q '^define Package/kmod-audiowrt-bluetooth/extra_provides$' "$bluetooth"
+for module in crc16.ko ecdh_generic.ko kpp.ko usbcore.ko; do
+    grep -Fq "$module" "$bluetooth"
+done
 if grep -Eq 'rfcomm\.ko|bnep\.ko|hidp\.ko|kmod-hid' "$bluetooth"; then
 	echo 'ERROR: minimal Bluetooth kernel package includes excluded profiles.' >&2
 	exit 1
