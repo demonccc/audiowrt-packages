@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=alsa-lib
 PKG_VERSION:=1.2.11
-PKG_RELEASE:=102
+PKG_RELEASE:=103
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
 PKG_SOURCE_URL:=https://www.alsa-project.org/files/pub/lib/ \
@@ -30,8 +30,8 @@ endef
 
 define Package/audiowrt-minimal-alsa/description
  ALSA userspace trimmed for AudioWRT. It retains PCM and mixer/control plus the
- hw, plug, rate, route and dmix paths used by USB Audio and BlueALSA. MIDI,
- Sequencer, topology, UCM and unrelated plugins are omitted.
+ hw, plug, rate, route, dmix and external I/O paths used by USB Audio and
+ BlueALSA. MIDI, Sequencer, topology, UCM and unrelated plugins are omitted.
 endef
 
 define Package/audiowrt-minimal-alsa/conffiles
@@ -53,7 +53,7 @@ CONFIGURE_ARGS += \
 	--disable-topology \
 	--disable-alisp \
 	--disable-old-symbols \
-	--with-pcm-plugins=linear,route,rate,plug,dmix \
+	--with-pcm-plugins=linear,route,rate,plug,dmix,ioplug \
 	--with-ctl-plugins=ext \
 	--with-max-cards=8 \
 	$(SOFT_FLOAT_CONFIG_OPTION)
