@@ -37,6 +37,11 @@ define Package/audiowrt-provisioning/install
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/audiowrt-provisioning-firstboot $(1)/etc/uci-defaults/10-audiowrt-provisioning
 
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/audiowrt-provisioning.init $(1)/etc/init.d/audiowrt-provisioning
+	$(INSTALL_DIR) $(1)/etc/rc.d
+	ln -s ../init.d/audiowrt-provisioning $(1)/etc/rc.d/S99audiowrt-provisioning
+
 	$(INSTALL_DIR) $(1)/etc/hotplug.d/button
 	$(INSTALL_BIN) ./files/audiowrt-button.hotplug $(1)/etc/hotplug.d/button/90-audiowrt-provision
 
