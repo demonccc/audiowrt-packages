@@ -15,9 +15,13 @@ if grep -Eq '(uci-defaults|/etc/init\.d|postinst)' "$makefile"; then
     exit 1
 fi
 
-# Scan uses the native iwinfo ubus provider and setup mode has its own DHCP/DNS support.
+# Scan uses the native iwinfo ubus provider. DHCP/DNS and mDNS are selected by
+# the firmware flavor, not pulled in implicitly by this reusable client package.
 grep -q '+rpcd-mod-iwinfo' "$makefile"
-grep -q '+dnsmasq' "$makefile"
+if grep -Eq '\+dnsmasq|\+umdns' "$makefile"; then
+    echo 'ERROR: DHCP/DNS and mDNS services must remain flavor-owned.' >&2
+    exit 1
+fi
 grep -q 'ubus call iwinfo scan' "$script"
 grep -q "network.audiowrt_wifi='interface'" "$script"
 grep -q "wireless.audiowrt_client='wifi-iface'" "$script"
