@@ -1,0 +1,43 @@
+#!/bin/sh /etc/rc.common
+
+START=81
+USE_PROCD=1
+PROG=/usr/sbin/minidlnad
+CONFIG_FILE=/var/etc/minidlna.conf
+
+start_service() {
+	local enabled interface friendly_name db_dir media_dir
+
+	config_load minidlna
+	config_get_bool enabled config enabled 1
+	[ "$enabled" -eq 1 ] || return 0
+
+	config_get interface config interface
+	config_get friendly_name config friendly_name 'AudioWRT DLNA'
+	config_get db_dir config db_dir '/var/run/minidlna'
+	config_get media_dir config media_dir '/mnt'
+
+	mkdir -p /var/etc "$db_dir"
+	cat > "$CONFIG_FILE" <<EOF
+port=8200
+network_interface=$interface
+friendly_name=$friendly_name
+db_dir=$db_dir
+log_level=error
+inotify=yes
+enable_tivo=no
+wide_links=no
+strict_dlna=no
+root_container=Music
+media_dir=A,$media_dir
+EOF
+
+	procd_open_instance
+	procd_set_param command "$PROG" -S -f "$CONFIG_FILE"
+	procd_set_param respawn
+	procd_close_instance
+}
+
+service_triggers() {
+	procd_add_reload_trigger minidlna
+}
