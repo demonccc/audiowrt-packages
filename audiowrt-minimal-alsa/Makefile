@@ -1,21 +1,10 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=alsa-lib
-PKG_VERSION:=1.2.11
-PKG_RELEASE:=104
-
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
-PKG_SOURCE_URL:=https://www.alsa-project.org/files/pub/lib/ \
-		https://distfiles.gentoo.org/distfiles/
-PKG_HASH:=9f3f2f69b995f9ad37359072fbc69a3a88bfba081fc83e9be30e14662795bb4d
+AUDIOWRT_DERIVED_NAME:=audiowrt-minimal-alsa
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/libs/alsa-lib/Makefile
+include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
-PKG_LICENSE:=LGPL-2.1-or-later
-PKG_LICENSE_FILES:=COPYING
-PKG_FIXUP:=autoreconf
-PKG_INSTALL:=1
-PKG_BUILD_PARALLEL:=1
-PKG_BUILD_FLAGS:=no-mips16 no-lto gc-sections
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -30,9 +19,10 @@ define Package/audiowrt-minimal-alsa
 endef
 
 define Package/audiowrt-minimal-alsa/description
- ALSA userspace trimmed for AudioWRT. It retains PCM and mixer/control plus the
- hw, plug, rate, route, dmix and external I/O paths used by USB Audio and
- BlueALSA. MIDI, Sequencer, topology, UCM and unrelated plugins are omitted.
+ ALSA userspace derived from the selected OpenWrt release. It retains PCM and
+ mixer/control plus the hw, plug, rate, route, dmix and external I/O paths used
+ by USB Audio and BlueALSA. MIDI, Sequencer, topology, UCM and unrelated
+ plugins are omitted.
 endef
 
 define Package/audiowrt-minimal-alsa/conffiles

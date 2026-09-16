@@ -1,20 +1,10 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=audiowrt-bluez
-PKG_VERSION:=5.83
-PKG_RELEASE:=7
+AUDIOWRT_DERIVED_NAME:=audiowrt-bluez
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/utils/bluez/Makefile
+include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
-PKG_SOURCE:=bluez-$(PKG_VERSION).tar.xz
-PKG_SOURCE_URL:=@KERNEL/linux/bluetooth/
-PKG_HASH:=108522d909d220581399bfec93daab62035539ceef3dda3e79970785c63bd24c
-PKG_BUILD_DIR:=$(BUILD_DIR)/bluez-$(PKG_VERSION)
-
-PKG_LICENSE:=GPL-2.0-or-later
-PKG_LICENSE_FILES:=COPYING
 PKG_MAINTAINER:=AudioWRT
-PKG_INSTALL:=1
-PKG_BUILD_PARALLEL:=1
-PKG_BUILD_FLAGS:=gc-sections
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -27,7 +17,8 @@ define Package/audiowrt-bluez-libs
 endef
 
 define Package/audiowrt-bluez-libs/description
- Minimal libbluetooth runtime built together with the AudioWRT BlueZ daemon.
+ Minimal libbluetooth runtime derived from the BlueZ package of the selected
+ OpenWrt release and built together with the AudioWRT BlueZ daemon.
 endef
 
 define Package/audiowrt-bluez
@@ -39,22 +30,15 @@ define Package/audiowrt-bluez
 endef
 
 define Package/audiowrt-bluez/description
- Minimal BlueZ daemon for AudioWRT A2DP Source output. MIDI, bluetoothctl, OBEX,
- generic command-line tools, monitor/debug tooling and unrelated Bluetooth
- profiles are omitted.
+ Minimal BlueZ daemon for AudioWRT A2DP Source output. The source version and
+ all OpenWrt patches come from the selected release; AudioWRT only applies the
+ profile/feature delta needed for audio output.
 endef
 
 define Package/audiowrt-bluez/conffiles
 /etc/bluetooth/main.conf
 endef
 
-# Keep bluetoothd, libbluetooth and classic A2DP/AVRCP. AudioWRT
-# owns discovery/pair/connect UX through its compact D-Bus helper. Other modern
-# LE Audio profiles remain disabled until AudioWRT has a product use for them.
-#
-# Build the static libbluetooth archive as a development/staging artifact because
-# Build/InstallDev mirrors OpenWrt's BlueZ package and stages libbluetooth.a along
-# with the shared library. The static archive is not installed in the firmware.
 CONFIGURE_ARGS += \
 	--disable-android \
 	--disable-asha \
@@ -114,7 +98,7 @@ define Package/audiowrt-bluez/install
 	$(INSTALL_DIR) $(1)/etc/bluetooth
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/src/main.conf $(1)/etc/bluetooth/main.conf
 	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/bluetoothd.init $(1)/etc/init.d/bluetoothd
+	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/bluetoothd.init $(1)/etc/init.d/bluetoothd
 endef
 
 $(eval $(call BuildPackage,audiowrt-bluez-libs))

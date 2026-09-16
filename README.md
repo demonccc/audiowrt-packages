@@ -2,26 +2,50 @@
 
 Reusable OpenWrt packages and LuCI applications used by AudioWRT.
 
-This repository is the single catalog of every package maintained by AudioWRT. It includes reusable capabilities and distribution packages such as first-boot provisioning. Installing a package provides capability; the [`demonccc/audiowrt`](https://github.com/demonccc/audiowrt) distribution selects packages through its `minimal`, `standard` and `full` profiles.
+This repository is the single catalog of every package maintained by AudioWRT. It includes reusable capabilities, distribution packages and constrained-runtime variants. Installing a package provides capability; the [`demonccc/audiowrt`](https://github.com/demonccc/audiowrt) distribution selects packages through its `minimal` and `standard` runtime groups.
 
-The constrained AudioWRT baseline also builds two release-compatible runtime
-library replacements from this feed:
+## OpenWrt-derived package contract
 
-- `audiowrt-minimal-alsa` replaces `alsa-lib`, keeping PCM, mixer/control and only the PCM plugins used by AudioWRT
-  USB Audio and BlueALSA; MIDI, Sequencer, topology, UCM and unrelated
-  interfaces are omitted;
-- `audiowrt-minimal-mbedtls` replaces `libmbedtls21`, keeping WPA2/WPA3 and modern HTTPS/package-verification support
-  while removing unused curves and TLS-PSK modes.
+AudioWRT does **not** fork OpenWrt package recipes by pinning a separate upstream version. If a package already exists in OpenWrt, an AudioWRT replacement must derive from the canonical recipe of the **selected OpenWrt release**.
 
-Both packages retain the upstream ABI and use a higher package release than
-the corresponding OpenWrt 25.12 binaries so the ImageBuilder selects the
-AudioWRT implementation without changing consumers.
+For a release build, the official SDK `feeds.conf.default` is authoritative. The builder updates the exact pinned `base` and `packages` feed revisions from that SDK. A derived AudioWRT package then inherits from that exact recipe:
 
-Release-specific kernel package replacements live under `packages/`. The
-constrained baseline uses `kmod-audiowrt-sound-core` and
-`kmod-audiowrt-usb-audio`; their module payload is taken from the exact OpenWrt
-release and repackaged without the unused OSS and compressed-offload sound-core
-modules.
+- upstream version/source/hash or git revision;
+- OpenWrt build flags and hardening metadata;
+- the complete OpenWrt patch set for that release;
+- canonical package files that are part of the source recipe;
+- the selected SDK target/subtarget/toolchain and architecture.
+
+AudioWRT stores only the delta. Source patches owned by AudioWRT use the `9xx-*` namespace. If OpenWrt 24.10 and 25.12 use different upstream versions or patches, each AudioWRT build automatically inherits the version and patch set from the selected release instead of carrying parallel copies in this repository.
+
+The helper is implemented by `include/audiowrt-openwrt-derived.mk` and `scripts/prepare-openwrt-derived.py`. The package recipe declares its canonical source, for example:
+
+```make
+AUDIOWRT_DERIVED_NAME:=audiowrt-dropbear
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/dropbear/Makefile
+include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
+```
+
+Release-family-specific AudioWRT compatibility deltas may live under `releases/<major.minor>/`, but those files may contain only AudioWRT overrides. They must not copy OpenWrt source metadata or OpenWrt-owned patches.
+
+Current derived userspace packages are:
+
+- `audiowrt-busybox` -> OpenWrt `busybox`;
+- `audiowrt-minimal-alsa` -> OpenWrt packages feed `alsa-lib`;
+- `audiowrt-minimal-mbedtls` -> OpenWrt `mbedtls`;
+- `audiowrt-dropbear` -> OpenWrt `dropbear`;
+- `audiowrt-minidlna` -> OpenWrt packages feed `minidlna`;
+- `audiowrt-umdns` -> OpenWrt `umdns`;
+- `audiowrt-sbc` -> OpenWrt packages feed `sbc`;
+- `audiowrt-bluez` -> OpenWrt packages feed `bluez`.
+
+`audiowrt-wpa-supplicant` is a selector rather than a source fork: it depends on the exact `wpa-supplicant-mbedtls` package shipped by the selected OpenWrt SDK/release.
+
+Kernel replacements use a binary-derived strategy instead of rebuilding the kernel. `audiowrt-kmod-bluetooth`, `kmod-audiowrt-sound-core` and `kmod-audiowrt-usb-audio` repackage modules downloaded from the exact selected OpenWrt release/target and therefore keep the matching kernel ABI, target and architecture.
+
+Packages for which OpenWrt has no canonical recipe remain AudioWRT-owned source packages. Today this includes `bluez-alsa` and `librespot`. They still compile with the selected OpenWrt SDK, target/subtarget and toolchain, but there is no OpenWrt recipe or OpenWrt patch set to inherit.
+
+`tests/test-openwrt-derived-packages.sh` enforces the contract: derived recipes cannot pin their own upstream source identity and copied OpenWrt patches are rejected.
 
 ## Responsibility boundary
 
@@ -41,11 +65,11 @@ Common reusable audio state and helper CLI. The device/audio name is derived fro
 
 ### `audiowrt-usb-audio`
 
-Detects the first USB Audio Class playback device, creates the ALSA `default` output and reacts to USB hotplug. It uses the `audiowrt-minimal-alsa` replacement rather than the full upstream ALSA userspace package.
+Detects the first USB Audio Class playback device, creates the ALSA `default` output and reacts to USB hotplug. Minimal builds use `audiowrt-minimal-alsa`; standard builds use the normal OpenWrt ALSA package.
 
 ### `audiowrt-extensions`
 
-Runtime service manager using OpenWrt 25.12's `apk` package manager. The initial extension catalog contains MPD, AirPlay, Spotify and Bluetooth.
+Runtime service manager using OpenWrt's package manager. The initial extension catalog contains MPD, AirPlay, Spotify and Bluetooth.
 
 ### `audiowrt-mpd`
 
@@ -57,11 +81,11 @@ Installs `shairport-sync-mini`, uses the current OpenWrt hostname as the AudioWR
 
 ### `librespot` + `audiowrt-spotify`
 
-Packages librespot 0.8.0 with the official OpenWrt Rust toolchain, ALSA backend, rustls and pure-Rust mDNS. Spotify Premium is required by librespot.
+Packages librespot with the selected OpenWrt Rust toolchain, ALSA backend, rustls and pure-Rust mDNS. Spotify Premium is required by librespot.
 
-### `bluez-alsa` + `audiowrt-bluetooth`
+### Bluetooth stack
 
-Packages the lightweight BlueALSA bridge and integrates it with OpenWrt's BlueZ packages. The BlueALSA package carries the known big-endian fixes used by the OpenWrt community packaging.
+`audiowrt-bluez`, `audiowrt-sbc` and the minimal Bluetooth kmod package follow the exact selected OpenWrt release. `bluez-alsa` remains AudioWRT-owned because it has no canonical OpenWrt package recipe in the supported feed set. `audiowrt-bluetooth` provides the AudioWRT integration/service layer.
 
 ### `audiowrt-wifi-client`
 
@@ -71,7 +95,7 @@ Reusable Wi-Fi client backend. It can:
 - create/update the `audiowrt_wifi` DHCP client interface;
 - create/update the `audiowrt_client` STA interface on the selected radio;
 - create/stop a temporary `audiowrt_setup` AP when explicitly requested;
-- keep uMDNS bound to the normal LAN, AudioWRT Wi-Fi client and setup networks.
+- keep mDNS bound to the normal LAN, AudioWRT Wi-Fi client and setup networks.
 
 Installing the package does **not** alter OpenWrt networking. All mutations require an explicit CLI or LuCI action.
 
@@ -96,11 +120,13 @@ Then:
 ./scripts/feeds install -a -p audiowrt
 ```
 
-Installing packages from the feed does not turn an OpenWrt router into the AudioWRT distribution. For example, installing `audiowrt-wifi-client` is inert until the user explicitly configures a client connection.
+Derived packages expect the canonical OpenWrt `base`/`packages` feeds for the build tree to be present. The AudioWRT distribution builder prepares those feeds from the selected SDK automatically.
+
+Installing packages from the feed does not turn an OpenWrt router into the AudioWRT distribution.
 
 ## Architecture
 
-File-only packages are marked `PKGARCH:=all` where possible. Packages that compile native software, notably `librespot` and `bluez-alsa`, remain target-architecture specific. `all` still means package architecture, not cross-release compatibility; development targets OpenWrt 25.12 first.
+File-only packages are marked `PKGARCH:=all` where possible. Native packages are compiled by the selected OpenWrt SDK and are target-architecture specific. Package architecture is independent from release compatibility: release compatibility comes from deriving canonical OpenWrt packages from the selected release context rather than pinning one OpenWrt version in this feed.
 
 ## GitHub Actions policy
 

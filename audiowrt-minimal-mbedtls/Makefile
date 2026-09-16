@@ -1,18 +1,10 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=mbedtls
-PKG_VERSION:=3.6.7
-PKG_RELEASE:=101
-PKG_BUILD_FLAGS:=no-mips16 gc-sections no-lto
-
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
-PKG_SOURCE_URL:=https://github.com/Mbed-TLS/$(PKG_NAME)/releases/download/$(PKG_NAME)-$(PKG_VERSION)
-PKG_HASH:=a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6
+AUDIOWRT_DERIVED_NAME:=audiowrt-minimal-mbedtls
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/libs/mbedtls/Makefile
+include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
-PKG_LICENSE:=GPL-2.0-or-later
-PKG_LICENSE_FILES:=LICENSE
-PKG_CPE_ID:=cpe:/a:arm:mbed_tls
 
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
@@ -27,9 +19,9 @@ define Package/audiowrt-minimal-mbedtls
 endef
 
 define Package/audiowrt-minimal-mbedtls/description
- Mbed TLS shared libraries trimmed for AudioWRT while retaining WPA2/WPA3,
- HTTPS and APK package verification compatibility. TLS 1.2 and TLS 1.3,
- RSA/ECDSA, P-256, P-384 and X25519 remain enabled.
+ Mbed TLS derived from the selected OpenWrt release and trimmed for AudioWRT
+ while retaining WPA2/WPA3, HTTPS and APK package verification compatibility.
+ TLS 1.2/1.3, RSA/ECDSA, P-256, P-384 and X25519 remain enabled.
 endef
 
 TARGET_CFLAGS := $(filter-out -O%,$(TARGET_CFLAGS)) -Wno-unterminated-string-initialization
@@ -40,9 +32,9 @@ CMAKE_OPTIONS += \
 	-DENABLE_TESTING:Bool=OFF \
 	-DENABLE_PROGRAMS:Bool=OFF
 
-# Start from the Mbed TLS upstream configuration and remove only algorithms
-# outside AudioWRT's three consumers: wpad-basic-mbedtls, libustream-mbedtls
-# and apk-mbedtls. Do not remove WPA crypto primitives or modern HTTPS paths.
+# Start from the exact release's Mbed TLS configuration and remove only
+# algorithms outside AudioWRT's consumers. OpenWrt owns the source version and
+# patches; this list is the AudioWRT feature delta only.
 MBEDTLS_UNSET_OPTIONS:= \
 	MBEDTLS_ECP_DP_SECP192R1_ENABLED \
 	MBEDTLS_ECP_DP_SECP224R1_ENABLED \

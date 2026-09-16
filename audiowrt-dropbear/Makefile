@@ -2,20 +2,11 @@
 
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=dropbear
-PKG_VERSION:=2025.89
-PKG_RELEASE:=101
-
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
-PKG_SOURCE_URL:=https://matt.ucc.asn.au/dropbear/releases/ https://dropbear.nl/mirror/releases/
-PKG_HASH:=0d1f7ca711cfc336dc8a85e672cab9cfd8223a02fe2da0a4a7aeb58c9e113634
+AUDIOWRT_DERIVED_NAME:=audiowrt-dropbear
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/dropbear/Makefile
+include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
-PKG_LICENSE:=MIT
-PKG_LICENSE_FILES:=LICENSE libtomcrypt/LICENSE libtommath/LICENSE
-PKG_FIXUP:=autoreconf
-PKG_BUILD_PARALLEL:=1
-PKG_BUILD_FLAGS:=no-mips16 gc-sections lto
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -28,9 +19,9 @@ define Package/audiowrt-dropbear
 endef
 
 define Package/audiowrt-dropbear/description
- Server-only Dropbear build for constrained AudioWRT images. Client SSH/SCP,
- forwarding, X11, legacy algorithms and unrelated compatibility features are
- disabled while password and public-key administration remain available.
+ Server-only Dropbear derived from the selected OpenWrt release. The exact
+ release source version, hardening/build flags and OpenWrt patches are inherited;
+ AudioWRT only disables client-side and unrelated server features.
 endef
 
 define Package/audiowrt-dropbear/conffiles
@@ -97,7 +88,7 @@ define Package/audiowrt-dropbear/install
 	$(INSTALL_DIR) $(1)/usr/sbin $(1)/usr/bin $(1)/etc/init.d $(1)/etc/dropbear
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/dropbearmulti $(1)/usr/sbin/dropbear
 	$(LN) ../sbin/dropbear $(1)/usr/bin/dropbearkey
-	$(INSTALL_BIN) ./files/audiowrt-dropbear.init $(1)/etc/init.d/dropbear
+	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/audiowrt-dropbear.init $(1)/etc/init.d/dropbear
 endef
 
 $(eval $(call BuildPackage,audiowrt-dropbear))

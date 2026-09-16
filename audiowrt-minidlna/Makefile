@@ -2,21 +2,11 @@
 
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=minidlna
-PKG_VERSION:=1.3.3
-PKG_RELEASE:=101
-
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
-PKG_SOURCE_URL:=@SF/minidlna
-PKG_HASH:=39026c6d4a139b9180192d1c37225aa3376fdf4f1a74d7debbdbb693d996afa4
+AUDIOWRT_DERIVED_NAME:=audiowrt-minidlna
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/multimedia/minidlna/Makefile
+include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
-PKG_LICENSE:=GPL-2.0-or-later BSD-3-Clause
-PKG_LICENSE_FILES:=COPYING LICENCE.miniupnpd
-PKG_FIXUP:=autoreconf
-PKG_INSTALL:=1
-PKG_BUILD_PARALLEL:=1
-PKG_BUILD_FLAGS:=gc-sections lto
 
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/nls.mk
@@ -33,9 +23,9 @@ define Package/audiowrt-minidlna
 endef
 
 define Package/audiowrt-minidlna/description
- ReadyMedia/MiniDLNA packaged for AudioWRT. Runtime configuration exposes only
- audio media directories and disables unrelated presentation features. NLS is
- disabled to keep the constrained-device package smaller.
+ ReadyMedia/MiniDLNA derived from the selected OpenWrt packages feed. AudioWRT
+ keeps an audio-only runtime configuration and disables NLS while inheriting
+ the release's exact source version, files and complete OpenWrt patch set.
 endef
 
 define Package/audiowrt-minidlna/conffiles
@@ -55,9 +45,9 @@ define Package/audiowrt-minidlna/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/minidlnad $(1)/usr/sbin/minidlnad
 	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/minidlna.init $(1)/etc/init.d/minidlna
+	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/minidlna.init $(1)/etc/init.d/minidlna
 	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/minidlna.config $(1)/etc/config/minidlna
+	$(INSTALL_CONF) $(AUDIOWRT_DERIVED_FILES_DIR)/minidlna.config $(1)/etc/config/minidlna
 endef
 
 $(eval $(call BuildPackage,audiowrt-minidlna))
