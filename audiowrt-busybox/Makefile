@@ -1,30 +1,12 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-# AudioWRT BusyBox replacement based on OpenWrt 25.12.5 BusyBox 1.37.0-r6.
 
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=audiowrt-busybox
-PKG_VERSION:=1.37.0
-PKG_RELEASE:=1
-PKG_FLAGS:=essential
+AUDIOWRT_DERIVED_NAME:=audiowrt-busybox
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/package/utils/busybox/Makefile
+include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
-PKG_SOURCE:=busybox-$(PKG_VERSION).tar.bz2
-PKG_SOURCE_URL:=https://www.busybox.net/downloads \
-		https://sources.buildroot.net/busybox
-PKG_HASH:=3311dff32e746499f4df0d5df04d7eb396382d7e108bb9250e7b519b837043a4
-PKG_BUILD_DIR:=$(BUILD_DIR)/busybox-$(PKG_VERSION)
-
-PKG_BUILD_DEPENDS:=BUSYBOX_CONFIG_PAM:libpam
-PKG_BUILD_PARALLEL:=1
-PKG_BUILD_FLAGS:=lto
-ifeq ($(CONFIG_SOFT_FLOAT),)
-  PKG_BUILD_FLAGS+=no-mips16
-endif
-
-PKG_CHECK_FORMAT_SECURITY:=0
-PKG_LICENSE:=GPL-2.0
-PKG_LICENSE_FILES:=LICENSE archival/libarchive/bz/LICENSE
-PKG_CPE_ID:=cpe:/a:busybox:busybox
+PKG_MAINTAINER:=AudioWRT
 
 BUSYBOX_SYM=$(if $(CONFIG_BUSYBOX_CUSTOM),CONFIG,DEFAULT)
 BUSYBOX_IF_ENABLED=$(if $(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_$(1)),$(2))
@@ -51,9 +33,9 @@ define Package/audiowrt-busybox
 endef
 
 define Package/audiowrt-busybox/description
- Drop-in replacement for OpenWrt BusyBox. It inherits OpenWrt's selected
- BusyBox defaults and additionally enables the udhcpd applet required by
- AudioWRT provisioning.
+ Drop-in replacement for the BusyBox from the selected OpenWrt release. It
+ inherits that release's source version, build flags, files and complete patch
+ set, then additionally enables the udhcpd applet required by AudioWRT.
 endef
 
 ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SYSLOG)$(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SYSLOGD_CFG),)
@@ -125,20 +107,20 @@ define Package/audiowrt-busybox/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(CP) $(PKG_INSTALL_DIR)/* $(1)/
 	$(INSTALL_DIR) $(1)/etc/profile.d
-	$(INSTALL_BIN) ./files/busybox-history-file.sh $(1)/etc/profile.d
+	$(INSTALL_DATA) $(AUDIOWRT_DERIVED_FILES_DIR)/busybox-history-file.sh $(1)/etc/profile.d/
 ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SYSLOG)$(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SYSLOGD_CFG),)
 	touch $(1)/etc/syslog.conf
 endif
 ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_CROND),)
-	$(INSTALL_BIN) ./files/cron $(1)/etc/init.d/cron
+	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/cron $(1)/etc/init.d/cron
 	$(INSTALL_DIR) $(1)/etc/crontabs
 endif
 ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_NTPD),)
-	$(INSTALL_BIN) ./files/sysntpd $(1)/etc/init.d/sysntpd
-	$(INSTALL_BIN) ./files/ntpd-hotplug $(1)/usr/sbin/ntpd-hotplug
+	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/sysntpd $(1)/etc/init.d/sysntpd
+	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/ntpd-hotplug $(1)/usr/sbin/ntpd-hotplug
 	$(INSTALL_DIR) $(1)/etc/capabilities $(1)/usr/share/acl.d
-	$(INSTALL_DATA) ./files/ntpd.capabilities $(1)/etc/capabilities/ntpd.json
-	$(INSTALL_DATA) ./files/ntpd_acl.json $(1)/usr/share/acl.d/ntpd.json
+	$(INSTALL_DATA) $(AUDIOWRT_DERIVED_FILES_DIR)/ntpd.capabilities $(1)/etc/capabilities/ntpd.json
+	$(INSTALL_DATA) $(AUDIOWRT_DERIVED_FILES_DIR)/ntpd_acl.json $(1)/usr/share/acl.d/ntpd.json
 endif
 	-rm -rf $(1)/lib64
 endef
