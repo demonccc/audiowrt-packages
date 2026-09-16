@@ -1,21 +1,10 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=audiowrt-sbc
-PKG_VERSION:=2.0
-PKG_RELEASE:=2
+AUDIOWRT_DERIVED_NAME:=audiowrt-sbc
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/libs/sbc/Makefile
+include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
-PKG_SOURCE:=sbc-$(PKG_VERSION).tar.xz
-PKG_SOURCE_URL:=@KERNEL/linux/bluetooth/
-PKG_HASH:=8f12368e1dbbf55e14536520473cfb338c84b392939cc9b64298360fd4a07992
-PKG_BUILD_DIR:=$(BUILD_DIR)/sbc-$(PKG_VERSION)
-
-PKG_LICENSE:=LGPL-2.1-or-later
-PKG_LICENSE_FILES:=COPYING.LIB
 PKG_MAINTAINER:=AudioWRT
-PKG_FIXUP:=autoreconf
-PKG_INSTALL:=1
-PKG_BUILD_PARALLEL:=1
-PKG_BUILD_FLAGS:=lto
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -27,14 +16,11 @@ define Package/audiowrt-sbc
 endef
 
 define Package/audiowrt-sbc/description
- Library-only SBC codec package for AudioWRT Bluetooth A2DP. Unlike the
- generic OpenWrt sbc package, it does not install command-line tools and does
- not pull libsndfile or its MP3/audio-format dependency chain into firmware.
+ Library-only SBC codec derived from the selected OpenWrt packages feed for
+ AudioWRT Bluetooth A2DP. Command-line tools and the tester dependency chain
+ are intentionally omitted.
 endef
 
-# libsndfile is only required by the upstream SBC tester. AudioWRT needs the
-# codec library for BlueALSA, so disable the tester and keep the runtime free of
-# libsndfile/lame/mpg123.
 CONFIGURE_ARGS += \
 	--disable-static \
 	--disable-tester
