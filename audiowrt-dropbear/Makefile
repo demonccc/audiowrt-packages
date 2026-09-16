@@ -4,7 +4,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=dropbear
 PKG_VERSION:=2025.89
-PKG_RELEASE:=101
+PKG_RELEASE:=102
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
 PKG_SOURCE_URL:=https://matt.ucc.asn.au/dropbear/releases/ https://dropbear.nl/mirror/releases/
@@ -15,7 +15,9 @@ PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=LICENSE libtomcrypt/LICENSE libtommath/LICENSE
 PKG_FIXUP:=autoreconf
 PKG_BUILD_PARALLEL:=1
+PKG_ASLR_PIE_REGULAR:=1
 PKG_BUILD_FLAGS:=no-mips16 gc-sections lto
+PKG_FLAGS:=nonshared
 
 include $(INCLUDE_DIR)/package.mk
 
