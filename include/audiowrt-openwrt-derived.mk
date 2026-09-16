@@ -33,9 +33,11 @@ ifeq ($(wildcard $(AUDIOWRT_CANONICAL_RECIPE)),)
 endif
 endif
 
-# VERSION_NUMBER is supplied by the selected OpenWrt SDK. The helper copies the
-# canonical release-specific files/patches and emits the canonical recipe
-# preamble before package.mk is included by the AudioWRT recipe body.
+# During a normal package build VERSION_NUMBER has already been populated by
+# OpenWrt. During `scripts/feeds update`, however, package Makefiles are dumped
+# before include/version.mk is loaded and VERSION_NUMBER is legitimately empty.
+# Pass both values: the helper prefers VERSION_NUMBER and otherwise reads the
+# authoritative fallback from the selected source tree/SDK's include/version.mk.
 $(shell \
 	mkdir -p '$(AUDIOWRT_DERIVED_WORK)' && \
 	rm -f '$(AUDIOWRT_DERIVED_STAMP)' && \
@@ -43,6 +45,7 @@ $(shell \
 		'$(AUDIOWRT_CANONICAL_RECIPE)' \
 		'$(AUDIOWRT_DERIVED_ROOT)' \
 		'$(VERSION_NUMBER)' \
+		'$(TOPDIR)' \
 		'$(AUDIOWRT_DERIVED_PREAMBLE)' \
 		'$(AUDIOWRT_DERIVED_RELEASE_RECIPE)' \
 		'$(AUDIOWRT_DERIVED_PATCH_DIR)' \
