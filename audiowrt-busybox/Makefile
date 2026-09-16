@@ -13,7 +13,7 @@ PKG_SOURCE_URL:=https://www.busybox.net/downloads \
 		https://sources.buildroot.net/busybox
 PKG_HASH:=3311dff32e746499f4df0d5df04d7eb396382d7e108bb9250e7b519b837043a4
 PKG_BUILD_DIR:=$(BUILD_DIR)/busybox-$(PKG_VERSION)
-PATCH_DIR:=$(TOPDIR)/package/utils/busybox/patches
+PATCH_DIR:=$(TOPDIR)/feeds/base/package/utils/busybox/patches
 
 PKG_BUILD_DEPENDS:=BUSYBOX_CONFIG_PAM:libpam
 PKG_BUILD_PARALLEL:=1
@@ -108,7 +108,7 @@ define Build/Configure
 ifeq ($(DEVICE_TYPE),nas)
 	echo "CONFIG_HDPARM=y" >> $(PKG_BUILD_DIR)/.config
 endif
-	grep 'CONFIG_BUSYBOX_$(BUSYBOX_SYM)' $(TOPDIR)/.config | sed -e "s,\\(# \)\\?CONFIG_BUSYBOX_$(BUSYBOX_SYM)_\\(.*\\),\\1CONFIG_\\2,g" >> $(PKG_BUILD_DIR)/.config
+	grep 'CONFIG_BUSYBOX_$(BUSYBOX_SYM)' $(TOPDIR)/.config | sed -e "s,\\(# \\)\\?CONFIG_BUSYBOX_$(BUSYBOX_SYM)_\\(.*\\),\\1CONFIG_\\2,g" >> $(PKG_BUILD_DIR)/.config
 	sed -i -e '/^CONFIG_UDHCPD=/d' -e '/^# CONFIG_UDHCPD is not set/d' $(PKG_BUILD_DIR)/.config
 	echo 'CONFIG_UDHCPD=y' >> $(PKG_BUILD_DIR)/.config
 	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
