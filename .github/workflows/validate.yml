@@ -30,6 +30,10 @@ jobs:
             sh -n "$script"
           done < <(find . -path './.git' -prune -o -type f -perm /111 -print0)
 
+      - name: Validate OpenWrt-derived package contract
+        shell: bash
+        run: bash tests/test-openwrt-derived-packages.sh
+
       - name: Validate reusable Wi-Fi client contract
         shell: bash
         run: bash tests/test-wifi-client-package.sh
@@ -94,6 +98,13 @@ jobs:
 
           git clone --depth=1 --branch '${{ inputs.openwrt_ref || 'v25.12.5' }}' https://github.com/openwrt/openwrt.git "$openwrt"
           cd "$openwrt"
+
+          # Production SDKs expose core package recipes through the exact-release
+          # base feed. A source-tree validation checkout stores the same recipes
+          # under package/, so expose the equivalent feeds/base path here.
+          mkdir -p feeds
+          ln -s ../package feeds/base
+
           cp feeds.conf.default feeds.conf
           printf '\nsrc-link audiowrt %s\n' "$workspace" >> feeds.conf
           ./scripts/feeds update -a
@@ -101,8 +112,13 @@ jobs:
           make -s prepare-tmpinfo
 
           for package in \
+            audiowrt-busybox \
             audiowrt-minimal-alsa \
             audiowrt-minimal-mbedtls \
+            audiowrt-dropbear \
+            audiowrt-minidlna \
+            audiowrt-umdns \
+            audiowrt-wpa-supplicant \
             audiowrt-audio \
             audiowrt-core \
             audiowrt-provisioning \
