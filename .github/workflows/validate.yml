@@ -108,6 +108,20 @@ jobs:
           cp feeds.conf.default feeds.conf
           printf '\nsrc-link audiowrt %s\n' "$workspace" >> feeds.conf
           ./scripts/feeds update -a
+
+          # Feed indexing intentionally continues after an individual package
+          # dump fails. Print those hidden dump logs before the later metadata
+          # assertion so the exact parser/derivation error is visible in CI.
+          if [[ -d logs/feeds/audiowrt ]]; then
+            while IFS= read -r -d '' dump; do
+              if [[ -s "$dump" ]]; then
+                echo "::group::${dump}"
+                cat "$dump"
+                echo "::endgroup::"
+              fi
+            done < <(find logs/feeds/audiowrt -name dump.txt -type f -print0 | sort -z)
+          fi
+
           ./scripts/feeds install -a
           make -s prepare-tmpinfo
 
