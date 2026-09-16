@@ -26,6 +26,8 @@ grep -q 'ubus call iwinfo scan' "$script"
 grep -q "network.audiowrt_wifi='interface'" "$script"
 grep -q "wireless.audiowrt_client='wifi-iface'" "$script"
 grep -q 'audiowrt_setup' "$script"
+grep -q 'Minimal flavors intentionally do not include dnsmasq' "$script"
+grep -q '\[ -x /etc/init.d/dnsmasq \] || return 0' "$script"
 
 # The AudioWRT Wi-Fi client owns IPv4 setup so luci-mod-network is not required.
 grep -q '^configure_ip()' "$script"
