@@ -21,23 +21,27 @@ AUDIOWRT_DERIVED_PATCH_DIR:=$(AUDIOWRT_DERIVED_WORK)/patches
 AUDIOWRT_DERIVED_FILES_DIR:=$(AUDIOWRT_DERIVED_WORK)/files
 AUDIOWRT_DERIVED_STAMP:=$(AUDIOWRT_DERIVED_WORK)/prepared
 
-# Official SDKs expose the OpenWrt core package tree as the pinned `base` feed.
-# AudioWRT distribution builds normally update it before package parsing, but a
-# derived package must also be usable when its feed is built directly. Resolve
-# that exact SDK-pinned feed lazily when a base recipe has not been materialized
-# yet. No branch name or AudioWRT-owned OpenWrt revision is substituted here.
-ifneq ($(findstring $(TOPDIR)/feeds/base/,$(AUDIOWRT_CANONICAL_RECIPE)),)
+# Derived recipes resolve only against source trees already present in the
+# selected OpenWrt build context. Core OpenWrt recipes live under $(TOPDIR)/package
+# in both source trees and official SDKs. External feed recipes live under their
+# exact feed checkout (for example $(TOPDIR)/feeds/packages).
+#
+# Never update or install the base feed from a package Makefile. Official SDKs
+# already contain the core package tree. Materializing a second copy through the
+# base feed duplicates package symbols, creates recursive Kconfig dependencies
+# and allows unrelated source packages into selective AudioWRT builds.
 ifeq ($(wildcard $(AUDIOWRT_CANONICAL_RECIPE)),)
-  $(info AudioWRT: resolving exact OpenWrt base feed for $(AUDIOWRT_DERIVED_NAME))
-  $(shell cd '$(TOPDIR)' && ./scripts/feeds update base >/dev/null 2>&1)
-endif
+  $(error Canonical OpenWrt recipe is not present in selected build context: $(AUDIOWRT_CANONICAL_RECIPE))
 endif
 
 # During a normal package build VERSION_NUMBER has already been populated by
-# OpenWrt. During `scripts/feeds update`, however, package Makefiles are dumped
-# before include/version.mk is loaded and VERSION_NUMBER is legitimately empty.
-# Pass both values: the helper prefers VERSION_NUMBER and otherwise reads the
-# authoritative fallback from the selected source tree/SDK's include/version.mk.
+# OpenWrt. During `scripts/feeds update`, package Makefiles can be dumped before
+# include/version.mk is loaded, so the helper also receives TOPDIR and resolves
+# the version from that selected source tree/SDK when necessary.
+#
+# prepare-openwrt-derived.py emits only the canonical pre-package.mk preamble
+# (source identity/build flags), canonical patches/files and AudioWRT 9xx deltas.
+# It never imports upstream Package/* definitions, DEPENDS or BuildPackage calls.
 $(shell \
 	mkdir -p '$(AUDIOWRT_DERIVED_WORK)' && \
 	rm -f '$(AUDIOWRT_DERIVED_STAMP)' && \
