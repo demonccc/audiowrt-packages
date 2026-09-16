@@ -45,8 +45,13 @@ done
 # interfaces differ between 24.10, 25.12, snapshot, etc.
 grep -Fq 'include $(AUDIOWRT_DERIVED_PREAMBLE)' "$repo_root/include/audiowrt-openwrt-derived.mk"
 grep -Fq -- '-include $(AUDIOWRT_DERIVED_RELEASE_RECIPE)' "$repo_root/include/audiowrt-openwrt-derived.mk"
-grep -Fq './scripts/feeds update base' "$repo_root/include/audiowrt-openwrt-derived.mk"
+grep -Fq 'AUDIOWRT_CANONICAL_RECIPE_RESOLVED' "$repo_root/include/audiowrt-openwrt-derived.mk"
+grep -Fq '$(TOPDIR)/package/%' "$repo_root/include/audiowrt-openwrt-derived.mk"
 grep -Fq "'\$(TOPDIR)'" "$repo_root/include/audiowrt-openwrt-derived.mk"
+if grep -Fq './scripts/feeds update base' "$repo_root/include/audiowrt-openwrt-derived.mk"; then
+  echo 'ERROR: derived package helper must never materialize the base feed.' >&2
+  exit 1
+fi
 grep -Fq 'copy_tree(canonical_root / "patches", patch_dir)' "$repo_root/scripts/prepare-openwrt-derived.py"
 grep -Fq 'copy_tree(canonical_root / "files", files_dir)' "$repo_root/scripts/prepare-openwrt-derived.py"
 grep -Fq 'release_delta / "recipe.mk"' "$repo_root/scripts/prepare-openwrt-derived.py"
