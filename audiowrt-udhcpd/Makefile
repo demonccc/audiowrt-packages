@@ -27,9 +27,10 @@ define Package/audiowrt-udhcpd/description
 endef
 
 define Build/Configure
-	$(MAKE) -C $(PKG_BUILD_DIR) $(TARGET_CONFIGURE_OPTS) allnoconfig
+	rm -f $(PKG_BUILD_DIR)/.config
+	touch $(PKG_BUILD_DIR)/.config
 	cat ./files/busybox.config >> $(PKG_BUILD_DIR)/.config
-	$(MAKE) -C $(PKG_BUILD_DIR) $(TARGET_CONFIGURE_OPTS) oldconfig
+	yes n | $(MAKE) -C $(PKG_BUILD_DIR) $(TARGET_CONFIGURE_OPTS) oldconfig
 endef
 
 define Build/Compile
