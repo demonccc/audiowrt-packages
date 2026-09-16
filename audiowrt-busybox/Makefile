@@ -3,7 +3,7 @@
 include $(TOPDIR)/rules.mk
 
 AUDIOWRT_DERIVED_NAME:=audiowrt-busybox
-AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/package/utils/busybox/Makefile
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/utils/busybox/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
