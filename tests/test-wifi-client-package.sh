@@ -15,8 +15,8 @@ if grep -Eq '(uci-defaults|/etc/init\.d|postinst)' "$makefile"; then
     exit 1
 fi
 
-# Scan uses the native iwinfo ubus provider. DHCP/DNS and mDNS are selected by
-# the firmware flavor, not pulled in implicitly by this reusable client package.
+# Scan uses the native iwinfo ubus provider. DHCP and mDNS are selected by the
+# firmware flavor, not pulled in implicitly by this reusable client package.
 grep -q '+rpcd-mod-iwinfo' "$makefile"
 if grep -Eq '\+dnsmasq|\+umdns' "$makefile"; then
     echo 'ERROR: DHCP/DNS and mDNS services must remain flavor-owned.' >&2
@@ -26,6 +26,14 @@ grep -q 'ubus call iwinfo scan' "$script"
 grep -q "network.audiowrt_wifi='interface'" "$script"
 grep -q "wireless.audiowrt_client='wifi-iface'" "$script"
 grep -q 'audiowrt_setup' "$script"
+grep -q 'All AudioWRT flavors use odhcpd' "$script"
+grep -q '\[ -x /etc/init.d/odhcpd \] || return 0' "$script"
+grep -q "dhcp.audiowrt_setup.dhcpv4='server'" "$script"
+grep -q '/etc/init.d/odhcpd restart' "$script"
+if grep -Eq 'dnsmasq|setup_dns' "$script"; then
+    echo 'ERROR: Wi-Fi provisioning must not depend on dnsmasq.' >&2
+    exit 1
+fi
 
 # The AudioWRT Wi-Fi client owns IPv4 setup so luci-mod-network is not required.
 grep -q '^configure_ip()' "$script"
