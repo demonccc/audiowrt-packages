@@ -79,10 +79,11 @@ def overlay_patches(source: Path, destination: Path) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) != 8:
+    if len(sys.argv) != 9:
         print(
             "usage: prepare-openwrt-derived.py <canonical-makefile> <delta-root> "
-            "<openwrt-version> <preamble-out> <patch-dir> <files-dir> <stamp>",
+            "<openwrt-version> <preamble-out> <release-recipe-out> "
+            "<patch-dir> <files-dir> <stamp>",
             file=sys.stderr,
         )
         return 2
@@ -91,9 +92,10 @@ def main() -> int:
     delta_root = Path(sys.argv[2]).resolve()
     version = sys.argv[3]
     preamble_out = Path(sys.argv[4])
-    patch_dir = Path(sys.argv[5])
-    files_dir = Path(sys.argv[6])
-    stamp = Path(sys.argv[7])
+    release_recipe_out = Path(sys.argv[5])
+    patch_dir = Path(sys.argv[6])
+    files_dir = Path(sys.argv[7])
+    stamp = Path(sys.argv[8])
 
     if not canonical_makefile.is_file():
         fail(f"canonical OpenWrt recipe is missing: {canonical_makefile}")
@@ -102,9 +104,23 @@ def main() -> int:
 
     release_family = family(version)
     canonical_root = canonical_makefile.parent
+    release_delta = delta_root / "releases" / release_family
 
     preamble_out.parent.mkdir(parents=True, exist_ok=True)
     preamble_out.write_text(extract_preamble(canonical_makefile), encoding="utf-8")
+
+    # A release-specific recipe fragment is optional. It contains only AudioWRT
+    # compatibility overrides when a feature/configure interface differs between
+    # OpenWrt release families; it never carries upstream version/source data.
+    release_recipe_out.parent.mkdir(parents=True, exist_ok=True)
+    recipe_fragment = release_delta / "recipe.mk"
+    if recipe_fragment.is_file():
+        release_recipe_out.write_text(recipe_fragment.read_text(encoding="utf-8"), encoding="utf-8")
+    else:
+        release_recipe_out.write_text(
+            f"# No AudioWRT recipe override for OpenWrt {release_family}\n",
+            encoding="utf-8",
+        )
 
     shutil.rmtree(patch_dir, ignore_errors=True)
     shutil.rmtree(files_dir, ignore_errors=True)
@@ -120,8 +136,6 @@ def main() -> int:
     # it is impossible to silently replace an OpenWrt-owned patch.
     copy_tree(delta_root / "files", files_dir)
     overlay_patches(delta_root / "patches", patch_dir)
-
-    release_delta = delta_root / "releases" / release_family
     copy_tree(release_delta / "files", files_dir)
     overlay_patches(release_delta / "patches", patch_dir)
 
