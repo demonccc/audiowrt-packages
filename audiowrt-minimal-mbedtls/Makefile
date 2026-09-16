@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 AUDIOWRT_DERIVED_NAME:=audiowrt-minimal-mbedtls
-AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/package/libs/mbedtls/Makefile
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/libs/mbedtls/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
