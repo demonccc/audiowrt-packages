@@ -21,6 +21,18 @@ AUDIOWRT_DERIVED_PATCH_DIR:=$(AUDIOWRT_DERIVED_WORK)/patches
 AUDIOWRT_DERIVED_FILES_DIR:=$(AUDIOWRT_DERIVED_WORK)/files
 AUDIOWRT_DERIVED_STAMP:=$(AUDIOWRT_DERIVED_WORK)/prepared
 
+# Official SDKs expose the OpenWrt core package tree as the pinned `base` feed.
+# AudioWRT distribution builds normally update it before package parsing, but a
+# derived package must also be usable when its feed is built directly. Resolve
+# that exact SDK-pinned feed lazily when a base recipe has not been materialized
+# yet. No branch name or AudioWRT-owned OpenWrt revision is substituted here.
+ifneq ($(findstring $(TOPDIR)/feeds/base/,$(AUDIOWRT_CANONICAL_RECIPE)),)
+ifeq ($(wildcard $(AUDIOWRT_CANONICAL_RECIPE)),)
+  $(info AudioWRT: resolving exact OpenWrt base feed for $(AUDIOWRT_DERIVED_NAME))
+  $(shell cd '$(TOPDIR)' && ./scripts/feeds update base >/dev/null 2>&1)
+endif
+endif
+
 # VERSION_NUMBER is supplied by the selected OpenWrt SDK. The helper copies the
 # canonical release-specific files/patches and emits the canonical recipe
 # preamble before package.mk is included by the AudioWRT recipe body.
