@@ -178,20 +178,28 @@ disconnect_wifi() {
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
 }
 
-setup_dns_enable() {
+setup_dhcp_enable() {
 	setup_ip="$1"
-	uci -q del_list dhcp.@dnsmasq[0].address="/#/$setup_ip" 2>/dev/null || true
-	uci -q add_list dhcp.@dnsmasq[0].address="/#/$setup_ip"
+	# All AudioWRT flavors use odhcpd for the provisioning DHCP service.
+	# Keep the AP usable even if a damaged/custom image is missing odhcpd.
+	[ -x /etc/init.d/odhcpd ] || return 0
+	uci -q get dhcp.odhcpd >/dev/null 2>&1 || uci -q set dhcp.odhcpd='odhcpd'
+	uci -q set dhcp.odhcpd.maindhcp='1'
+	uci -q set dhcp.audiowrt_setup.dhcpv4='server'
+	uci -q set dhcp.audiowrt_setup.dhcpv6='disabled'
+	uci -q set dhcp.audiowrt_setup.ra='disabled'
 	uci -q commit dhcp
-	/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+	/etc/init.d/odhcpd enable >/dev/null 2>&1 || true
+	/etc/init.d/odhcpd restart >/dev/null 2>&1 || true
 }
 
-setup_dns_disable() {
-	setup_ip="${1:-}"
-	[ -n "$setup_ip" ] || return 0
-	uci -q del_list dhcp.@dnsmasq[0].address="/#/$setup_ip" 2>/dev/null || true
+setup_dhcp_disable() {
+	[ -x /etc/init.d/odhcpd ] || return 0
+	uci -q set dhcp.audiowrt_setup.dhcpv4='disabled' 2>/dev/null || true
+	uci -q set dhcp.audiowrt_setup.dhcpv6='disabled' 2>/dev/null || true
+	uci -q set dhcp.audiowrt_setup.ra='disabled' 2>/dev/null || true
 	uci -q commit dhcp
-	/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
+	/etc/init.d/odhcpd restart >/dev/null 2>&1 || true
 }
 
 setup_start() {
@@ -211,7 +219,9 @@ setup_start() {
 	uci -q set dhcp.audiowrt_setup.start='100'
 	uci -q set dhcp.audiowrt_setup.limit='100'
 	uci -q set dhcp.audiowrt_setup.leasetime='10m'
-	uci -q set dhcp.audiowrt_setup.ignore='0'
+	uci -q set dhcp.audiowrt_setup.dhcpv4='disabled'
+	uci -q set dhcp.audiowrt_setup.dhcpv6='disabled'
+	uci -q set dhcp.audiowrt_setup.ra='disabled'
 
 	uci -q delete wireless.audiowrt_setup 2>/dev/null || true
 	uci -q set wireless.audiowrt_setup='wifi-iface'
@@ -226,7 +236,7 @@ setup_start() {
 	uci -q commit network
 	uci -q commit dhcp
 	uci -q commit wireless
-	setup_dns_enable "$setup_ip"
+	setup_dhcp_enable "$setup_ip"
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
 	mdns_sync
 }
@@ -234,10 +244,10 @@ setup_start() {
 setup_stop() {
 	setup_ip="$(uci -q get network.audiowrt_setup.ipaddr || true)"
 	uci -q set wireless.audiowrt_setup.disabled='1' 2>/dev/null || true
-	uci -q set dhcp.audiowrt_setup.ignore='1' 2>/dev/null || true
+	uci -q set dhcp.audiowrt_setup.dhcpv4='disabled' 2>/dev/null || true
 	uci -q commit wireless
 	uci -q commit dhcp
-	setup_dns_disable "$setup_ip"
+	setup_dhcp_disable "$setup_ip"
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
 	mdns_sync
 }
