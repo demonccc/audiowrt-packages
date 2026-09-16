@@ -26,12 +26,14 @@ grep -q 'ubus call iwinfo scan' "$script"
 grep -q "network.audiowrt_wifi='interface'" "$script"
 grep -q "wireless.audiowrt_client='wifi-iface'" "$script"
 grep -q 'audiowrt_setup' "$script"
-grep -q 'All AudioWRT flavors use odhcpd' "$script"
-grep -q '\[ -x /etc/init.d/odhcpd \] || return 0' "$script"
-grep -q "dhcp.audiowrt_setup.dhcpv4='server'" "$script"
-grep -q '/etc/init.d/odhcpd restart' "$script"
-if grep -Eq 'dnsmasq|setup_dns' "$script"; then
-    echo 'ERROR: Wi-Fi provisioning must not depend on dnsmasq.' >&2
+grep -q 'standalone BusyBox' "$script"
+grep -q '\[ -x /usr/sbin/udhcpd \] || return 0' "$script"
+grep -q '/etc/init.d/audiowrt-udhcpd restart' "$script"
+grep -q 'option lease 600' "$script"
+grep -q 'option router' "$script"
+grep -q 'option dns' "$script"
+if grep -Eq 'dnsmasq|setup_dns|odhcpd' "$script"; then
+    echo 'ERROR: Wi-Fi provisioning must use BusyBox udhcpd, not dnsmasq/odhcpd.' >&2
     exit 1
 fi
 

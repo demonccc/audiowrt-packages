@@ -180,26 +180,24 @@ disconnect_wifi() {
 
 setup_dhcp_enable() {
 	setup_ip="$1"
-	# All AudioWRT flavors use odhcpd for the provisioning DHCP service.
-	# Keep the AP usable even if a damaged/custom image is missing odhcpd.
-	[ -x /etc/init.d/odhcpd ] || return 0
-	uci -q get dhcp.odhcpd >/dev/null 2>&1 || uci -q set dhcp.odhcpd='odhcpd'
-	uci -q set dhcp.odhcpd.maindhcp='1'
-	uci -q set dhcp.audiowrt_setup.dhcpv4='server'
-	uci -q set dhcp.audiowrt_setup.dhcpv6='disabled'
-	uci -q set dhcp.audiowrt_setup.ra='disabled'
-	uci -q commit dhcp
-	/etc/init.d/odhcpd enable >/dev/null 2>&1 || true
-	/etc/init.d/odhcpd restart >/dev/null 2>&1 || true
+	# Provisioning is the only DHCP server use case. Use the standalone BusyBox
+	# udhcpd binary instead of installing OpenWrt's long-running DHCP daemon.
+	[ -x /usr/sbin/udhcpd ] || return 0
+	cat > /tmp/audiowrt-udhcpd.conf <<-EOF
+	start ${setup_ip%.*}.100
+	end ${setup_ip%.*}.199
+	interface br-audiowrt_setup
+	option lease 600
+	option router $setup_ip
+	option dns $setup_ip
+	option subnet 255.255.255.0
+	EOF
+	killall udhcpd 2>/dev/null || true
 }
 
 setup_dhcp_disable() {
-	[ -x /etc/init.d/odhcpd ] || return 0
-	uci -q set dhcp.audiowrt_setup.dhcpv4='disabled' 2>/dev/null || true
-	uci -q set dhcp.audiowrt_setup.dhcpv6='disabled' 2>/dev/null || true
-	uci -q set dhcp.audiowrt_setup.ra='disabled' 2>/dev/null || true
-	uci -q commit dhcp
-	/etc/init.d/odhcpd restart >/dev/null 2>&1 || true
+	killall udhcpd 2>/dev/null || true
+	rm -f /tmp/audiowrt-udhcpd.conf
 }
 
 setup_start() {
@@ -214,14 +212,6 @@ setup_start() {
 	uci -q set network.audiowrt_setup.netmask='255.255.255.0'
 
 	uci -q delete dhcp.audiowrt_setup 2>/dev/null || true
-	uci -q set dhcp.audiowrt_setup='dhcp'
-	uci -q set dhcp.audiowrt_setup.interface='audiowrt_setup'
-	uci -q set dhcp.audiowrt_setup.start='100'
-	uci -q set dhcp.audiowrt_setup.limit='100'
-	uci -q set dhcp.audiowrt_setup.leasetime='10m'
-	uci -q set dhcp.audiowrt_setup.dhcpv4='disabled'
-	uci -q set dhcp.audiowrt_setup.dhcpv6='disabled'
-	uci -q set dhcp.audiowrt_setup.ra='disabled'
 
 	uci -q delete wireless.audiowrt_setup 2>/dev/null || true
 	uci -q set wireless.audiowrt_setup='wifi-iface'
@@ -238,6 +228,7 @@ setup_start() {
 	uci -q commit wireless
 	setup_dhcp_enable "$setup_ip"
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
+	/etc/init.d/audiowrt-udhcpd restart >/dev/null 2>&1 || true
 	mdns_sync
 }
 

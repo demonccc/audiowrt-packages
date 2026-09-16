@@ -1,0 +1,28 @@
+#!/bin/sh /etc/rc.common
+
+START=90
+
+start_service() {
+	[ -x /usr/sbin/udhcpd ] || return 0
+	config=/tmp/audiowrt-udhcpd.conf
+	[ -r "$config" ] || config=/etc/udhcpd.conf
+	[ -r "$config" ] || return 0
+	stop_service
+	interface="$(sed -n 's/^interface[[:space:]]\+//p' "$config" | head -n 1)"
+	if [ -n "$interface" ]; then
+		tries=0
+		while ! ip link show "$interface" >/dev/null 2>&1 && [ "$tries" -lt 10 ]; do
+			sleep 1
+			tries=$((tries + 1))
+		done
+		ip link show "$interface" >/dev/null 2>&1 || return 0
+	fi
+	/usr/sbin/udhcpd -S -f "$config" >/dev/null 2>&1 &
+}
+
+stop_service() {
+	killall udhcpd 2>/dev/null || true
+}
+
+start() { start_service; }
+stop() { stop_service; }
