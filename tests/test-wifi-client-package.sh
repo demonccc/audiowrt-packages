@@ -8,6 +8,7 @@ makefile="$repo_root/audiowrt-wifi-client/Makefile"
 script="$repo_root/audiowrt-wifi-client/files/audiowrt-wifi-client"
 ui="$repo_root/luci-app-audiowrt-wifi-client/htdocs/luci-static/resources/view/audiowrt-wifi-client/client.js"
 busybox_makefile="$repo_root/audiowrt-busybox/Makefile"
+udhcpd_makefile="$repo_root/audiowrt-udhcpd/Makefile"
 
 # The package must remain architecture independent and inert at install time.
 grep -q '^PKGARCH:=all$' "$makefile"
@@ -20,6 +21,11 @@ fi
 # firmware flavor, not pulled in implicitly by this reusable client package.
 grep -q '+rpcd-mod-iwinfo' "$makefile"
 grep -q "echo 'CONFIG_UDHCPD=y'" "$busybox_makefile"
+grep -q '+audiowrt-busybox' "$udhcpd_makefile"
+if grep -Eq 'usr/sbin/udhcpd|ln -sf .*/bin/busybox' "$udhcpd_makefile"; then
+    echo 'ERROR: audiowrt-busybox must own the udhcpd applet; audiowrt-udhcpd is configuration/service only.' >&2
+    exit 1
+fi
 if grep -Eq '\+dnsmasq|\+umdns' "$makefile"; then
     echo 'ERROR: DHCP/DNS and mDNS services must remain flavor-owned.' >&2
     exit 1
