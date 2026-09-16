@@ -4,7 +4,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-branding
 PKG_VERSION:=1
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -13,6 +13,7 @@ define Package/audiowrt-branding
   CATEGORY:=AudioWRT
   TITLE:=AudioWRT system branding metadata
   PKGARCH:=all
+  DEPENDS:=+base-files
 endef
 
 define Package/audiowrt-branding/description
@@ -23,8 +24,18 @@ define Build/Compile
 endef
 
 define Package/audiowrt-branding/install
-	$(INSTALL_DIR) $(1)/etc
-	$(INSTALL_DATA) ./files/banner $(1)/etc/banner
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt
+	$(INSTALL_DATA) ./files/banner $(1)/usr/share/audiowrt/banner
+endef
+
+define Package/audiowrt-branding/postinst
+#!/bin/sh
+banner="$${IPKG_INSTROOT}/usr/share/audiowrt/banner"
+target="$${IPKG_INSTROOT}/etc/banner"
+[ -f "$${banner}" ] || exit 0
+mkdir -p "$${IPKG_INSTROOT}/etc"
+cp -f "$${banner}" "$${target}"
+exit 0
 endef
 
 $(eval $(call BuildPackage,audiowrt-branding))
