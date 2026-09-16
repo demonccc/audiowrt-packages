@@ -180,6 +180,10 @@ disconnect_wifi() {
 
 setup_dns_enable() {
 	setup_ip="$1"
+	# Minimal flavors intentionally do not include dnsmasq. The setup AP can
+	# still be created and used with a manually configured client IP.
+	[ -x /etc/init.d/dnsmasq ] || return 0
+	uci -q get dhcp.@dnsmasq[0] >/dev/null 2>&1 || return 0
 	uci -q del_list dhcp.@dnsmasq[0].address="/#/$setup_ip" 2>/dev/null || true
 	uci -q add_list dhcp.@dnsmasq[0].address="/#/$setup_ip"
 	uci -q commit dhcp
@@ -189,6 +193,8 @@ setup_dns_enable() {
 setup_dns_disable() {
 	setup_ip="${1:-}"
 	[ -n "$setup_ip" ] || return 0
+	[ -x /etc/init.d/dnsmasq ] || return 0
+	uci -q get dhcp.@dnsmasq[0] >/dev/null 2>&1 || return 0
 	uci -q del_list dhcp.@dnsmasq[0].address="/#/$setup_ip" 2>/dev/null || true
 	uci -q commit dhcp
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1 || true
