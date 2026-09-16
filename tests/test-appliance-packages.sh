@@ -21,6 +21,9 @@ grep -q '/usr/sbin/audiowrt-wifi-client connect' "$provisioning/files/audiowrt-p
 grep -q '/bin/busybox passwd root' "$provisioning/files/audiowrt-provision.cgi"
 grep -q 'audiowrt-scan.cgi' "$provisioning/Makefile"
 grep -q 'audiowrt-radios.cgi' "$provisioning/Makefile"
+grep -q 'audiowrt-provisioning.init' "$provisioning/Makefile"
+grep -q 'S99audiowrt-provisioning' "$provisioning/Makefile"
+grep -q 'provisioning_initialized' "$provisioning/files/audiowrt-provisioning.init"
 grep -q 'bssid' "$provisioning/files/audiowrt-provision.cgi"
 grep -q 'alternate_radio' "$provisioning/files/audiowrt-provision"
 
@@ -36,7 +39,6 @@ fi
 grep -q 'Passwords match' "$provisioning/files/audiowrt.html"
 grep -q 'groupNetworks' "$provisioning/files/audiowrt.html"
 
-# Storage remains supported but is not required by the 8 MB core.
 grep -q 'audiowrt-storage.main' "$storage"
 if grep -q 'audiowrt\.storage' "$storage"; then
     echo 'ERROR: storage runtime still writes the legacy audiowrt.storage section.' >&2
