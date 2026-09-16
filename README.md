@@ -6,9 +6,11 @@ This repository is the single catalog of every package maintained by AudioWRT. I
 
 ## OpenWrt-derived package contract
 
-AudioWRT does **not** fork OpenWrt package recipes by pinning a separate upstream version. If a package already exists in OpenWrt, an AudioWRT replacement must derive from the canonical recipe of the **selected OpenWrt release**.
+AudioWRT does **not** fork OpenWrt package recipes by pinning a separate upstream version. If a package already exists in OpenWrt and AudioWRT really needs to rebuild that source, the AudioWRT replacement derives from the canonical recipe of the **selected OpenWrt release**.
 
-For a release build, the official SDK `feeds.conf.default` is authoritative. The builder updates the exact pinned `base` and `packages` feed revisions from that SDK. A derived AudioWRT package then inherits from that exact recipe:
+For a release build, the official SDK/build context is authoritative. Core OpenWrt recipes are taken from the SDK's existing `$(TOPDIR)/package` tree; external recipes are taken from the exact release-pinned feeds such as `$(TOPDIR)/feeds/packages`. AudioWRT must **never materialize a second `base` package tree** merely to derive a package. Doing so duplicates Kconfig package symbols and can cause unrelated OpenWrt packages to enter a selective source build.
+
+A source-derived AudioWRT package inherits from that exact recipe:
 
 - upstream version/source/hash or git revision;
 - OpenWrt build flags and hardening metadata;
@@ -18,34 +20,43 @@ For a release build, the official SDK `feeds.conf.default` is authoritative. The
 
 AudioWRT stores only the delta. Source patches owned by AudioWRT use the `9xx-*` namespace. If OpenWrt 24.10 and 25.12 use different upstream versions or patches, each AudioWRT build automatically inherits the version and patch set from the selected release instead of carrying parallel copies in this repository.
 
-The helper is implemented by `include/audiowrt-openwrt-derived.mk` and `scripts/prepare-openwrt-derived.py`. The package recipe declares its canonical source, for example:
-
-```make
-AUDIOWRT_DERIVED_NAME:=audiowrt-dropbear
-AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/dropbear/Makefile
-include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
-```
+The helper is implemented by `include/audiowrt-openwrt-derived.mk` and `scripts/prepare-openwrt-derived.py`. Existing declarations may use the logical `feeds/base/...` location for a core package, but the helper resolves it to the already-present SDK/source-tree `package/...` recipe and never runs `scripts/feeds update base` itself.
 
 Release-family-specific AudioWRT compatibility deltas may live under `releases/<major.minor>/`, but those files may contain only AudioWRT overrides. They must not copy OpenWrt source metadata or OpenWrt-owned patches.
 
-Current derived userspace packages are:
+Current source-derived userspace packages are:
 
 - `audiowrt-busybox` -> OpenWrt `busybox`;
 - `audiowrt-minimal-alsa` -> OpenWrt packages feed `alsa-lib`;
 - `audiowrt-minimal-mbedtls` -> OpenWrt `mbedtls`;
 - `audiowrt-dropbear` -> OpenWrt `dropbear`;
-- `audiowrt-minidlna` -> OpenWrt packages feed `minidlna`;
 - `audiowrt-umdns` -> OpenWrt `umdns`;
 - `audiowrt-sbc` -> OpenWrt packages feed `sbc`;
 - `audiowrt-bluez` -> OpenWrt packages feed `bluez`.
 
-`audiowrt-wpa-supplicant` is a selector rather than a source fork: it depends on the exact `wpa-supplicant-mbedtls` package shipped by the selected OpenWrt SDK/release.
+Not every AudioWRT package that customizes behavior should rebuild upstream source. If the AudioWRT delta is only runtime policy/configuration, the exact official release binary must be reused instead. This avoids rebuilding OpenWrt dependency graphs that already exist as release packages.
+
+`audiowrt-minidlna` follows that binary-reuse rule. AudioWRT currently changes only the runtime profile to expose audio media, so it depends on the exact official `minidlna` package from the selected release and installs only AudioWRT's audio-only configuration. It is deliberately **not** a source-derived package: rebuilding MiniDLNA would pull the complete FFmpeg dependency graph into a selective SDK build without producing a truly smaller binary. A future source-minimized DLNA implementation must first remove those compile/link dependencies before it may be added to the source-build set.
+
+`audiowrt-wpa-supplicant` is also a selector rather than a source fork: it depends on the exact `wpa-supplicant-mbedtls` package shipped by the selected OpenWrt SDK/release.
 
 Kernel replacements use a binary-derived strategy instead of rebuilding the kernel. `audiowrt-kmod-bluetooth`, `kmod-audiowrt-sound-core` and `kmod-audiowrt-usb-audio` repackage modules downloaded from the exact selected OpenWrt release/target and therefore keep the matching kernel ABI, target and architecture.
 
 Packages for which OpenWrt has no canonical recipe remain AudioWRT-owned source packages. Today this includes `bluez-alsa` and `librespot`. They still compile with the selected OpenWrt SDK, target/subtarget and toolchain, but there is no OpenWrt recipe or OpenWrt patch set to inherit.
 
-`tests/test-openwrt-derived-packages.sh` enforces the contract: derived recipes cannot pin their own upstream source identity and copied OpenWrt patches are rejected.
+`tests/test-openwrt-derived-packages.sh` enforces the contract: source-derived recipes cannot pin their own upstream source identity, copied OpenWrt patches are rejected, the helper is forbidden from materializing the base feed, and binary-reuse packages such as MiniDLNA are forbidden from accidentally becoming source-derived again.
+
+## Selective source-build boundary
+
+The distribution must not treat every selected runtime package as source-build intent.
+
+- File-only packages, selectors and runtime profiles are built with `NO_DEPS=1`.
+- Unchanged OpenWrt runtime packages come from the official release repositories and are installed by ImageBuilder.
+- Only packages whose AudioWRT delta really changes the compiled binary may enter the source-build set.
+- Adding a package to the source-build set is an explicit opt-in to compiling its required build/link dependency closure.
+- A package must not be placed in that set merely because it references an upstream project.
+
+This boundary is particularly important on constrained-device builds: selecting an AudioWRT runtime capability must not silently turn the SDK step into a broad OpenWrt source build.
 
 ## Responsibility boundary
 
@@ -120,7 +131,7 @@ Then:
 ./scripts/feeds install -a -p audiowrt
 ```
 
-Derived packages expect the canonical OpenWrt `base`/`packages` feeds for the build tree to be present. The AudioWRT distribution builder prepares those feeds from the selected SDK automatically.
+Source-derived packages expect their canonical OpenWrt recipe to be available in the selected build context. Core recipes come from the existing `package/` tree; packages-feed recipes require the exact selected `packages` feed checkout. The package helper never updates the base feed on its own.
 
 Installing packages from the feed does not turn an OpenWrt router into the AudioWRT distribution.
 
