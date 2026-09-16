@@ -46,9 +46,39 @@ done
 grep -Fq 'include $(AUDIOWRT_DERIVED_PREAMBLE)' "$repo_root/include/audiowrt-openwrt-derived.mk"
 grep -Fq -- '-include $(AUDIOWRT_DERIVED_RELEASE_RECIPE)' "$repo_root/include/audiowrt-openwrt-derived.mk"
 grep -Fq './scripts/feeds update base' "$repo_root/include/audiowrt-openwrt-derived.mk"
+grep -Fq "'\$(TOPDIR)'" "$repo_root/include/audiowrt-openwrt-derived.mk"
 grep -Fq 'copy_tree(canonical_root / "patches", patch_dir)' "$repo_root/scripts/prepare-openwrt-derived.py"
 grep -Fq 'copy_tree(canonical_root / "files", files_dir)' "$repo_root/scripts/prepare-openwrt-derived.py"
 grep -Fq 'release_delta / "recipe.mk"' "$repo_root/scripts/prepare-openwrt-derived.py"
+
+# `scripts/feeds update` evaluates package Makefiles before VERSION_NUMBER is
+# initialized. Verify that an empty make variable is resolved from the exact
+# selected tree/SDK's include/version.mk rather than from an AudioWRT default.
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/openwrt/include" "$tmp/canonical/patches" "$tmp/delta"
+cat >"$tmp/openwrt/include/version.mk" <<'EOF'
+VERSION_NUMBER:=$(call qstrip,$(CONFIG_VERSION_NUMBER))
+VERSION_NUMBER:=$(if $(VERSION_NUMBER),$(VERSION_NUMBER),25.12.5)
+EOF
+cat >"$tmp/canonical/Makefile" <<'EOF'
+include $(TOPDIR)/rules.mk
+PKG_NAME:=fixture
+PKG_VERSION:=1.0
+include $(INCLUDE_DIR)/package.mk
+EOF
+python3 "$repo_root/scripts/prepare-openwrt-derived.py" \
+  "$tmp/canonical/Makefile" \
+  "$tmp/delta" \
+  '' \
+  "$tmp/openwrt" \
+  "$tmp/out/preamble.mk" \
+  "$tmp/out/release.mk" \
+  "$tmp/out/patches" \
+  "$tmp/out/files" \
+  "$tmp/out/prepared"
+grep -Fq 'openwrt_version=25.12.5' "$tmp/out/prepared"
+grep -Fq 'release_family=25.12' "$tmp/out/prepared"
 
 # These use other provenance strategies and must stay release-context aware:
 # selector -> exact SDK package; prebuilt -> exact target kmods.
