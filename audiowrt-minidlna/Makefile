@@ -2,52 +2,46 @@
 
 include $(TOPDIR)/rules.mk
 
-AUDIOWRT_DERIVED_NAME:=audiowrt-minidlna
-AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/multimedia/minidlna/Makefile
-include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
-
+PKG_NAME:=audiowrt-minidlna
+PKG_RELEASE:=2
 PKG_MAINTAINER:=AudioWRT
 
 include $(INCLUDE_DIR)/package.mk
-include $(INCLUDE_DIR)/nls.mk
 
 define Package/audiowrt-minidlna
   SECTION:=multimedia
   CATEGORY:=AudioWRT
-  TITLE:=AudioWRT audio-only DLNA server
-  URL:=https://sourceforge.net/projects/minidlna/
-  DEPENDS:=+libpthread +libexif +libjpeg +libsqlite3 +libffmpeg +libid3tag +libflac +libvorbis $(ICONV_DEPENDS)
-  USERID:=minidlna:minidlna
-  PROVIDES:=minidlna
-  CONFLICTS:=minidlna
+  TITLE:=AudioWRT audio-only MiniDLNA profile
+  DEPENDS:=+minidlna
 endef
 
 define Package/audiowrt-minidlna/description
- ReadyMedia/MiniDLNA derived from the selected OpenWrt packages feed. AudioWRT
- keeps an audio-only runtime configuration and disables NLS while inheriting
- the release's exact source version, files and complete OpenWrt patch set.
+ AudioWRT runtime profile for the exact MiniDLNA binary shipped by the selected
+ OpenWrt release. The official binary already contains that release's source,
+ patches and architecture-specific build. AudioWRT only applies the audio-only
+ runtime configuration and never rebuilds MiniDLNA or its FFmpeg dependency
+ graph in a selective SDK build.
 endef
 
-define Package/audiowrt-minidlna/conffiles
-/etc/config/minidlna
+define Build/Prepare
 endef
 
-CONFIGURE_ARGS += \
-	--disable-nls \
-	--with-libiconv-prefix="$(ICONV_PREFIX)" \
-	--with-os-name="AudioWRT" \
-	--with-os-version="$(LINUX_VERSION)" \
-	--with-os-url="https://github.com/demonccc/audiowrt" \
-	--with-db-path="/var/run/minidlna" \
-	--with-log-path="/var/log"
+define Build/Configure
+endef
+
+define Build/Compile
+endef
 
 define Package/audiowrt-minidlna/install
-	$(INSTALL_DIR) $(1)/usr/sbin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/sbin/minidlnad $(1)/usr/sbin/minidlnad
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/minidlna.init $(1)/etc/init.d/minidlna
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) $(AUDIOWRT_DERIVED_FILES_DIR)/minidlna.config $(1)/etc/config/minidlna
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt
+	$(INSTALL_DATA) ./files/minidlna.config $(1)/usr/share/audiowrt/minidlna.config
+endef
+
+define Package/audiowrt-minidlna/postinst
+#!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] || exit 0
+[ -f "$${IPKG_INSTROOT}/usr/share/audiowrt/minidlna.config" ] || exit 0
+cp "$${IPKG_INSTROOT}/usr/share/audiowrt/minidlna.config" "$${IPKG_INSTROOT}/etc/config/minidlna"
 endef
 
 $(eval $(call BuildPackage,audiowrt-minidlna))
