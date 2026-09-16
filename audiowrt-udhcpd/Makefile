@@ -30,8 +30,6 @@ define Build/Compile
 endef
 
 define Package/audiowrt-udhcpd/install
-	$(INSTALL_DIR) $(1)/usr/sbin
-	ln -sf /bin/busybox $(1)/usr/sbin/udhcpd
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/udhcpd.init $(1)/etc/init.d/audiowrt-udhcpd
 	$(INSTALL_DIR) $(1)/etc
