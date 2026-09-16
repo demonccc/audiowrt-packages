@@ -3,7 +3,7 @@
 include $(TOPDIR)/rules.mk
 
 AUDIOWRT_DERIVED_NAME:=audiowrt-umdns
-AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/package/network/services/umdns/Makefile
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/umdns/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
