@@ -18,19 +18,19 @@ start_service() {
 	config_get media_dir config media_dir '/mnt'
 
 	mkdir -p /var/etc "$db_dir"
-	cat > "$CONFIG_FILE" <<EOF
-port=8200
-network_interface=$interface
-friendly_name=$friendly_name
-db_dir=$db_dir
-log_level=error
-inotify=yes
-enable_tivo=no
-wide_links=no
-strict_dlna=no
-root_container=Music
-media_dir=A,$media_dir
-EOF
+	{
+		echo 'port=8200'
+		[ -n "$interface" ] && echo "network_interface=$interface"
+		echo "friendly_name=$friendly_name"
+		echo "db_dir=$db_dir"
+		echo 'log_level=error'
+		echo 'inotify=yes'
+		echo 'enable_tivo=no'
+		echo 'wide_links=no'
+		echo 'strict_dlna=no'
+		echo 'root_container=Music'
+		echo "media_dir=A,$media_dir"
+	} > "$CONFIG_FILE"
 
 	procd_open_instance
 	procd_set_param command "$PROG" -S -f "$CONFIG_FILE"
