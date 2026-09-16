@@ -3,7 +3,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-minidlna
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_MAINTAINER:=AudioWRT
 
 include $(INCLUDE_DIR)/package.mk
@@ -39,9 +39,13 @@ endef
 
 define Package/audiowrt-minidlna/postinst
 #!/bin/sh
-[ -n "$${IPKG_INSTROOT}" ] || exit 0
-[ -f "$${IPKG_INSTROOT}/usr/share/audiowrt/minidlna.config" ] || exit 0
-cp "$${IPKG_INSTROOT}/usr/share/audiowrt/minidlna.config" "$${IPKG_INSTROOT}/etc/config/minidlna"
+root="$${IPKG_INSTROOT:-}"
+src="$${root}/usr/share/audiowrt/minidlna.config"
+dst="$${root}/etc/config/minidlna"
+[ -f "$${src}" ] || exit 0
+mkdir -p "$${root}/etc/config"
+cp "$${src}" "$${dst}"
+exit 0
 endef
 
 $(eval $(call BuildPackage,audiowrt-minidlna))
