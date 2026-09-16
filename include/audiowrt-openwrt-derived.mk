@@ -21,17 +21,28 @@ AUDIOWRT_DERIVED_PATCH_DIR:=$(AUDIOWRT_DERIVED_WORK)/patches
 AUDIOWRT_DERIVED_FILES_DIR:=$(AUDIOWRT_DERIVED_WORK)/files
 AUDIOWRT_DERIVED_STAMP:=$(AUDIOWRT_DERIVED_WORK)/prepared
 
+# Core OpenWrt recipes are already part of both an official SDK and a full
+# source checkout under $(TOPDIR)/package. Older AudioWRT declarations used the
+# logical base-feed path. Resolve that path to the SDK-owned package tree rather
+# than materializing a second copy of the base feed.
+AUDIOWRT_CANONICAL_RECIPE_RESOLVED:=$(AUDIOWRT_CANONICAL_RECIPE)
+ifneq ($(findstring $(TOPDIR)/feeds/base/,$(AUDIOWRT_CANONICAL_RECIPE)),)
+  AUDIOWRT_CORE_RECIPE:=$(patsubst $(TOPDIR)/feeds/base/%,$(TOPDIR)/package/%,$(AUDIOWRT_CANONICAL_RECIPE))
+  ifneq ($(wildcard $(AUDIOWRT_CORE_RECIPE)),)
+    AUDIOWRT_CANONICAL_RECIPE_RESOLVED:=$(AUDIOWRT_CORE_RECIPE)
+  endif
+endif
+
 # Derived recipes resolve only against source trees already present in the
-# selected OpenWrt build context. Core OpenWrt recipes live under $(TOPDIR)/package
-# in both source trees and official SDKs. External feed recipes live under their
-# exact feed checkout (for example $(TOPDIR)/feeds/packages).
+# selected OpenWrt build context. External feed recipes live under their exact
+# feed checkout (for example $(TOPDIR)/feeds/packages).
 #
 # Never update or install the base feed from a package Makefile. Official SDKs
-# already contain the core package tree. Materializing a second copy through the
-# base feed duplicates package symbols, creates recursive Kconfig dependencies
-# and allows unrelated source packages into selective AudioWRT builds.
-ifeq ($(wildcard $(AUDIOWRT_CANONICAL_RECIPE)),)
-  $(error Canonical OpenWrt recipe is not present in selected build context: $(AUDIOWRT_CANONICAL_RECIPE))
+# already contain the core package tree. Materializing a second copy duplicates
+# package symbols, creates recursive Kconfig dependencies and allows unrelated
+# OpenWrt sources to enter a selective AudioWRT build.
+ifeq ($(wildcard $(AUDIOWRT_CANONICAL_RECIPE_RESOLVED)),)
+  $(error Canonical OpenWrt recipe is not present in selected build context: $(AUDIOWRT_CANONICAL_RECIPE_RESOLVED))
 endif
 
 # During a normal package build VERSION_NUMBER has already been populated by
@@ -46,7 +57,7 @@ $(shell \
 	mkdir -p '$(AUDIOWRT_DERIVED_WORK)' && \
 	rm -f '$(AUDIOWRT_DERIVED_STAMP)' && \
 	python3 '$(TOPDIR)/feeds/audiowrt/scripts/prepare-openwrt-derived.py' \
-		'$(AUDIOWRT_CANONICAL_RECIPE)' \
+		'$(AUDIOWRT_CANONICAL_RECIPE_RESOLVED)' \
 		'$(AUDIOWRT_DERIVED_ROOT)' \
 		'$(VERSION_NUMBER)' \
 		'$(TOPDIR)' \
