@@ -3,14 +3,15 @@
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 bluez="$repo_root/audiowrt-bluez/Makefile"
-bluez_vcp_patch="$repo_root/audiowrt-bluez/patches/220-transport-fix-build-with-vcp-disabled.patch"
+bluez_vcp_patch="$repo_root/audiowrt-bluez/releases/25.12/patches/900-transport-fix-build-with-vcp-disabled.patch"
 sbc="$repo_root/audiowrt-sbc/Makefile"
 bluealsa="$repo_root/bluez-alsa/Makefile"
 bluetooth="$repo_root/audiowrt-bluetooth/Makefile"
 wrapper="$repo_root/audiowrt-bluetooth/files/audiowrt-bluetooth"
 
-# Generic OpenWrt BlueZ pulls tools, readline/ncurses and libical. AudioWRT
-# keeps bluetoothd, libbluetooth and A2DP/AVRCP only.
+# AudioWRT keeps bluetoothd, libbluetooth and A2DP/AVRCP only. The package
+# inherits its source identity and canonical OpenWrt patches from the selected
+# release; this test validates only the AudioWRT feature delta.
 for option in --disable-client --disable-tools --disable-monitor --disable-obex --disable-network --disable-hid --disable-hog --enable-library --disable-midi; do
     grep -q -- "$option" "$bluez"
 done
@@ -26,8 +27,9 @@ fi
 grep -q '^define Package/audiowrt-bluez-libs$' "$bluez"
 grep -q 'libbluetooth.so' "$bluez"
 
-# BlueZ 5.83 has an upstream-confirmed link failure when VCP is disabled.
-# Keep VCP out of the minimal build and carry the upstream transport guard.
+# OpenWrt 25.12's BlueZ currently needs an AudioWRT compatibility delta when
+# VCP is disabled. Keep it release-scoped so other OpenWrt families never
+# receive a patch that was written for a different BlueZ version.
 grep -q -- '--disable-vcp' "$bluez"
 test -f "$bluez_vcp_patch"
 grep -q 'c6dcf6b714501768ab7ea293e75d945be0eec188' "$bluez_vcp_patch"
