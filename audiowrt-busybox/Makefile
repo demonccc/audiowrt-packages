@@ -13,7 +13,6 @@ PKG_SOURCE_URL:=https://www.busybox.net/downloads \
 		https://sources.buildroot.net/busybox
 PKG_HASH:=3311dff32e746499f4df0d5df04d7eb396382d7e108bb9250e7b519b837043a4
 PKG_BUILD_DIR:=$(BUILD_DIR)/busybox-$(PKG_VERSION)
-PATCH_DIR:=$(TOPDIR)/feeds/base/package/utils/busybox/patches
 
 PKG_BUILD_DEPENDS:=BUSYBOX_CONFIG_PAM:libpam
 PKG_BUILD_PARALLEL:=1
