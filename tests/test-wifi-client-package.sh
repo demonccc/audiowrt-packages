@@ -7,7 +7,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 makefile="$repo_root/audiowrt-wifi-client/Makefile"
 script="$repo_root/audiowrt-wifi-client/files/audiowrt-wifi-client"
 ui="$repo_root/luci-app-audiowrt-wifi-client/htdocs/luci-static/resources/view/audiowrt-wifi-client/client.js"
-busybox_config="$repo_root/audiowrt-udhcpd/files/busybox.config"
+busybox_makefile="$repo_root/audiowrt-busybox/Makefile"
 
 # The package must remain architecture independent and inert at install time.
 grep -q '^PKGARCH:=all$' "$makefile"
@@ -19,7 +19,7 @@ fi
 # Scan uses the native iwinfo ubus provider. DHCP and mDNS are selected by the
 # firmware flavor, not pulled in implicitly by this reusable client package.
 grep -q '+rpcd-mod-iwinfo' "$makefile"
-grep -qx 'CONFIG_BUSYBOX_DEFAULT_UDHCPD=y' "$busybox_config"
+grep -q "echo 'CONFIG_UDHCPD=y'" "$busybox_makefile"
 if grep -Eq '\+dnsmasq|\+umdns' "$makefile"; then
     echo 'ERROR: DHCP/DNS and mDNS services must remain flavor-owned.' >&2
     exit 1

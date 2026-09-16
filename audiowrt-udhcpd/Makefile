@@ -12,12 +12,21 @@ define Package/audiowrt-udhcpd
   CATEGORY:=Network
   TITLE:=AudioWRT minimal BusyBox DHCP server
   URL:=https://busybox.net/
-  DEPENDS:=+busybox
+  DEPENDS:=+audiowrt-busybox
 endef
 
 define Package/audiowrt-udhcpd/description
- Configuration and service wrapper for the udhcpd applet in OpenWrt's
- standard BusyBox binary. It is used only for the AudioWRT provisioning AP.
+ Configuration and service wrapper for the udhcpd applet provided by
+ audiowrt-busybox. It is used only for the AudioWRT provisioning AP.
+endef
+
+define Build/Prepare
+endef
+
+define Build/Configure
+endef
+
+define Build/Compile
 endef
 
 define Package/audiowrt-udhcpd/install
