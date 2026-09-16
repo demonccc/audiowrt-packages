@@ -3,7 +3,7 @@
 include $(TOPDIR)/rules.mk
 
 AUDIOWRT_DERIVED_NAME:=audiowrt-dropbear
-AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/package/network/services/dropbear/Makefile
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/dropbear/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
