@@ -15,10 +15,47 @@ from pathlib import Path
 
 PACKAGE_MK = re.compile(r"^\s*include\s+\$\(INCLUDE_DIR\)/package\.mk\s*$")
 TOPDIR_RULES = re.compile(r"^\s*include\s+\$\(TOPDIR\)/rules\.mk\s*$")
+VERSION_FALLBACK = re.compile(
+    r"^\s*VERSION_NUMBER\s*:=\s*\$\(if\s+\$\(VERSION_NUMBER\),"
+    r"\$\(VERSION_NUMBER\),([^\)]+)\)\s*$"
+)
 
 
 def fail(message: str) -> None:
     raise SystemExit(f"ERROR: {message}")
+
+
+def resolve_openwrt_version(version: str, topdir: Path) -> str:
+    """Return the exact OpenWrt version even while a feed is being indexed.
+
+    scripts/feeds update evaluates package Makefiles before the normal package
+    build context has included include/version.mk, so VERSION_NUMBER can be
+    empty there. The selected source tree/SDK still carries its authoritative
+    release value in include/version.mk. Reading that fallback keeps package
+    indexing and normal builds tied to the same selected OpenWrt context.
+    """
+    value = version.strip()
+    if value:
+        return value
+
+    version_mk = topdir / "include" / "version.mk"
+    if not version_mk.is_file():
+        fail(
+            "OpenWrt VERSION_NUMBER is empty and include/version.mk is missing "
+            f"under {topdir}"
+        )
+
+    for line in version_mk.read_text(encoding="utf-8").splitlines():
+        match = VERSION_FALLBACK.match(line)
+        if match:
+            value = match.group(1).strip()
+            if value:
+                return value
+
+    fail(
+        "OpenWrt VERSION_NUMBER is empty and the selected tree/SDK does not "
+        f"expose a release fallback in {version_mk}"
+    )
 
 
 def family(version: str) -> str:
@@ -79,23 +116,24 @@ def overlay_patches(source: Path, destination: Path) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) != 9:
+    if len(sys.argv) != 10:
         print(
             "usage: prepare-openwrt-derived.py <canonical-makefile> <delta-root> "
-            "<openwrt-version> <preamble-out> <release-recipe-out> "
-            "<patch-dir> <files-dir> <stamp>",
+            "<openwrt-version> <openwrt-topdir> <preamble-out> "
+            "<release-recipe-out> <patch-dir> <files-dir> <stamp>",
             file=sys.stderr,
         )
         return 2
 
     canonical_makefile = Path(sys.argv[1]).resolve()
     delta_root = Path(sys.argv[2]).resolve()
-    version = sys.argv[3]
-    preamble_out = Path(sys.argv[4])
-    release_recipe_out = Path(sys.argv[5])
-    patch_dir = Path(sys.argv[6])
-    files_dir = Path(sys.argv[7])
-    stamp = Path(sys.argv[8])
+    topdir = Path(sys.argv[4]).resolve()
+    version = resolve_openwrt_version(sys.argv[3], topdir)
+    preamble_out = Path(sys.argv[5])
+    release_recipe_out = Path(sys.argv[6])
+    patch_dir = Path(sys.argv[7])
+    files_dir = Path(sys.argv[8])
+    stamp = Path(sys.argv[9])
 
     if not canonical_makefile.is_file():
         fail(f"canonical OpenWrt recipe is missing: {canonical_makefile}")
@@ -141,7 +179,9 @@ def main() -> int:
 
     stamp.parent.mkdir(parents=True, exist_ok=True)
     stamp.write_text(
-        f"canonical={canonical_makefile}\nrelease_family={release_family}\n",
+        f"canonical={canonical_makefile}\n"
+        f"openwrt_version={version}\n"
+        f"release_family={release_family}\n",
         encoding="utf-8",
     )
     return 0
