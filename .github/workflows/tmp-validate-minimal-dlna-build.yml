@@ -1,0 +1,44 @@
+name: Temporary minimal DLNA renderer build
+
+on:
+  pull_request:
+    paths:
+      - 'audiowrt-minimal-dlna-renderer/**'
+      - '.github/workflows/tmp-validate-minimal-dlna-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-renderer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout AudioWRT packages
+        uses: actions/checkout@v4
+
+      - name: Build renderer with OpenWrt 25.12.5 ath79 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          workspace="$PWD"
+          sdk_archive=/tmp/openwrt-sdk.tar.zst
+          sdk=/tmp/openwrt-sdk
+          url='https://downloads.openwrt.org/releases/25.12.5/targets/ath79/generic/openwrt-sdk-25.12.5-ath79-generic_gcc-14.3.0_musl.Linux-x86_64.tar.zst'
+
+          curl -fL --retry 3 --retry-delay 2 "$url" -o "$sdk_archive"
+          mkdir -p "$sdk"
+          tar --zstd -xf "$sdk_archive" -C "$sdk" --strip-components=1
+          cd "$sdk"
+
+          cp feeds.conf.default feeds.conf
+          printf '\nsrc-link audiowrt %s\n' "$workspace" >> feeds.conf
+          ./scripts/feeds update packages audiowrt
+          ./scripts/feeds install -p packages libupnp libflac libmad alsa-lib
+          ./scripts/feeds install -p audiowrt audiowrt-minimal-dlna-renderer
+
+          printf 'CONFIG_PACKAGE_audiowrt-minimal-dlna-renderer=m\n' > .config
+          make defconfig
+          make package/feeds/audiowrt/audiowrt-minimal-dlna-renderer/compile -j2 V=s
+
+          find bin/packages -type f -name 'audiowrt-minimal-dlna-renderer*.apk' -print -quit | grep .
