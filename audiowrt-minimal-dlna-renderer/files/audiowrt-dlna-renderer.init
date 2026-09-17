@@ -1,0 +1,40 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-only
+
+START=95
+USE_PROCD=1
+
+start_service() {
+	local root=/tmp/audiowrt-dlna
+	local mac hex udn hostname friendly f
+
+	mkdir -p "$root"
+	cp /usr/share/audiowrt-dlna/AVTransport.xml "$root/"
+	cp /usr/share/audiowrt-dlna/RenderingControl.xml "$root/"
+	cp /usr/share/audiowrt-dlna/ConnectionManager.xml "$root/"
+
+	for f in /sys/class/net/*/address; do
+		mac="$(cat "$f" 2>/dev/null)"
+		[ -n "$mac" ] && [ "$mac" != '00:00:00:00:00:00' ] && break
+	done
+	hex="$(printf '%s' "$mac" | tr -d ':')"
+	[ "${#hex}" -eq 12 ] || hex='000000000001'
+	udn="uuid:00000000-0000-4000-8000-$hex"
+
+	hostname="$(uci -q get system.@system[0].hostname)"
+	[ -n "$hostname" ] || hostname='AudioWRT'
+	friendly="AudioWRT-$hostname"
+
+	sed \
+		-e "s|@FRIENDLY_NAME@|$friendly|g" \
+		-e "s|@UDN@|$udn|g" \
+		/usr/share/audiowrt-dlna/description.xml.in > "$root/description.xml"
+
+	procd_open_instance
+	procd_set_param command /usr/sbin/audiowrt-dlna-renderer \
+		"$root" "$root/description.xml" "$udn"
+	procd_set_param respawn
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+}
