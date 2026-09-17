@@ -1,0 +1,8 @@
+{
+  "admin/audiowrt/dlna": {
+    "title": "DLNA",
+    "order": 15,
+    "action": { "type": "view", "path": "audiowrt/dlna" },
+    "depends": { "acl": [ "luci-app-audiowrt-dlna" ] }
+  }
+}
