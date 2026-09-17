@@ -1,0 +1,31 @@
+#!/bin/sh /etc/rc.common
+
+START=90
+STOP=10
+USE_PROCD=1
+
+start_service() {
+	config_load audiowrt-mdns
+	local enabled interface hostname advertise_http http_port
+	config_get_bool enabled main enabled 1
+	[ "$enabled" -eq 1 ] || return 0
+	config_get interface main interface br-lan
+	config_get hostname main hostname
+	config_get_bool advertise_http main advertise_http 1
+	config_get http_port main http_port 80
+
+	[ -n "$hostname" ] || hostname="$(cat /proc/sys/kernel/hostname 2>/dev/null)"
+	[ -n "$hostname" ] || hostname=AudioWRT
+
+	procd_open_instance
+	procd_set_param command /usr/sbin/audiowrt-mdns -i "$interface" -n "$hostname"
+	[ "$advertise_http" -eq 1 ] && procd_append_param command -p "$http_port"
+	procd_set_param respawn 3600 5 5
+	procd_set_param stdout 1
+	procd_set_param stderr 1
+	procd_close_instance
+}
+
+service_triggers() {
+	procd_add_reload_trigger audiowrt-mdns
+}
