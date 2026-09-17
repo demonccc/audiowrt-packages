@@ -8,8 +8,9 @@ ensure_uuid() {
 	local uuid
 	config_get uuid main uuid
 	[ -n "$uuid" ] && [ "$uuid" != "00000000-0000-0000-0000-000000000000" ] && return 0
+
 	uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null)"
-	[ -n "$uuid" ] || uuid="$(date +%s)-$(cat /sys/class/net/*/address 2>/dev/null | head -n1 | tr -d ':')"
+	[ -n "$uuid" ] || uuid="00000000-0000-4000-8000-$(printf '%012x' $$)"
 	uci -q set audiowrt-dlna.main.uuid="$uuid"
 	uci -q commit audiowrt-dlna
 }
@@ -27,6 +28,11 @@ start_service() {
 	procd_set_param stdout 1
 	procd_set_param stderr 1
 	procd_close_instance
+}
+
+reload_service() {
+	stop
+	start
 }
 
 service_triggers() {
