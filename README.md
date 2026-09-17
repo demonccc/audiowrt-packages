@@ -31,8 +31,6 @@ Current source-derived userspace packages are:
 - `audiowrt-minimal-mbedtls` -> OpenWrt `mbedtls`;
 - `audiowrt-dropbear` -> OpenWrt `dropbear`;
 - `audiowrt-umdns` -> OpenWrt `umdns`;
-- `audiowrt-minimal-mpd` -> OpenWrt packages feed `mpd`;
-- `audiowrt-minimal-upmpdcli` -> OpenWrt packages feed `upmpdcli`;
 - `audiowrt-sbc` -> OpenWrt packages feed `sbc`;
 - `audiowrt-bluez` -> OpenWrt packages feed `bluez`.
 
@@ -40,11 +38,13 @@ Not every AudioWRT package that customizes behavior should rebuild upstream sour
 
 `audiowrt-wpa-supplicant` is a selector rather than a source fork: it depends on the exact `wpa-supplicant-mbedtls` package shipped by the selected OpenWrt SDK/release.
 
+`audiowrt-minimal-upmpdcli` follows the same binary-reuse rule. It depends on the exact OpenWrt `upmpdcli` and `mpd-mini` release packages and only applies the AudioWRT renderer runtime profile: OpenHome disabled, MPD on loopback and a constrained FLAC/MP3 protocol advertisement. It is deliberately built with `NO_DEPS=1`; it must never cause MPD, libupnpp or their dependency graphs to be rebuilt.
+
 Kernel replacements use a binary-derived strategy instead of rebuilding the kernel. `audiowrt-kmod-bluetooth`, `kmod-audiowrt-sound-core` and `kmod-audiowrt-usb-audio` repackage modules downloaded from the exact selected OpenWrt release/target and therefore keep the matching kernel ABI, target and architecture.
 
 Packages for which OpenWrt has no canonical recipe remain AudioWRT-owned source packages. Today this includes `bluez-alsa` and `librespot`. They still compile with the selected OpenWrt SDK, target/subtarget and toolchain, but there is no OpenWrt recipe or OpenWrt patch set to inherit.
 
-`tests/test-openwrt-derived-packages.sh` enforces the provenance contract: source-derived recipes cannot pin their own upstream source identity, copied OpenWrt patches are rejected, and the helper is forbidden from materializing the base feed.
+`tests/test-openwrt-derived-packages.sh` enforces the provenance contract: source-derived recipes cannot pin their own upstream source identity, copied OpenWrt patches are rejected, the helper is forbidden from materializing the base feed, and the minimal UPnP renderer is kept on the release-binary path.
 
 ## Selective source-build boundary
 
@@ -78,13 +78,9 @@ Common reusable audio state and helper CLI. The device/audio name is derived fro
 
 Detects the first USB Audio Class playback device, creates the ALSA `default` output and reacts to USB hotplug. Minimal builds use `audiowrt-minimal-alsa`; standard builds use the normal OpenWrt ALSA package.
 
-### `audiowrt-minimal-mpd`
-
-Source-derived MPD backend for constrained builds. It keeps MPD control, HTTP input, FLAC and MP3 decoding, and ALSA output while omitting AAC, Vorbis, Opus, FFmpeg, UPnP and unrelated outputs. MPD is bound to loopback and is an implementation detail behind the DLNA renderer.
-
 ### `audiowrt-minimal-upmpdcli`
 
-Source-derived and package-trimmed UPnP AV/DLNA MediaRenderer for constrained builds. OpenHome is disabled, only renderer resources are installed, and the advertised sink formats are limited to FLAC and MP3 to match `audiowrt-minimal-mpd`.
+Configuration-only profile for the exact OpenWrt `upmpdcli` and `mpd-mini` binaries. It disables OpenHome, keeps MPD internal on loopback and replaces the renderer protocol advertisement with the constrained FLAC/MP3 profile. It contains no upstream source and is built with `NO_DEPS=1`.
 
 ### `audiowrt-extensions`
 
@@ -92,7 +88,7 @@ Runtime service manager using OpenWrt's package manager. The initial extension c
 
 ### `audiowrt-mpd`
 
-Configures whichever package provides the `mpd` capability and keeps the daemon on `127.0.0.1:6600` for use as an internal playback backend.
+Configures whichever package provides the `mpd` capability and keeps the daemon on `127.0.0.1:6600` for use as an internal playback backend. The constrained firmware selects the official OpenWrt `mpd-mini` package.
 
 ### `audiowrt-airplay`
 
