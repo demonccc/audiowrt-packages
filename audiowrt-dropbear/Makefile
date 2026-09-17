@@ -6,6 +6,9 @@ AUDIOWRT_DERIVED_NAME:=audiowrt-dropbear
 AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/dropbear/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
+# Upstream Dropbear is target-local (`nonshared`), but this replacement must be
+# emitted into the reusable AudioWRT feed so the orchestrator can collect it.
+PKG_FLAGS:=
 PKG_MAINTAINER:=AudioWRT
 
 include $(INCLUDE_DIR)/package.mk
