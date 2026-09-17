@@ -1,13 +1,13 @@
 {
-  "luci-app-audiowrt-dlna": {
-    "description": "Grant access to AudioWRT native DLNA renderer configuration and status",
+  "luci-app-audiowrt-renderer": {
+    "description": "Grant access to AudioWRT renderer and discovery configuration and status",
     "read": {
       "uci": [ "audiowrt-dlna" ],
-      "file": { "/usr/libexec/audiowrt-dlna": [ "exec" ] }
+      "file": { "/usr/libexec/audiowrt-renderer": [ "exec" ] }
     },
     "write": {
       "uci": [ "audiowrt-dlna" ],
-      "file": { "/usr/libexec/audiowrt-dlna": [ "exec" ] }
+      "file": { "/usr/libexec/audiowrt-renderer": [ "exec" ] }
     }
   }
 }
