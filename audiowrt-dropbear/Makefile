@@ -15,7 +15,6 @@ define Package/audiowrt-dropbear
   CATEGORY:=AudioWRT
   TITLE:=AudioWRT minimal SSH server
   PROVIDES:=dropbear
-  CONFLICTS:=dropbear
 endef
 
 define Package/audiowrt-dropbear/description
