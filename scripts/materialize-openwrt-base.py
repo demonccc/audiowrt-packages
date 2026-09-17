@@ -93,16 +93,18 @@ def ensure_checkout(target: Path, source: str) -> None:
             run("git", "clone", "--filter=blob:none", "--no-checkout", url, str(target))
 
     if mode == "commit":
-        current = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+        # A --no-checkout clone can have HEAD pointing at the requested commit
+        # while the worktree is still empty. Always populate the worktree. Fetch
+        # only when the requested object is not already available locally.
+        present = subprocess.run(
+            ["git", "cat-file", "-e", f"{ref}^{{commit}}"],
             cwd=target,
-            text=True,
-            stdout=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        if current.returncode != 0 or current.stdout.strip() != ref:
+        if present.returncode != 0:
             run("git", "fetch", "--depth=1", "origin", ref, cwd=target)
-            run("git", "-c", "advice.detachedHead=false", "checkout", "--detach", "FETCH_HEAD", cwd=target)
+        run("git", "-c", "advice.detachedHead=false", "checkout", "--detach", ref, cwd=target)
     elif mode == "branch":
         run("git", "fetch", "--depth=1", "origin", ref, cwd=target)
         run("git", "-c", "advice.detachedHead=false", "checkout", "--detach", "FETCH_HEAD", cwd=target)
