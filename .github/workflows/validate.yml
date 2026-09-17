@@ -53,7 +53,7 @@ jobs:
       - name: Validate minimal runtime libraries
         run: bash tests/test-runtime-libraries-minimal.sh
 
-      - name: Validate native DLNA renderer and players
+      - name: Validate native renderer, discovery and players
         shell: bash
         run: bash tests/test-native-dlna.sh
 
@@ -140,13 +140,13 @@ jobs:
             audiowrt-usb-audio \
             audiowrt-extensions \
             audiowrt-mpd \
-            audiowrt-dlna \
+            audiowrt-renderer \
             audiowrt-player-core \
             audiowrt-player-flac \
             audiowrt-player-mp3 \
             audiowrt-player-aac \
             audiowrt-player-wav \
-            luci-app-audiowrt-dlna \
+            luci-app-audiowrt-renderer \
             audiowrt-airplay \
             librespot \
             audiowrt-spotify \
