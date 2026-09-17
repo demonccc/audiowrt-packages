@@ -156,9 +156,9 @@ static void signal_handler(int sig)
 
 static int daemon_main(void)
 {
-    int sfd, hfd;
-    struct pollfd fds[2];
-    time_t next_alive;
+    int sfd, hfd, mfd;
+    struct pollfd fds[3];
+    time_t next_alive, next_mdns;
 
     signal(SIGTERM, signal_handler);
     signal(SIGINT, signal_handler);
@@ -167,20 +167,25 @@ static int daemon_main(void)
     write_status();
     sfd = open_ssdp();
     hfd = open_http();
-    if (sfd < 0 || hfd < 0) {
-        fprintf(stderr, "audiowrt-dlna: could not open SSDP or HTTP listener: %s\n", strerror(errno));
+    mfd = open_mdns();
+    if (sfd < 0 || hfd < 0 || mfd < 0) {
+        fprintf(stderr, "audiowrt-renderer: could not open SSDP, mDNS or HTTP listener: %s\n", strerror(errno));
         if (sfd >= 0) close(sfd);
         if (hfd >= 0) close(hfd);
+        if (mfd >= 0) close(mfd);
         return 1;
     }
 
     fds[0].fd = sfd; fds[0].events = POLLIN;
     fds[1].fd = hfd; fds[1].events = POLLIN;
+    fds[2].fd = mfd; fds[2].events = POLLIN;
     ssdp_notify(sfd, "ssdp:alive");
+    mdns_announce(mfd);
     next_alive = time(NULL) + 300;
+    next_mdns = time(NULL) + 60;
 
     while (running) {
-        int rc = poll(fds, 2, 1000);
+        int rc = poll(fds, 3, 1000);
         if (rc > 0) {
             if (fds[0].revents & POLLIN) handle_ssdp(sfd);
             if (fds[1].revents & POLLIN) {
@@ -189,16 +194,22 @@ static int daemon_main(void)
                 int cfd = accept(hfd, (struct sockaddr *)&peer, &plen);
                 if (cfd >= 0) handle_http_client(cfd, &peer);
             }
+            if (fds[2].revents & POLLIN) handle_mdns(mfd);
         }
         reap_player();
         if (time(NULL) >= next_alive) {
             ssdp_notify(sfd, "ssdp:alive");
             next_alive = time(NULL) + 300;
         }
+        if (time(NULL) >= next_mdns) {
+            mdns_announce(mfd);
+            next_mdns = time(NULL) + 60;
+        }
     }
 
     stop_current(false);
     ssdp_notify(sfd, "ssdp:byebye");
+    close(mfd);
     close(hfd);
     close(sfd);
     return 0;
@@ -223,7 +234,7 @@ int main(int argc, char **argv)
 {
     const char *cmd = argc > 1 ? argv[1] : "daemon";
     if (load_config() < 0) {
-        fprintf(stderr, "audiowrt-dlna: unable to load /etc/config/audiowrt-dlna\n");
+        fprintf(stderr, "audiowrt-renderer: unable to load renderer configuration\n");
         return 1;
     }
     if (!strcmp(cmd, "daemon")) return daemon_main();
