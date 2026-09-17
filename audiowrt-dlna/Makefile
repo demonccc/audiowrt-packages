@@ -1,27 +1,29 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=audiowrt-dlna
+PKG_NAME:=audiowrt-renderer
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
 
 include $(INCLUDE_DIR)/package.mk
 
-define Package/audiowrt-dlna
+define Package/audiowrt-renderer
   SECTION:=sound
   CATEGORY:=Sound
-  TITLE:=AudioWRT native modular DLNA renderer
+  TITLE:=AudioWRT native network renderer and discovery service
   DEPENDS:=+libuci
+  PROVIDES:=audiowrt-dlna
 endef
 
-define Package/audiowrt-dlna/description
- Native DLNA/UPnP MediaRenderer with SSDP discovery, AVTransport,
- RenderingControl and ConnectionManager. Codec capabilities are discovered
- from installed audiowrt-player-* descriptors and may be overridden with
- custom player commands through UCI/LuCI.
+define Package/audiowrt-renderer/description
+ Native AudioWRT network renderer. A single daemon provides DLNA/UPnP
+ MediaRenderer functionality over SSDP, minimal authoritative mDNS/DNS-SD for
+ the AudioWRT host and LuCI service, codec/player autodetection, custom player
+ overrides and runtime playback status. It does not require MPD, upmpdcli or
+ umdns.
 endef
 
-define Package/audiowrt-dlna/conffiles
+define Package/audiowrt-renderer/conffiles
 /etc/config/audiowrt-dlna
 endef
 
@@ -35,19 +37,20 @@ endef
 
 define Build/Compile
 	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_CPPFLAGS) \
-		-o $(PKG_BUILD_DIR)/audiowrt-dlna \
+		-Wall -Wextra \
+		-o $(PKG_BUILD_DIR)/audiowrt-renderer \
 		$(PKG_BUILD_DIR)/audiowrt-dlna.c \
 		$(TARGET_LDFLAGS) -luci
 endef
 
-define Package/audiowrt-dlna/install
+define Package/audiowrt-renderer/install
 	$(INSTALL_DIR) $(1)/usr/libexec
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-dlna $(1)/usr/libexec/audiowrt-dlna
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-renderer $(1)/usr/libexec/audiowrt-renderer
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./files/audiowrt-dlna.config $(1)/etc/config/audiowrt-dlna
 	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/audiowrt-dlna.init $(1)/etc/init.d/audiowrt-dlna
+	$(INSTALL_BIN) ./files/audiowrt-dlna.init $(1)/etc/init.d/audiowrt-renderer
 	$(INSTALL_DIR) $(1)/usr/share/audiowrt/dlna/players
 endef
 
-$(eval $(call BuildPackage,audiowrt-dlna))
+$(eval $(call BuildPackage,audiowrt-renderer))
