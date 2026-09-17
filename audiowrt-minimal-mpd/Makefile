@@ -14,9 +14,9 @@ include $(INCLUDE_DIR)/meson.mk
 define Package/audiowrt-minimal-mpd
   SECTION:=sound
   CATEGORY:=AudioWRT
-  TITLE:=AudioWRT FLAC-only Music Player Daemon
+  TITLE:=AudioWRT minimal Music Player Daemon
   URL:=https://www.musicpd.org/
-  DEPENDS:=+zlib +libcurl +libpthread +boost +libfmt +alsa-lib +libflac
+  DEPENDS:=+zlib +libcurl +libpthread +boost +libfmt +alsa-lib +libflac +libmad
   USERID:=mpd:mpd
   PROVIDES:=mpd
   CONFLICTS:=mpd-mini mpd-full
@@ -24,9 +24,9 @@ endef
 
 define Package/audiowrt-minimal-mpd/description
  MPD derived from the selected OpenWrt release and reduced to the AudioWRT
- minimal remote-playback path: MPD protocol control, HTTP input, FLAC decoding
- and ALSA output. AAC, MP3, Ogg/Vorbis, Opus, FFmpeg, UPnP, local transcoding
- and unrelated outputs are intentionally omitted.
+ remote-playback path: MPD protocol control, HTTP input, FLAC and MP3 decoding,
+ and ALSA output. AAC, Ogg/Vorbis, Opus, FFmpeg, UPnP and unrelated outputs are
+ intentionally omitted.
 endef
 
 define Package/audiowrt-minimal-mpd/conffiles
@@ -39,7 +39,7 @@ MESON_ARGS += \
 	-Dhtml_manual=false \
 	-Dmanpages=false \
 	-Dsyslog=enabled \
-	-Dinotify=true \
+	-Dinotify=false \
 	-Dio_uring=disabled \
 	-Ddaemon=false \
 	-Dsystemd=disabled \
@@ -52,7 +52,7 @@ MESON_ARGS += \
 	-Dipv6=disabled \
 	-Dlocal_socket=false \
 	-Ddsd=false \
-	-Ddatabase=true \
+	-Ddatabase=false \
 	-Dlibmpdclient=disabled \
 	-Dneighbor=false \
 	-Dudisks=disabled \
@@ -112,7 +112,7 @@ MESON_ARGS += \
 	-Dmms=disabled \
 	-Dsoundcloud=disabled \
 	-Dffmpeg=disabled \
-	-Dmad=disabled \
+	-Dmad=enabled \
 	-Dtremor=disabled \
 	-Dvorbis=disabled \
 	-Dfifo=false \
@@ -127,7 +127,7 @@ define Package/audiowrt-minimal-mpd/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/mpd $(1)/usr/bin/
 	$(INSTALL_DIR) $(1)/etc
-	$(INSTALL_DATA) $(PKG_BUILD_DIR)/doc/mpdconf.example $(1)/etc/mpd.conf
+	$(INSTALL_CONF) ./files/mpd.conf $(1)/etc/mpd.conf
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/mpd.init $(1)/etc/init.d/mpd
 endef
