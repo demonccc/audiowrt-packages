@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-wifi-client
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 
@@ -11,7 +11,7 @@ define Package/audiowrt-wifi-client
   SECTION:=net
   CATEGORY:=Network
   TITLE:=AudioWRT reusable Wi-Fi client manager
-  DEPENDS:=+uci +ubus +netifd +wifi-scripts +wpad-basic-mbedtls +rpcd-mod-iwinfo
+  DEPENDS:=+uci +ubus +netifd +wifi-scripts +wpa-supplicant +rpcd-mod-iwinfo
 endef
 
 define Package/audiowrt-wifi-client/description
