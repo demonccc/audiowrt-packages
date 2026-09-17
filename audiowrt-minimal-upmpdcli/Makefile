@@ -33,10 +33,7 @@ define Package/audiowrt-minimal-upmpdcli/conffiles
 /etc/upmpdcli.conf
 endef
 
-MESON_ARGS += \
-	-Dconfgui=false \
-	-Dconfgui_listifs=false \
-	-Dscctl=false
+MESON_ARGS += -Dscctl=disabled
 
 define Package/audiowrt-minimal-upmpdcli/install
 	$(INSTALL_DIR) $(1)/usr/bin
@@ -56,7 +53,7 @@ define Package/audiowrt-minimal-upmpdcli/install
 	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/upmpdcli/ConnectionManager.xml $(1)/usr/share/upmpdcli/
 	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/upmpdcli/RenderingControl.xml $(1)/usr/share/upmpdcli/
 	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/upmpdcli/description.xml $(1)/usr/share/upmpdcli/
-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/upmpdcli/icon.png $(1)/usr/share/upmpdcli/
+	$(INSTALL_DATA) $(AUDIOWRT_DERIVED_FILES_DIR)/upmpdcli.png $(1)/usr/share/upmpdcli/icon.png
 	$(INSTALL_DATA) ./files/protocolinfo.txt $(1)/usr/share/upmpdcli/protocolinfo.txt
 endef
 
