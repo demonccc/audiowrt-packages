@@ -130,7 +130,8 @@ jobs:
             audiowrt-minimal-alsa \
             audiowrt-minimal-mbedtls \
             audiowrt-dropbear \
-            audiowrt-minidlna \
+            audiowrt-minimal-mpd \
+            audiowrt-minimal-upmpdcli \
             audiowrt-umdns \
             audiowrt-wpa-supplicant \
             audiowrt-audio \
