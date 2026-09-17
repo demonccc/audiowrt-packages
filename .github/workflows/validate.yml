@@ -53,6 +53,10 @@ jobs:
       - name: Validate minimal runtime libraries
         run: bash tests/test-runtime-libraries-minimal.sh
 
+      - name: Validate native DLNA renderer and players
+        shell: bash
+        run: bash tests/test-native-dlna.sh
+
       - name: Validate appliance packages
         shell: bash
         run: |
@@ -80,7 +84,8 @@ jobs:
             luci-app-audiowrt \
             luci-app-audiowrt-wifi-client \
             luci-app-audiowrt-core \
-            luci-app-audiowrt-storage; do
+            luci-app-audiowrt-storage \
+            luci-app-audiowrt-dlna; do
             makefile="$package/Makefile"
             for phase in Prepare Configure Compile; do
               grep -q "^define Build/$phase$" "$makefile" || {
@@ -100,9 +105,6 @@ jobs:
           git clone --depth=1 --branch '${{ inputs.openwrt_ref || 'v25.12.5' }}' https://github.com/openwrt/openwrt.git "$openwrt"
           cd "$openwrt"
 
-          # Production SDKs expose core package recipes through the exact-release
-          # base feed. A source-tree validation checkout stores the same recipes
-          # under package/, so expose the equivalent feeds/base path here.
           mkdir -p feeds
           ln -s ../package feeds/base
 
@@ -110,9 +112,6 @@ jobs:
           printf '\nsrc-link audiowrt %s\n' "$workspace" >> feeds.conf
           ./scripts/feeds update -a
 
-          # Feed indexing intentionally continues after an individual package
-          # dump fails. Print those hidden dump logs before the later metadata
-          # assertion so the exact parser/derivation error is visible in CI.
           if [[ -d logs/feeds/audiowrt ]]; then
             while IFS= read -r -d '' dump; do
               if [[ -s "$dump" ]]; then
@@ -141,6 +140,13 @@ jobs:
             audiowrt-usb-audio \
             audiowrt-extensions \
             audiowrt-mpd \
+            audiowrt-dlna \
+            audiowrt-player-core \
+            audiowrt-player-flac \
+            audiowrt-player-mp3 \
+            audiowrt-player-aac \
+            audiowrt-player-wav \
+            luci-app-audiowrt-dlna \
             audiowrt-airplay \
             librespot \
             audiowrt-spotify \
