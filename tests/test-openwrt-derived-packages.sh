@@ -101,7 +101,8 @@ test -f "$renderer/src/audiowrt-dlna-renderer.c"
 grep -Fq 'DEPENDS:=+libpthread +libupnp +libflac +libmad +alsa-lib' "$renderer/Makefile"
 grep -Fq -- '-lupnp -lixml -lFLAC -lmad -lasound' "$renderer/Makefile"
 grep -Fq 'SINK_PROTOCOLS "http-get:*:audio/flac:*,http-get:*:audio/x-flac:*,http-get:*:audio/mpeg:*"' "$renderer/src/audiowrt-dlna-renderer.c"
-if grep -Eq 'mpd|upmpdcli|libcurl|ffmpeg' "$renderer/Makefile"; then
+depends_line="$(grep -E '^[[:space:]]*DEPENDS:=' "$renderer/Makefile")"
+if grep -Eqi 'mpd|upmpdcli|libcurl|ffmpeg' <<< "$depends_line"; then
   echo 'ERROR: minimal DLNA renderer must not depend on MPD/upmpdcli/curl/FFmpeg.' >&2
   exit 1
 fi
