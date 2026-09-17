@@ -1,4 +1,16 @@
-# AudioWRT native DLNA player registry
+# AudioWRT native renderer and discovery service
+
+`audiowrt-renderer` is the native AudioWRT network renderer. One daemon owns:
+
+- SSDP discovery and DLNA/UPnP MediaRenderer control;
+- minimal authoritative mDNS/DNS-SD for the AudioWRT hostname and LuCI HTTP service;
+- codec/player autodetection;
+- custom player overrides;
+- playback lifecycle and runtime status.
+
+It intentionally does not depend on MPD, upmpdcli or a separate umdns daemon.
+
+## Player registry
 
 Official codec packages register themselves by installing one descriptor under:
 
@@ -24,3 +36,10 @@ Official players receive the source URI as their first argument. They are respon
 for transport, decoding and audio output. Native AudioWRT players use `libuclient`
 directly for HTTP/HTTPS and write PCM directly to ALSA; they must not exec wget,
 uclient-fetch or curl.
+
+## mDNS scope
+
+The integrated mDNS implementation is deliberately small. It answers the local
+AudioWRT host A record and advertises the LuCI `_http._tcp` service. It is not a
+replacement API for OpenWrt `umdns`: it does not implement browsing, reflection,
+ubus integration or a generic service database.
