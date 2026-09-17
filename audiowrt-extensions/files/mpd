@@ -10,19 +10,15 @@ case "${1:-}" in
 		cat > /etc/mpd.conf <<'EOF'
 music_directory "/mnt/music"
 playlist_directory "/tmp/mpd/playlists"
-db_file "/tmp/mpd/database"
 state_file "/tmp/mpd/state"
-sticker_file "/tmp/mpd/sticker.sql"
 
-bind_to_address "0.0.0.0"
+bind_to_address "127.0.0.1"
 port "6600"
-
-auto_update "yes"
 restore_paused "yes"
 
 audio_output {
 	type "alsa"
-	name "AudioWRT USB Audio"
+	name "AudioWRT"
 	device "default"
 	mixer_type "software"
 }
