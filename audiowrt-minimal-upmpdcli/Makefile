@@ -2,59 +2,54 @@
 
 include $(TOPDIR)/rules.mk
 
-AUDIOWRT_DERIVED_NAME:=audiowrt-minimal-upmpdcli
-AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/sound/upmpdcli/Makefile
-include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
-
+PKG_NAME:=audiowrt-minimal-upmpdcli
+PKG_RELEASE:=2
+PKG_LICENSE:=GPL-2.0-only
+PKGARCH:=all
 PKG_MAINTAINER:=AudioWRT
 
 include $(INCLUDE_DIR)/package.mk
-include $(INCLUDE_DIR)/meson.mk
 
 define Package/audiowrt-minimal-upmpdcli
   SECTION:=sound
   CATEGORY:=AudioWRT
-  TITLE:=AudioWRT minimal UPnP/DLNA renderer
-  URL:=https://www.lesbonscomptes.com/upmpdcli
-  DEPENDS:=+libupnpp +libmpdclient +jsoncpp +mpd
-  USERID:=upmpdcli=89:upmpdcli=89
-  PROVIDES:=upmpdcli
-  CONFLICTS:=upmpdcli
+  TITLE:=AudioWRT minimal UPnP/DLNA renderer profile
+  DEPENDS:=+upmpdcli +mpd-mini
 endef
 
 define Package/audiowrt-minimal-upmpdcli/description
- upmpdcli derived from the selected OpenWrt release and packaged for the
- AudioWRT minimal renderer path. It exposes UPnP AV/DLNA only, talks to the
- local MPD backend, disables OpenHome, and advertises only FLAC and MP3.
+ Runtime profile for the exact upmpdcli and mpd-mini binaries shipped by the
+ selected OpenWrt release. AudioWRT disables OpenHome, keeps MPD on loopback,
+ and replaces protocolinfo with the constrained FLAC/MP3 renderer profile.
+ No upstream source or dependency graph is rebuilt.
 endef
 
-define Package/audiowrt-minimal-upmpdcli/conffiles
-/etc/config/upmpdcli
-/etc/upmpdcli.conf
+define Build/Prepare
 endef
 
-MESON_ARGS += -Dscctl=disabled
+define Build/Configure
+endef
+
+define Build/Compile
+endef
 
 define Package/audiowrt-minimal-upmpdcli/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/upmpdcli $(1)/usr/bin/
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt/upmpdcli
+	$(INSTALL_DATA) ./files/upmpdcli.conf $(1)/usr/share/audiowrt/upmpdcli/upmpdcli.conf
+	$(INSTALL_DATA) ./files/upmpdcli.config $(1)/usr/share/audiowrt/upmpdcli/upmpdcli.config
+	$(INSTALL_DATA) ./files/protocolinfo.txt $(1)/usr/share/audiowrt/upmpdcli/protocolinfo.txt
+endef
 
-	$(INSTALL_DIR) $(1)/etc
-	$(INSTALL_CONF) ./files/upmpdcli.conf $(1)/etc/upmpdcli.conf
-
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/upmpdcli.config $(1)/etc/config/upmpdcli
-
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/upmpdcli.init $(1)/etc/init.d/upmpdcli
-
-	$(INSTALL_DIR) $(1)/usr/share/upmpdcli
-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/upmpdcli/AVTransport.xml $(1)/usr/share/upmpdcli/
-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/upmpdcli/ConnectionManager.xml $(1)/usr/share/upmpdcli/
-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/upmpdcli/RenderingControl.xml $(1)/usr/share/upmpdcli/
-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/upmpdcli/description.xml $(1)/usr/share/upmpdcli/
-	$(INSTALL_DATA) $(AUDIOWRT_DERIVED_FILES_DIR)/upmpdcli.png $(1)/usr/share/upmpdcli/icon.png
-	$(INSTALL_DATA) ./files/protocolinfo.txt $(1)/usr/share/upmpdcli/protocolinfo.txt
+define Package/audiowrt-minimal-upmpdcli/postinst
+#!/bin/sh
+root="$${IPKG_INSTROOT:-}"
+src="$${root}/usr/share/audiowrt/upmpdcli"
+[ -d "$${src}" ] || exit 0
+mkdir -p "$${root}/etc/config" "$${root}/usr/share/upmpdcli"
+cp "$${src}/upmpdcli.conf" "$${root}/etc/upmpdcli.conf"
+cp "$${src}/upmpdcli.config" "$${root}/etc/config/upmpdcli"
+cp "$${src}/protocolinfo.txt" "$${root}/usr/share/upmpdcli/protocolinfo.txt"
+exit 0
 endef
 
 $(eval $(call BuildPackage,audiowrt-minimal-upmpdcli))
