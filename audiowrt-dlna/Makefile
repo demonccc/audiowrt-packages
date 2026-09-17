@@ -12,7 +12,8 @@ define Package/audiowrt-renderer
   CATEGORY:=Sound
   TITLE:=AudioWRT native network renderer and discovery service
   DEPENDS:=+libuci
-  PROVIDES:=audiowrt-dlna
+  PROVIDES:=audiowrt-dlna umdns
+  CONFLICTS:=umdns audiowrt-umdns
 endef
 
 define Package/audiowrt-renderer/description
@@ -20,7 +21,7 @@ define Package/audiowrt-renderer/description
  MediaRenderer functionality over SSDP, minimal authoritative mDNS/DNS-SD for
  the AudioWRT host and LuCI service, codec/player autodetection, custom player
  overrides and runtime playback status. It does not require MPD, upmpdcli or
- umdns.
+ a separate mDNS daemon.
 endef
 
 define Package/audiowrt-renderer/conffiles
