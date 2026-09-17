@@ -5,4 +5,5 @@
 #include "renderer-part-03b.inc"
 #include "renderer-part-03c.inc"
 #include "renderer-part-03d.inc"
+#include "renderer-part-04a-mdns.inc"
 #include "renderer-part-04.inc"
