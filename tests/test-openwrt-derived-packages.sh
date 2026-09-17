@@ -38,7 +38,7 @@ done
 helper="$repo_root/include/audiowrt-openwrt-derived.mk"
 grep -Fq 'include $(AUDIOWRT_DERIVED_PREAMBLE)' "$helper"
 grep -Fq -- '-include $(AUDIOWRT_DERIVED_RELEASE_RECIPE)' "$helper"
-grep -Fq 'AUDIOWRT_CANONICAL_RECIPE_RESOLVED' "$helper"
+grep -Fq 'AUDIOWRT_DERIVED_CANONICAL_RECIPE_RESOLVED' "$helper" || grep -Fq 'AUDIOWRT_CANONICAL_RECIPE_RESOLVED' "$helper"
 grep -Fq '$(TOPDIR)/package/%' "$helper"
 grep -Fq 'materialize-openwrt-base.py' "$helper"
 grep -Fq "'\$(TOPDIR)'" "$helper"
@@ -51,8 +51,6 @@ grep -Fq 'copy_tree(canonical_root / "patches", patch_dir)' "$repo_root/scripts/
 grep -Fq 'copy_tree(canonical_root / "files", files_dir)' "$repo_root/scripts/prepare-openwrt-derived.py"
 grep -Fq 'release_delta / "recipe.mk"' "$repo_root/scripts/prepare-openwrt-derived.py"
 
-# Verify that a missing SDK core source tree can be materialized from the exact
-# base feed declaration without invoking OpenWrt feed indexing/install or make.
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/upstream/package/utils/busybox" "$tmp/sdk/feeds"
@@ -70,13 +68,9 @@ test -f "$tmp/sdk/feeds/base/utils/busybox/Makefile"
 test "$(git -C "$tmp/sdk/feeds/base_root" rev-parse HEAD)" = "$upstream_commit"
 test ! -e "$tmp/sdk/feeds/base.tmp"
 test ! -e "$tmp/sdk/feeds/base.index"
-# A second invocation must reuse the exact checkout instead of recloning it.
 python3 "$repo_root/scripts/materialize-openwrt-base.py" "$tmp/sdk"
 test "$(git -C "$tmp/sdk/feeds/base_root" rev-parse HEAD)" = "$upstream_commit"
 
-# `scripts/feeds update` evaluates package Makefiles before VERSION_NUMBER is
-# initialized. Verify that an empty make variable is resolved from the exact
-# selected tree/SDK's include/version.mk rather than from an AudioWRT default.
 mkdir -p "$tmp/openwrt/include" "$tmp/canonical/patches" "$tmp/delta"
 cat >"$tmp/openwrt/include/version.mk" <<'EOF'
 VERSION_NUMBER:=$(call qstrip,$(CONFIG_VERSION_NUMBER))
@@ -101,20 +95,17 @@ python3 "$repo_root/scripts/prepare-openwrt-derived.py" \
 grep -Fq 'openwrt_version=25.12.5' "$tmp/out/prepared"
 grep -Fq 'release_family=25.12' "$tmp/out/prepared"
 
-# The constrained DLNA renderer is a runtime profile around exact-release
-# OpenWrt binaries. It must never become a source-derived package because that
-# would recursively build MPD/libupnpp and their dependency graphs.
-renderer_makefile="$repo_root/audiowrt-minimal-upmpdcli/Makefile"
-grep -Fq 'PKGARCH:=all' "$renderer_makefile"
-grep -Fq 'DEPENDS:=+upmpdcli +mpd-mini' "$renderer_makefile"
-for phase in Prepare Configure Compile; do
-  grep -q "^define Build/$phase$" "$renderer_makefile"
-done
-if grep -Fq 'audiowrt-openwrt-derived.mk' "$renderer_makefile"; then
-  echo 'ERROR: audiowrt-minimal-upmpdcli must reuse official release binaries.' >&2
+renderer="$repo_root/audiowrt-minimal-dlna-renderer"
+test -f "$renderer/Makefile"
+test -f "$renderer/src/audiowrt-dlna-renderer.c"
+grep -Fq 'DEPENDS:=+libpthread +libupnp +libflac +libmad +alsa-lib' "$renderer/Makefile"
+grep -Fq -- '-lupnp -lixml -lFLAC -lmad -lasound' "$renderer/Makefile"
+grep -Fq 'SINK_PROTOCOLS "http-get:*:audio/flac:*,http-get:*:audio/x-flac:*,http-get:*:audio/mpeg:*"' "$renderer/src/audiowrt-dlna-renderer.c"
+if grep -Eq 'mpd|upmpdcli|libcurl|ffmpeg' "$renderer/Makefile"; then
+  echo 'ERROR: minimal DLNA renderer must not depend on MPD/upmpdcli/curl/FFmpeg.' >&2
   exit 1
 fi
-
+test ! -e "$repo_root/audiowrt-minimal-upmpdcli/Makefile"
 test ! -e "$repo_root/audiowrt-minimal-mpd/Makefile"
 
 grep -Fq '+wpa-supplicant-mbedtls' "$repo_root/audiowrt-wpa-supplicant/Makefile"
