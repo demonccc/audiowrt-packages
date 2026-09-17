@@ -21,15 +21,11 @@ for package in "${!canonical[@]}"; do
   grep -Fq "AUDIOWRT_CANONICAL_RECIPE:=${canonical[$package]}" "$makefile"
   grep -Fq 'include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk' "$makefile"
 
-  # Upstream source identity is owned by the selected OpenWrt recipe. A derived
-  # AudioWRT package must never pin its own upstream version/source/hash/date.
   if grep -Eq '^PKG_(VERSION|SOURCE|HASH|MIRROR_HASH|SOURCE_VERSION|SOURCE_DATE)[[:space:]]*[:?+]?=' "$makefile"; then
     echo "ERROR: $package pins upstream source metadata instead of inheriting OpenWrt." >&2
     exit 1
   fi
 
-  # Any AudioWRT source patch is additive and uses the 9xx namespace. OpenWrt
-  # patch names must never be copied into the AudioWRT feed.
   while IFS= read -r patch; do
     name="$(basename "$patch")"
     [[ "$name" =~ ^9[0-9][0-9]- ]] || {
@@ -39,27 +35,48 @@ for package in "${!canonical[@]}"; do
   done < <(find "$repo_root/$package" -type f -path '*/patches/*.patch' -print)
 done
 
-# The helper must inherit the canonical preamble and canonical patch/file sets,
-# while allowing release-family-specific AudioWRT deltas when OpenWrt package
-# interfaces differ between 24.10, 25.12, snapshot, etc.
-grep -Fq 'include $(AUDIOWRT_DERIVED_PREAMBLE)' "$repo_root/include/audiowrt-openwrt-derived.mk"
-grep -Fq -- '-include $(AUDIOWRT_DERIVED_RELEASE_RECIPE)' "$repo_root/include/audiowrt-openwrt-derived.mk"
-grep -Fq 'AUDIOWRT_CANONICAL_RECIPE_RESOLVED' "$repo_root/include/audiowrt-openwrt-derived.mk"
-grep -Fq '$(TOPDIR)/package/%' "$repo_root/include/audiowrt-openwrt-derived.mk"
-grep -Fq "'\$(TOPDIR)'" "$repo_root/include/audiowrt-openwrt-derived.mk"
-if grep -Fq './scripts/feeds update base' "$repo_root/include/audiowrt-openwrt-derived.mk"; then
-  echo 'ERROR: derived package helper must never materialize the base feed.' >&2
+helper="$repo_root/include/audiowrt-openwrt-derived.mk"
+grep -Fq 'include $(AUDIOWRT_DERIVED_PREAMBLE)' "$helper"
+grep -Fq -- '-include $(AUDIOWRT_DERIVED_RELEASE_RECIPE)' "$helper"
+grep -Fq 'AUDIOWRT_CANONICAL_RECIPE_RESOLVED' "$helper"
+grep -Fq '$(TOPDIR)/package/%' "$helper"
+grep -Fq 'materialize-openwrt-base.py' "$helper"
+grep -Fq "'\$(TOPDIR)'" "$helper"
+if grep -Fq './scripts/feeds update base' "$helper"; then
+  echo 'ERROR: package Makefiles must never recursively index the base feed.' >&2
   exit 1
 fi
+
 grep -Fq 'copy_tree(canonical_root / "patches", patch_dir)' "$repo_root/scripts/prepare-openwrt-derived.py"
 grep -Fq 'copy_tree(canonical_root / "files", files_dir)' "$repo_root/scripts/prepare-openwrt-derived.py"
 grep -Fq 'release_delta / "recipe.mk"' "$repo_root/scripts/prepare-openwrt-derived.py"
 
+# Verify that a missing SDK core source tree can be materialized from the exact
+# base feed declaration without invoking OpenWrt feed indexing/install or make.
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/upstream/package/utils/busybox" "$tmp/sdk/feeds"
+printf 'fixture\n' > "$tmp/upstream/package/utils/busybox/Makefile"
+git -C "$tmp/upstream" init -q
+git -C "$tmp/upstream" config user.email test@example.invalid
+git -C "$tmp/upstream" config user.name test
+git -C "$tmp/upstream" add .
+git -C "$tmp/upstream" commit -qm fixture
+upstream_commit="$(git -C "$tmp/upstream" rev-parse HEAD)"
+printf 'src-git --root=package base file://%s^%s\n' "$tmp/upstream" "$upstream_commit" > "$tmp/sdk/feeds.conf"
+python3 "$repo_root/scripts/materialize-openwrt-base.py" "$tmp/sdk"
+test -L "$tmp/sdk/feeds/base"
+test -f "$tmp/sdk/feeds/base/utils/busybox/Makefile"
+test "$(git -C "$tmp/sdk/feeds/base_root" rev-parse HEAD)" = "$upstream_commit"
+test ! -e "$tmp/sdk/feeds/base.tmp"
+test ! -e "$tmp/sdk/feeds/base.index"
+# A second invocation must reuse the exact checkout instead of recloning it.
+python3 "$repo_root/scripts/materialize-openwrt-base.py" "$tmp/sdk"
+test "$(git -C "$tmp/sdk/feeds/base_root" rev-parse HEAD)" = "$upstream_commit"
+
 # `scripts/feeds update` evaluates package Makefiles before VERSION_NUMBER is
 # initialized. Verify that an empty make variable is resolved from the exact
 # selected tree/SDK's include/version.mk rather than from an AudioWRT default.
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/openwrt/include" "$tmp/canonical/patches" "$tmp/delta"
 cat >"$tmp/openwrt/include/version.mk" <<'EOF'
 VERSION_NUMBER:=$(call qstrip,$(CONFIG_VERSION_NUMBER))
@@ -95,15 +112,11 @@ if grep -Fq 'audiowrt-openwrt-derived.mk' "$minidlna_makefile"; then
   exit 1
 fi
 
-# These use other provenance strategies and must stay release-context aware:
-# selector -> exact SDK package; prebuilt -> exact target kmods.
 grep -Fq '+wpa-supplicant-mbedtls' "$repo_root/audiowrt-wpa-supplicant/Makefile"
 grep -Fq 'Repackages the exact-release OpenWrt Bluetooth core' "$repo_root/audiowrt-kmod-bluetooth/Makefile"
 grep -Fq 'Repackages the exact-release ALSA kernel core' "$repo_root/packages/audiowrt-kmod-sound-core/Makefile"
 grep -Fq 'exact-release' "$repo_root/packages/audiowrt-kmod-usb-audio/Makefile"
 
-# Packages that have no canonical OpenWrt recipe remain AudioWRT-owned source
-# packages; they still compile against the selected SDK/target/toolchain.
 test -f "$repo_root/bluez-alsa/Makefile"
 test -f "$repo_root/librespot/Makefile"
 
