@@ -9,7 +9,6 @@ declare -A canonical=(
   [audiowrt-minimal-alsa]='$(TOPDIR)/feeds/packages/libs/alsa-lib/Makefile'
   [audiowrt-minimal-mbedtls]='$(TOPDIR)/feeds/base/libs/mbedtls/Makefile'
   [audiowrt-dropbear]='$(TOPDIR)/feeds/base/network/services/dropbear/Makefile'
-  [audiowrt-minidlna]='$(TOPDIR)/feeds/packages/multimedia/minidlna/Makefile'
   [audiowrt-umdns]='$(TOPDIR)/feeds/base/network/services/umdns/Makefile'
   [audiowrt-sbc]='$(TOPDIR)/feeds/packages/libs/sbc/Makefile'
   [audiowrt-bluez]='$(TOPDIR)/feeds/packages/utils/bluez/Makefile'
@@ -45,8 +44,13 @@ done
 # interfaces differ between 24.10, 25.12, snapshot, etc.
 grep -Fq 'include $(AUDIOWRT_DERIVED_PREAMBLE)' "$repo_root/include/audiowrt-openwrt-derived.mk"
 grep -Fq -- '-include $(AUDIOWRT_DERIVED_RELEASE_RECIPE)' "$repo_root/include/audiowrt-openwrt-derived.mk"
-grep -Fq './scripts/feeds update base' "$repo_root/include/audiowrt-openwrt-derived.mk"
+grep -Fq 'AUDIOWRT_CANONICAL_RECIPE_RESOLVED' "$repo_root/include/audiowrt-openwrt-derived.mk"
+grep -Fq '$(TOPDIR)/package/%' "$repo_root/include/audiowrt-openwrt-derived.mk"
 grep -Fq "'\$(TOPDIR)'" "$repo_root/include/audiowrt-openwrt-derived.mk"
+if grep -Fq './scripts/feeds update base' "$repo_root/include/audiowrt-openwrt-derived.mk"; then
+  echo 'ERROR: derived package helper must never materialize the base feed.' >&2
+  exit 1
+fi
 grep -Fq 'copy_tree(canonical_root / "patches", patch_dir)' "$repo_root/scripts/prepare-openwrt-derived.py"
 grep -Fq 'copy_tree(canonical_root / "files", files_dir)' "$repo_root/scripts/prepare-openwrt-derived.py"
 grep -Fq 'release_delta / "recipe.mk"' "$repo_root/scripts/prepare-openwrt-derived.py"
@@ -79,6 +83,17 @@ python3 "$repo_root/scripts/prepare-openwrt-derived.py" \
   "$tmp/out/prepared"
 grep -Fq 'openwrt_version=25.12.5' "$tmp/out/prepared"
 grep -Fq 'release_family=25.12' "$tmp/out/prepared"
+
+# MiniDLNA currently has no AudioWRT source delta. Rebuilding it would pull the
+# complete FFmpeg dependency graph into selective SDK builds, so AudioWRT reuses
+# the exact official binary and owns only the audio-only runtime profile.
+minidlna_makefile="$repo_root/audiowrt-minidlna/Makefile"
+grep -Fq 'DEPENDS:=+minidlna' "$minidlna_makefile"
+grep -Fq 'define Build/Compile' "$minidlna_makefile"
+if grep -Fq 'audiowrt-openwrt-derived.mk' "$minidlna_makefile"; then
+  echo 'ERROR: audiowrt-minidlna must not rebuild the upstream source dependency graph.' >&2
+  exit 1
+fi
 
 # These use other provenance strategies and must stay release-context aware:
 # selector -> exact SDK package; prebuilt -> exact target kmods.
