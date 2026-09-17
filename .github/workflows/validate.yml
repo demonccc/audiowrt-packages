@@ -72,6 +72,7 @@ jobs:
             audiowrt-usb-audio \
             audiowrt-extensions \
             audiowrt-mpd \
+            audiowrt-minimal-upmpdcli \
             audiowrt-airplay \
             audiowrt-spotify \
             audiowrt-bluetooth \
@@ -130,7 +131,6 @@ jobs:
             audiowrt-minimal-alsa \
             audiowrt-minimal-mbedtls \
             audiowrt-dropbear \
-            audiowrt-minimal-mpd \
             audiowrt-minimal-upmpdcli \
             audiowrt-umdns \
             audiowrt-wpa-supplicant \

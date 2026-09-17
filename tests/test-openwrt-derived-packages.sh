@@ -10,8 +10,6 @@ declare -A canonical=(
   [audiowrt-minimal-mbedtls]='$(TOPDIR)/feeds/base/libs/mbedtls/Makefile'
   [audiowrt-dropbear]='$(TOPDIR)/feeds/base/network/services/dropbear/Makefile'
   [audiowrt-umdns]='$(TOPDIR)/feeds/base/network/services/umdns/Makefile'
-  [audiowrt-minimal-mpd]='$(TOPDIR)/feeds/packages/sound/mpd/Makefile'
-  [audiowrt-minimal-upmpdcli]='$(TOPDIR)/feeds/packages/sound/upmpdcli/Makefile'
   [audiowrt-sbc]='$(TOPDIR)/feeds/packages/libs/sbc/Makefile'
   [audiowrt-bluez]='$(TOPDIR)/feeds/packages/utils/bluez/Makefile'
 )
@@ -102,6 +100,22 @@ python3 "$repo_root/scripts/prepare-openwrt-derived.py" \
   "$tmp/out/prepared"
 grep -Fq 'openwrt_version=25.12.5' "$tmp/out/prepared"
 grep -Fq 'release_family=25.12' "$tmp/out/prepared"
+
+# The constrained DLNA renderer is a runtime profile around exact-release
+# OpenWrt binaries. It must never become a source-derived package because that
+# would recursively build MPD/libupnpp and their dependency graphs.
+renderer_makefile="$repo_root/audiowrt-minimal-upmpdcli/Makefile"
+grep -Fq 'PKGARCH:=all' "$renderer_makefile"
+grep -Fq 'DEPENDS:=+upmpdcli +mpd-mini' "$renderer_makefile"
+for phase in Prepare Configure Compile; do
+  grep -q "^define Build/$phase$" "$renderer_makefile"
+done
+if grep -Fq 'audiowrt-openwrt-derived.mk' "$renderer_makefile"; then
+  echo 'ERROR: audiowrt-minimal-upmpdcli must reuse official release binaries.' >&2
+  exit 1
+fi
+
+test ! -e "$repo_root/audiowrt-minimal-mpd/Makefile"
 
 grep -Fq '+wpa-supplicant-mbedtls' "$repo_root/audiowrt-wpa-supplicant/Makefile"
 grep -Fq 'Repackages the exact-release OpenWrt Bluetooth core' "$repo_root/audiowrt-kmod-bluetooth/Makefile"
