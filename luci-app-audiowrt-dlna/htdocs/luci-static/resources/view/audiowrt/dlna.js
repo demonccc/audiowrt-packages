@@ -46,8 +46,8 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			uci.load('audiowrt-dlna'),
-			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-dlna', [ 'status' ]), { stdout: '{}' }),
-			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-dlna', [ 'players' ]), { stdout: '[]' })
+			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'status' ]), { stdout: '{}' }),
+			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'players' ]), { stdout: '[]' })
 		]);
 	},
 
@@ -56,8 +56,8 @@ return view.extend({
 		var players = parseJSON(data[2].stdout, []);
 		var m, s, o;
 
-		m = new form.Map('audiowrt-dlna', _('AudioWRT DLNA Renderer'),
-			_('The native renderer advertises only codecs whose AudioWRT player packages are installed. Custom mappings override autodetected players without deleting the automatic fallback.'));
+		m = new form.Map('audiowrt-dlna', _('AudioWRT Renderer & Discovery'),
+			_('A single native service exposes AudioWRT through SSDP/DLNA and minimal mDNS/DNS-SD. It advertises only codecs whose AudioWRT player packages are installed. Custom mappings override autodetected players without deleting the automatic fallback.'));
 
 		s = m.section(form.TypedSection, 'renderer', _('Renderer'));
 		s.anonymous = true;
@@ -70,7 +70,7 @@ return view.extend({
 		o.default = 'AudioWRT';
 		o.rmempty = false;
 
-		o = s.option(form.Value, 'port', _('HTTP control port'));
+		o = s.option(form.Value, 'port', _('UPnP HTTP control port'));
 		o.datatype = 'port';
 		o.default = '49152';
 
@@ -117,7 +117,7 @@ return view.extend({
 		o.placeholder = 'flac';
 
 		poll.add(function() {
-			return L.resolveDefault(fs.exec('/usr/libexec/audiowrt-dlna', [ 'status' ]), { stdout: '{}' }).then(function(res) {
+			return L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'status' ]), { stdout: '{}' }).then(function(res) {
 				var st = parseJSON(res.stdout, {}), fields = {
 					'dlna-state': st.state || '-',
 					'dlna-controller': st.controller || '-',
@@ -135,8 +135,9 @@ return view.extend({
 
 		return Promise.resolve(m.render()).then(function(formNode) {
 			return E('div', { 'class': 'cbi-map' }, [
-				E('h2', {}, _('DLNA status')),
+				E('h2', {}, _('Renderer status')),
 				E('div', { 'class': 'cbi-section' }, [
+					E('p', {}, _('Discovery: SSDP/DLNA and mDNS/DNS-SD are provided by this renderer service.')),
 					E('div', { 'class': 'table' }, [
 						statusRow(_('Playback'), 'dlna-state', status.state),
 						statusRow(_('Last controller'), 'dlna-controller', status.controller),
