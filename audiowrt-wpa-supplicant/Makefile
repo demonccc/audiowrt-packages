@@ -5,7 +5,7 @@ AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/hostapd/Makefil
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_FLAGS:=gc-sections lto
 
@@ -21,7 +21,7 @@ define Package/audiowrt-wpa-supplicant
   CATEGORY:=AudioWRT
   TITLE:=AudioWRT minimal WPA2/WPA3 station supplicant
   URL:=https://w1.fi/wpa_supplicant/
-  DEPENDS:=+libnl-tiny +hostapd-common +ucode +libucode +ucode-mod-fs +ucode-mod-nl80211 +ucode-mod-rtnl +ucode-mod-ubus +ucode-mod-uloop +libubus +libblobmsg-json +libudebug +libmbedtls
+  DEPENDS:=+libnl-tiny +hostapd-common +libubox +ucode +libucode +ucode-mod-fs +ucode-mod-nl80211 +ucode-mod-rtnl +ucode-mod-ubus +ucode-mod-uloop +libubus +libblobmsg-json +libudebug +libmbedtls
   PROVIDES:=wpa-supplicant
   USERID:=network=101:network=101
 endef
