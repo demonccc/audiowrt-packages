@@ -26,12 +26,11 @@ grep -q '^define Package/audiowrt-minimal-alsa$' "$alsa"
 grep -q '^  PROVIDES:=alsa-lib$' "$alsa"
 ! grep -q '^  CONFLICTS:=' "$alsa"
 
-# The sound kernel capability is required in the firmware, but ALSA itself
-# does not compile against the OpenWrt kernel. Keep it out of the source build
-# graph so compiling ALSA and BlueALSA cannot rebuild the release kernel.
-grep -q '^  EXTRA_DEPENDS:=kmod-sound-core (>=0)$' "$alsa"
-if awk '/^define Package\/audiowrt-minimal-alsa$/{inside=1; next} /^endef$/{inside=0} inside && /^  DEPENDS:=/ && /kmod-sound-core/{found=1} END{exit found ? 0 : 1}' "$alsa"; then
-	echo 'ERROR: ALSA runtime kmod must not participate in source dependency expansion.' >&2
+# ALSA is a userspace library. Kernel sound modules belong to the concrete
+# USB-audio flavor, not to the library package. Any kmod dependency here makes
+# a Bluetooth source build recurse into package/kernel/linux.
+if grep -Eq 'kmod-sound-core' "$alsa"; then
+	echo 'ERROR: minimal ALSA must not force kmod-sound-core.' >&2
 	exit 1
 fi
 

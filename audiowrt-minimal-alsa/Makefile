@@ -5,6 +5,7 @@ AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/libs/alsa-lib/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
+PKG_RELEASE:=2
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -14,7 +15,6 @@ define Package/audiowrt-minimal-alsa
   TITLE:=AudioWRT minimal ALSA library
   URL:=https://www.alsa-project.org/
   DEPENDS:=@AUDIO_SUPPORT +libpthread +librt
-  EXTRA_DEPENDS:=kmod-sound-core (>=0)
   PROVIDES:=alsa-lib
 endef
 

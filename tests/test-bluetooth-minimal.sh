@@ -15,7 +15,10 @@ wrapper="$repo_root/audiowrt-bluetooth/files/audiowrt-bluetooth"
 for option in --disable-client --disable-tools --disable-monitor --disable-obex --disable-network --disable-hid --disable-hog --enable-library --disable-midi; do
     grep -q -- "$option" "$bluez"
 done
-grep -q 'DEPENDS:=.*+alsa-lib' "$bluez"
+if grep -q 'DEPENDS:=.*+alsa-lib' "$bluez"; then
+    echo 'ERROR: bluetoothd must not pull ALSA; BlueALSA owns the ALSA boundary.' >&2
+    exit 1
+fi
 if grep -q 'kmod-sound-seq' "$bluez"; then
     echo 'ERROR: ALSA Sequencer must not be pulled without a complete MIDI feature.' >&2
     exit 1

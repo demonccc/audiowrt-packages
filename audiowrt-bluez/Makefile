@@ -5,6 +5,7 @@ AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/utils/bluez/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
+PKG_RELEASE:=2
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -25,7 +26,7 @@ define Package/audiowrt-bluez
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=AudioWRT minimal BlueZ audio daemon
-  DEPENDS:=+audiowrt-bluez-libs +glib2 +dbus +alsa-lib
+  DEPENDS:=+audiowrt-bluez-libs +glib2 +dbus
   URL:=https://www.bluez.org/
 endef
 

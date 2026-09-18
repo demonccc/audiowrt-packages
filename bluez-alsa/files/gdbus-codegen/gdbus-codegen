@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+# Host-only wrapper for the vendored GLib gdbus-codegen implementation.
+import os
+import sys
+
+root = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, root)
+from codegen import codegen_main
+
+raise SystemExit(codegen_main.codegen_main())
