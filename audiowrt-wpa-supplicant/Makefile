@@ -5,7 +5,7 @@ AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/hostapd/Makefil
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_FLAGS:=gc-sections lto
 
@@ -38,7 +38,8 @@ TARGET_CPPFLAGS := \
 	-I$(PKG_BUILD_DIR)/src/crypto \
 	$(TARGET_CPPFLAGS) \
 	-DCONFIG_LIBNL20 \
-	-D_GNU_SOURCE
+	-D_GNU_SOURCE \
+	-DCONFIG_MSG_MIN_PRIORITY=3
 
 TARGET_LDFLAGS += \
 	-lubox -lubus -lblobmsg_json -lucode -lm -lnl-tiny -ludebug \

@@ -12,6 +12,7 @@ grep -q '^  PROVIDES:=wpa-supplicant$' "$makefile"
 grep -q '+libmbedtls' "$makefile"
 grep -q 'CONFIG_TLS=mbedtls' "$makefile"
 grep -q 'CONFIG_SAE=y' "$makefile"
+grep -q -- '-DCONFIG_MSG_MIN_PRIORITY=3' "$makefile"
 grep -q 'wpa_supplicant.uc' "$makefile"
 grep -q 'wpa_supplicant$' "$makefile"
 
