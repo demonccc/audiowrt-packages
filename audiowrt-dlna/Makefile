@@ -11,7 +11,6 @@ define Package/audiowrt-renderer
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT native network renderer and discovery service
-  DEPENDS:=+libuci
   PROVIDES:=audiowrt-dlna
   CONFLICTS:=umdns audiowrt-umdns
 endef
@@ -41,7 +40,7 @@ define Build/Compile
 		-Wall -Wextra \
 		-o $(PKG_BUILD_DIR)/audiowrt-renderer \
 		$(PKG_BUILD_DIR)/audiowrt-dlna.c \
-		$(TARGET_LDFLAGS) -luci
+		$(TARGET_LDFLAGS)
 endef
 
 define Package/audiowrt-renderer/install
