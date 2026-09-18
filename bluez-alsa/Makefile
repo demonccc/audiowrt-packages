@@ -25,11 +25,11 @@ endef
 
 CONFIGURE_VARS += \
 	GDBUS_CODEGEN="$(PKG_BUILD_DIR)/host-tools/gdbus-codegen" \
-	PATH="$(PKG_BUILD_DIR)/host-tools:$$PATH"
+	PATH="$(PKG_BUILD_DIR)/host-tools:$$$$PATH"
 
 MAKE_VARS += \
 	GDBUS_CODEGEN="$(PKG_BUILD_DIR)/host-tools/gdbus-codegen" \
-	PATH="$(PKG_BUILD_DIR)/host-tools:$$PATH"
+	PATH="$(PKG_BUILD_DIR)/host-tools:$$$$PATH"
 
 define Package/bluez-alsa
   SECTION:=sound
