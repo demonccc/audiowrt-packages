@@ -19,6 +19,7 @@ AUDIOWRT_DERIVED_PREAMBLE:=$(AUDIOWRT_DERIVED_WORK)/upstream-preamble.mk
 AUDIOWRT_DERIVED_RELEASE_RECIPE:=$(AUDIOWRT_DERIVED_WORK)/release-recipe.mk
 AUDIOWRT_DERIVED_PATCH_DIR:=$(AUDIOWRT_DERIVED_WORK)/patches
 AUDIOWRT_DERIVED_FILES_DIR:=$(AUDIOWRT_DERIVED_WORK)/files
+AUDIOWRT_DERIVED_SRC_DIR:=$(AUDIOWRT_DERIVED_WORK)/src
 AUDIOWRT_DERIVED_STAMP:=$(AUDIOWRT_DERIVED_WORK)/prepared
 
 # Core recipes can already be present in a full OpenWrt checkout or in some SDK
@@ -59,8 +60,9 @@ endif
 # the version from that selected source tree/SDK when necessary.
 #
 # prepare-openwrt-derived.py emits only the canonical pre-package.mk preamble
-# (source identity/build flags), canonical patches/files and AudioWRT 9xx deltas.
-# It never imports upstream Package/* definitions, DEPENDS or BuildPackage calls.
+# (source identity/build flags), canonical patches/files/source overlays and
+# AudioWRT deltas. It never imports upstream Package/* definitions, DEPENDS or
+# BuildPackage calls.
 $(shell \
 	mkdir -p '$(AUDIOWRT_DERIVED_WORK)' && \
 	rm -f '$(AUDIOWRT_DERIVED_STAMP)' && \
@@ -73,6 +75,7 @@ $(shell \
 		'$(AUDIOWRT_DERIVED_RELEASE_RECIPE)' \
 		'$(AUDIOWRT_DERIVED_PATCH_DIR)' \
 		'$(AUDIOWRT_DERIVED_FILES_DIR)' \
+		'$(AUDIOWRT_DERIVED_SRC_DIR)' \
 		'$(AUDIOWRT_DERIVED_STAMP)')
 
 ifeq ($(wildcard $(AUDIOWRT_DERIVED_STAMP)),)
