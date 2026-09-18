@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Prepare exact-release OpenWrt metadata/files/patches for an AudioWRT package.
+"""Prepare exact-release OpenWrt metadata/source/files/patches for an AudioWRT package.
 
 The caller owns only the AudioWRT recipe body. Version, source, hash, build
-flags, canonical runtime files and OpenWrt source patches are inherited from
+flags, canonical source overlays, runtime files and OpenWrt patches are inherited from
 the package recipe that exists in the selected OpenWrt SDK/feed checkout.
 """
 
@@ -116,11 +116,11 @@ def overlay_patches(source: Path, destination: Path) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) != 10:
+    if len(sys.argv) != 11:
         print(
             "usage: prepare-openwrt-derived.py <canonical-makefile> <delta-root> "
             "<openwrt-version> <openwrt-topdir> <preamble-out> "
-            "<release-recipe-out> <patch-dir> <files-dir> <stamp>",
+            "<release-recipe-out> <patch-dir> <files-dir> <src-dir> <stamp>",
             file=sys.stderr,
         )
         return 2
@@ -133,7 +133,8 @@ def main() -> int:
     release_recipe_out = Path(sys.argv[6])
     patch_dir = Path(sys.argv[7])
     files_dir = Path(sys.argv[8])
-    stamp = Path(sys.argv[9])
+    src_dir = Path(sys.argv[9])
+    stamp = Path(sys.argv[10])
 
     if not canonical_makefile.is_file():
         fail(f"canonical OpenWrt recipe is missing: {canonical_makefile}")
@@ -162,19 +163,27 @@ def main() -> int:
 
     shutil.rmtree(patch_dir, ignore_errors=True)
     shutil.rmtree(files_dir, ignore_errors=True)
+    shutil.rmtree(src_dir, ignore_errors=True)
     patch_dir.mkdir(parents=True, exist_ok=True)
     files_dir.mkdir(parents=True, exist_ok=True)
+    src_dir.mkdir(parents=True, exist_ok=True)
 
-    # OpenWrt owns the base patch and file sets. They always come from the exact
-    # canonical recipe selected by the SDK/feed checkout.
+    # OpenWrt owns the base patch, runtime-file and source-overlay sets. They
+    # always come from the exact canonical recipe selected by the SDK/feed
+    # checkout. OpenWrt's default Build/Prepare copies ./src into PKG_BUILD_DIR
+    # before applying patches, so preserving this tree is part of reproducing
+    # the canonical package source exactly.
     copy_tree(canonical_root / "patches", patch_dir)
     copy_tree(canonical_root / "files", files_dir)
+    copy_tree(canonical_root / "src", src_dir)
 
     # AudioWRT overlays are intentionally small. Source patches use 9xx names so
     # it is impossible to silently replace an OpenWrt-owned patch.
     copy_tree(delta_root / "files", files_dir)
+    copy_tree(delta_root / "src", src_dir)
     overlay_patches(delta_root / "patches", patch_dir)
     copy_tree(release_delta / "files", files_dir)
+    copy_tree(release_delta / "src", src_dir)
     overlay_patches(release_delta / "patches", patch_dir)
 
     stamp.parent.mkdir(parents=True, exist_ok=True)

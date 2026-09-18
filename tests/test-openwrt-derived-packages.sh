@@ -50,6 +50,9 @@ fi
 
 grep -Fq 'copy_tree(canonical_root / "patches", patch_dir)' "$repo_root/scripts/prepare-openwrt-derived.py"
 grep -Fq 'copy_tree(canonical_root / "files", files_dir)' "$repo_root/scripts/prepare-openwrt-derived.py"
+grep -Fq 'copy_tree(canonical_root / "src", src_dir)' "$repo_root/scripts/prepare-openwrt-derived.py"
+grep -Fq 'AUDIOWRT_DERIVED_SRC_DIR' "$helper"
+grep -Fq 'Build/Prepare/AudioWRTDerived' "$helper"
 grep -Fq 'release_delta / "recipe.mk"' "$repo_root/scripts/prepare-openwrt-derived.py"
 
 # Verify that a missing SDK core source tree can be materialized from the exact
@@ -78,7 +81,7 @@ test "$(git -C "$tmp/sdk/feeds/base_root" rev-parse HEAD)" = "$upstream_commit"
 # `scripts/feeds update` evaluates package Makefiles before VERSION_NUMBER is
 # initialized. Verify that an empty make variable is resolved from the exact
 # selected tree/SDK's include/version.mk rather than from an AudioWRT default.
-mkdir -p "$tmp/openwrt/include" "$tmp/canonical/patches" "$tmp/delta"
+mkdir -p "$tmp/openwrt/include" "$tmp/canonical/patches" "$tmp/canonical/src/src/ap" "$tmp/delta"
 cat >"$tmp/openwrt/include/version.mk" <<'EOF'
 VERSION_NUMBER:=$(call qstrip,$(CONFIG_VERSION_NUMBER))
 VERSION_NUMBER:=$(if $(VERSION_NUMBER),$(VERSION_NUMBER),25.12.5)
@@ -89,6 +92,7 @@ PKG_NAME:=fixture
 PKG_VERSION:=1.0
 include $(INCLUDE_DIR)/package.mk
 EOF
+printf 'canonical overlay\n' > "$tmp/canonical/src/src/ap/ubus.h"
 python3 "$repo_root/scripts/prepare-openwrt-derived.py" \
   "$tmp/canonical/Makefile" \
   "$tmp/delta" \
@@ -98,9 +102,11 @@ python3 "$repo_root/scripts/prepare-openwrt-derived.py" \
   "$tmp/out/release.mk" \
   "$tmp/out/patches" \
   "$tmp/out/files" \
+  "$tmp/out/src" \
   "$tmp/out/prepared"
 grep -Fq 'openwrt_version=25.12.5' "$tmp/out/prepared"
 grep -Fq 'release_family=25.12' "$tmp/out/prepared"
+grep -Fq 'canonical overlay' "$tmp/out/src/src/ap/ubus.h"
 
 # The constrained DLNA renderer is a runtime profile around exact-release
 # OpenWrt binaries. It must never become a source-derived package because that
@@ -119,6 +125,7 @@ fi
 test ! -e "$repo_root/audiowrt-minimal-mpd/Makefile"
 
 grep -Fq 'PROVIDES:=wpa-supplicant' "$repo_root/audiowrt-wpa-supplicant/Makefile"
+grep -Fq '$(Build/Prepare/AudioWRTDerived)' "$repo_root/audiowrt-wpa-supplicant/Makefile"
 if grep -Fq '+wpa-supplicant-mbedtls' "$repo_root/audiowrt-wpa-supplicant/Makefile"; then
   echo 'ERROR: minimal WPA package regressed to the full OpenWrt supplicant metapackage.' >&2
   exit 1

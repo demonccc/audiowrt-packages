@@ -11,6 +11,11 @@ PKG_BUILD_FLAGS:=gc-sections lto
 
 include $(INCLUDE_DIR)/package.mk
 
+
+define Build/Prepare
+	$(Build/Prepare/AudioWRTDerived)
+endef
+
 define Package/audiowrt-wpa-supplicant
   SECTION:=net
   CATEGORY:=AudioWRT
