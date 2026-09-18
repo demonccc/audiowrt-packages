@@ -19,6 +19,7 @@ grep -q 'system.@system\[0\].hostname' "$core_firstboot"
 grep -q 'system.@system\[0\].hostname' "$provision"
 grep -q '/usr/sbin/audiowrt-wifi-client connect' "$provision"
 grep -q '/usr/sbin/audiowrt-wifi-client setup-start' "$firstboot"
+grep -q 'Failed to start provisioning AP' "$firstboot"
 grep -q 'audiowrt-storage.main' "$storage"
 
 # Check active runtime code only. The uci-defaults migration intentionally reads
