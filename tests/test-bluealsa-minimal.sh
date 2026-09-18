@@ -6,6 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 makefile="$repo_root/bluez-alsa/Makefile"
 alsa_makefile="$repo_root/audiowrt-minimal-alsa/Makefile"
 patch="$repo_root/bluez-alsa/patches/005-fix-gcc14-musl-basename.patch"
+ctl_patch="$repo_root/bluez-alsa/patches/040-add-disable-ctl-option.patch"
 
 # GCC 14 + musl rejects the legacy basename() declaration used by BlueALSA 4.1.1.
 grep -q '^+#include <libgen.h>$' "$patch"
@@ -24,6 +25,10 @@ grep -Fq 'PATH="$(PKG_BUILD_DIR)/host-tools:$$$$PATH"' "$makefile" || {
     exit 1
 }
 python3 "$repo_root/bluez-alsa/files/gdbus-codegen/gdbus-codegen" --help >/dev/null
+
+grep -q 'AC_ARG_ENABLE(\[ctl\]' "$ctl_patch"
+grep -q 'AM_CONDITIONAL(\[ENABLE_CTL\]' "$ctl_patch"
+grep -q 'if ENABLE_CTL' "$ctl_patch"
 
 # The 8 MB baseline only needs the A2DP Source path. Do not build receiver-side
 # utilities or optional codecs/tools that increase compile and firmware size.
