@@ -1,49 +1,206 @@
-static void apply_player_overrides(struct uci_context *ctx, struct uci_package *pkg)
+static int config_next_token(char **cursor, char *out, size_t len)
 {
-    struct uci_element *e;
-    uci_foreach_element(&pkg->sections, e) {
-        struct uci_section *s = uci_to_section(e);
-        const char *codec, *command, *v;
-        struct player *p;
-        if (strcmp(s->type, "player"))
-            continue;
-        codec = uci_opt(ctx, s, "codec");
-        command = uci_opt(ctx, s, "command");
-        if (!codec || !*codec || !command || !*command)
-            continue;
-        v = uci_opt(ctx, s, "enabled");
-        if (!parse_bool(v, 1))
-            continue;
-        p = find_player_id(codec);
-        if (!p && g.player_count < MAX_PLAYERS) {
-            p = &g.players[g.player_count++];
-            memset(p, 0, sizeof(*p));
-            copystr(p->id, sizeof(p->id), codec);
-            copystr(p->name, sizeof(p->name), codec);
-        }
-        if (!p)
-            continue;
-        p->custom = true;
-        p->managed = parse_bool(uci_opt(ctx, s, "managed"), 0);
-        copystr(p->command, sizeof(p->command), command);
-        v = uci_opt(ctx, s, "pause_command");
-        if (v) copystr(p->pause_command, sizeof(p->pause_command), v);
-        v = uci_opt(ctx, s, "resume_command");
-        if (v) copystr(p->resume_command, sizeof(p->resume_command), v);
-        v = uci_opt(ctx, s, "stop_command");
-        if (v) copystr(p->stop_command, sizeof(p->stop_command), v);
-        v = uci_opt(ctx, s, "mime");
-        if (v && *v) copystr(p->mime, sizeof(p->mime), v);
-        v = uci_opt(ctx, s, "extensions");
-        if (v && *v) copystr(p->extensions, sizeof(p->extensions), v);
+    char *p = *cursor;
+    size_t used = 0;
+    char quote = 0;
+
+    while (*p && isspace((unsigned char)*p))
+        p++;
+    if (!*p || *p == '#') {
+        *cursor = p;
+        if (len) out[0] = 0;
+        return 0;
     }
+
+    while (*p) {
+        if (!quote && (isspace((unsigned char)*p) || *p == '#'))
+            break;
+        if (*p == '\\' && p[1]) {
+            p++;
+            if (used + 1 < len)
+                out[used++] = *p;
+            p++;
+            continue;
+        }
+        if (*p == '\'' || *p == '"') {
+            if (!quote) {
+                quote = *p++;
+                continue;
+            }
+            if (quote == *p) {
+                quote = 0;
+                p++;
+                continue;
+            }
+        }
+        if (used + 1 < len)
+            out[used++] = *p;
+        p++;
+    }
+
+    if (len)
+        out[used] = 0;
+    *cursor = p;
+    return 1;
+}
+
+static void apply_renderer_option(const char *key, const char *value)
+{
+    if (!strcmp(key, "friendly_name"))
+        copystr(g.friendly_name, sizeof(g.friendly_name), value);
+    else if (!strcmp(key, "uuid"))
+        copystr(g.uuid, sizeof(g.uuid), value);
+    else if (!strcmp(key, "player_dir"))
+        copystr(g.player_dir, sizeof(g.player_dir), value);
+    else if (!strcmp(key, "runtime_dir"))
+        copystr(g.runtime_dir, sizeof(g.runtime_dir), value);
+    else if (!strcmp(key, "alsa_device"))
+        copystr(g.alsa_device, sizeof(g.alsa_device), value);
+    else if (!strcmp(key, "port"))
+        g.port = atoi(value);
+    else if (!strcmp(key, "volume"))
+        g.volume = atoi(value);
+}
+
+static int load_renderer_options(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    char line[2048];
+    bool in_renderer = false;
+    bool renderer_seen = false;
+
+    if (!f)
+        return -1;
+
+    while (fgets(line, sizeof(line), f)) {
+        char *cursor = line;
+        char directive[32], type[64], name[128], key[128], value[1536];
+
+        if (!config_next_token(&cursor, directive, sizeof(directive)))
+            continue;
+
+        if (!strcmp(directive, "config")) {
+            type[0] = name[0] = 0;
+            config_next_token(&cursor, type, sizeof(type));
+            config_next_token(&cursor, name, sizeof(name));
+            in_renderer = !strcmp(type, "renderer") &&
+                (!renderer_seen || !name[0] || !strcmp(name, "main"));
+            if (in_renderer)
+                renderer_seen = true;
+            continue;
+        }
+
+        if (in_renderer && !strcmp(directive, "option")) {
+            if (!config_next_token(&cursor, key, sizeof(key)) ||
+                !config_next_token(&cursor, value, sizeof(value)))
+                continue;
+            apply_renderer_option(key, value);
+        }
+    }
+
+    fclose(f);
+    return 0;
+}
+
+static void commit_player_override(struct player *override, bool enabled)
+{
+    struct player *p;
+
+    if (!enabled || !override->id[0] || !override->command[0])
+        return;
+
+    p = find_player_id(override->id);
+    if (!p && g.player_count < MAX_PLAYERS) {
+        p = &g.players[g.player_count++];
+        memset(p, 0, sizeof(*p));
+        copystr(p->id, sizeof(p->id), override->id);
+        copystr(p->name, sizeof(p->name), override->id);
+    }
+    if (!p)
+        return;
+
+    p->custom = true;
+    p->managed = override->managed;
+    copystr(p->command, sizeof(p->command), override->command);
+    if (override->pause_command[0])
+        copystr(p->pause_command, sizeof(p->pause_command), override->pause_command);
+    if (override->resume_command[0])
+        copystr(p->resume_command, sizeof(p->resume_command), override->resume_command);
+    if (override->stop_command[0])
+        copystr(p->stop_command, sizeof(p->stop_command), override->stop_command);
+    if (override->mime[0])
+        copystr(p->mime, sizeof(p->mime), override->mime);
+    if (override->extensions[0])
+        copystr(p->extensions, sizeof(p->extensions), override->extensions);
+}
+
+static int load_player_overrides(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    char line[2048];
+    struct player override;
+    bool in_player = false;
+    bool enabled = true;
+
+    if (!f)
+        return -1;
+
+    memset(&override, 0, sizeof(override));
+    while (fgets(line, sizeof(line), f)) {
+        char *cursor = line;
+        char directive[32], type[64], ignored_name[128], key[128], value[1536];
+
+        if (!config_next_token(&cursor, directive, sizeof(directive)))
+            continue;
+
+        if (!strcmp(directive, "config")) {
+            if (in_player)
+                commit_player_override(&override, enabled);
+
+            type[0] = ignored_name[0] = 0;
+            config_next_token(&cursor, type, sizeof(type));
+            config_next_token(&cursor, ignored_name, sizeof(ignored_name));
+            in_player = !strcmp(type, "player");
+            memset(&override, 0, sizeof(override));
+            enabled = true;
+            continue;
+        }
+
+        if (!in_player || strcmp(directive, "option"))
+            continue;
+        if (!config_next_token(&cursor, key, sizeof(key)) ||
+            !config_next_token(&cursor, value, sizeof(value)))
+            continue;
+
+        if (!strcmp(key, "codec"))
+            copystr(override.id, sizeof(override.id), value);
+        else if (!strcmp(key, "command"))
+            copystr(override.command, sizeof(override.command), value);
+        else if (!strcmp(key, "enabled"))
+            enabled = parse_bool(value, 1);
+        else if (!strcmp(key, "managed"))
+            override.managed = parse_bool(value, 0);
+        else if (!strcmp(key, "pause_command"))
+            copystr(override.pause_command, sizeof(override.pause_command), value);
+        else if (!strcmp(key, "resume_command"))
+            copystr(override.resume_command, sizeof(override.resume_command), value);
+        else if (!strcmp(key, "stop_command"))
+            copystr(override.stop_command, sizeof(override.stop_command), value);
+        else if (!strcmp(key, "mime"))
+            copystr(override.mime, sizeof(override.mime), value);
+        else if (!strcmp(key, "extensions"))
+            copystr(override.extensions, sizeof(override.extensions), value);
+    }
+
+    if (in_player)
+        commit_player_override(&override, enabled);
+    fclose(f);
+    return 0;
 }
 
 static int load_config(void)
 {
-    struct uci_context *ctx;
-    struct uci_package *pkg = NULL;
-    struct uci_element *e;
+    const char *path = "/etc/config/audiowrt-dlna";
 
     memset(&g, 0, sizeof(g));
     copystr(g.friendly_name, sizeof(g.friendly_name), "AudioWRT");
@@ -54,37 +211,17 @@ static int load_config(void)
     g.volume = 100;
     g.state = STATE_NO_MEDIA;
 
-    ctx = uci_alloc_context();
-    if (!ctx)
+    if (load_renderer_options(path) < 0)
         return -1;
-    if (uci_load(ctx, "audiowrt-dlna", &pkg) != UCI_OK) {
-        uci_free_context(ctx);
-        return -1;
-    }
 
-    uci_foreach_element(&pkg->sections, e) {
-        struct uci_section *s = uci_to_section(e);
-        const char *v;
-        if (strcmp(s->type, "renderer") && strcmp(s->e.name, "main"))
-            continue;
-        v = uci_opt(ctx, s, "friendly_name"); if (v) copystr(g.friendly_name, sizeof(g.friendly_name), v);
-        v = uci_opt(ctx, s, "uuid"); if (v) copystr(g.uuid, sizeof(g.uuid), v);
-        v = uci_opt(ctx, s, "player_dir"); if (v) copystr(g.player_dir, sizeof(g.player_dir), v);
-        v = uci_opt(ctx, s, "runtime_dir"); if (v) copystr(g.runtime_dir, sizeof(g.runtime_dir), v);
-        v = uci_opt(ctx, s, "alsa_device"); if (v) copystr(g.alsa_device, sizeof(g.alsa_device), v);
-        v = uci_opt(ctx, s, "port"); if (v) g.port = atoi(v);
-        v = uci_opt(ctx, s, "volume"); if (v) g.volume = atoi(v);
-        break;
-    }
     if (g.port < 1024 || g.port > 65535)
         g.port = DEFAULT_PORT;
     if (g.volume < 0) g.volume = 0;
     if (g.volume > 100) g.volume = 100;
 
     load_descriptors();
-    apply_player_overrides(ctx, pkg);
-    uci_unload(ctx, pkg);
-    uci_free_context(ctx);
+    if (load_player_overrides(path) < 0)
+        return -1;
 
     if (!g.uuid[0])
         copystr(g.uuid, sizeof(g.uuid), "00000000-0000-0000-0000-000000000000");
