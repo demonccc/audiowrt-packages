@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bluez-alsa
 PKG_VERSION:=4.1.1
-PKG_RELEASE:=8
+PKG_RELEASE:=9
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/Arkq/bluez-alsa/archive/v$(PKG_VERSION)
@@ -18,6 +18,7 @@ include $(INCLUDE_DIR)/package.mk
 
 define Build/Prepare
 	$(call Build/Prepare/Default)
+	python3 ./files/disable-ctl.py "$(PKG_BUILD_DIR)"
 	$(INSTALL_DIR) $(PKG_BUILD_DIR)/host-tools
 	$(CP) ./files/gdbus-codegen/* $(PKG_BUILD_DIR)/host-tools/
 	chmod +x $(PKG_BUILD_DIR)/host-tools/gdbus-codegen

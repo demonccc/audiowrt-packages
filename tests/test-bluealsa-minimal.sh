@@ -6,7 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 makefile="$repo_root/bluez-alsa/Makefile"
 alsa_makefile="$repo_root/audiowrt-minimal-alsa/Makefile"
 patch="$repo_root/bluez-alsa/patches/005-fix-gcc14-musl-basename.patch"
-ctl_patch="$repo_root/bluez-alsa/patches/040-add-disable-ctl-option.patch"
+ctl_helper="$repo_root/bluez-alsa/files/disable-ctl.py"
 
 # GCC 14 + musl rejects the legacy basename() declaration used by BlueALSA 4.1.1.
 grep -q '^+#include <libgen.h>$' "$patch"
@@ -26,9 +26,29 @@ grep -Fq 'PATH="$(PKG_BUILD_DIR)/host-tools:$$$$PATH"' "$makefile" || {
 }
 python3 "$repo_root/bluez-alsa/files/gdbus-codegen/gdbus-codegen" --help >/dev/null
 
-grep -q 'AC_ARG_ENABLE(\[ctl\]' "$ctl_patch"
-grep -q 'AM_CONDITIONAL(\[ENABLE_CTL\]' "$ctl_patch"
-grep -q 'if ENABLE_CTL' "$ctl_patch"
+grep -q 'AC_ARG_ENABLE(\[ctl\]' "$ctl_helper"
+grep -q 'AM_CONDITIONAL(\[ENABLE_CTL\]' "$ctl_helper"
+grep -q 'if ENABLE_CTL' "$ctl_helper"
+grep -q 'disable-ctl.py' "$makefile"
+
+# The source customization must be safe if prepare is repeated.
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp/src/asound"
+cat >"$tmp/configure.ac" <<'EOF'
+AC_PATH_PROGS([GDBUS_CODEGEN], [gdbus-codegen])
+AS_IF([test "x$GDBUS_CODEGEN" = "x"], [AC_MSG_ERROR([[gdbus-codegen not found]])])
+
+PKG_CHECK_MODULES([LIBBSD], [libbsd >= 0.8],
+EOF
+cat >"$tmp/src/asound/Makefile.am" <<'EOF'
+asound_module_ctl_LTLIBRARIES = libasound_module_ctl_bluealsa.la
+asound_module_pcm_LTLIBRARIES = libasound_module_pcm_bluealsa.la
+EOF
+python3 "$ctl_helper" "$tmp"
+python3 "$ctl_helper" "$tmp"
+grep -q 'AC_ARG_ENABLE(\[ctl\]' "$tmp/configure.ac"
+grep -q '^if ENABLE_CTL$' "$tmp/src/asound/Makefile.am"
 
 # The 8 MB baseline only needs the A2DP Source path. Do not build receiver-side
 # utilities or optional codecs/tools that increase compile and firmware size.
