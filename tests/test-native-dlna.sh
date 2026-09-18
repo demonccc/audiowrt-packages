@@ -9,6 +9,14 @@ fail() { echo "native renderer contract failed: $*" >&2; exit 1; }
 grep -q '^PKG_NAME:=audiowrt-renderer$' audiowrt-dlna/Makefile || fail "renderer package name mismatch"
 grep -q 'PROVIDES:=audiowrt-dlna' audiowrt-dlna/Makefile || fail "renderer compatibility provide missing"
 
+if grep -Eq '(^|[+[:space:]])libuci([[:space:]]|$)|-luci' audiowrt-dlna/Makefile; then
+  fail "renderer must not depend on libuci"
+fi
+if grep -Rqs '#include <uci.h>' audiowrt-dlna/src; then
+  fail "renderer must not require uci.h"
+fi
+grep -q 'config_next_token' audiowrt-dlna/src/renderer-part-01.inc || fail "minimal renderer config parser missing"
+
 renderer_sources=$(cat audiowrt-dlna/src/*)
 for token in \
   'MediaRenderer:1' \

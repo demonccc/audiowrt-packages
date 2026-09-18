@@ -27,7 +27,7 @@ define Build/Compile
 		-I$(STAGING_DIR)/usr/include/audiowrt \
 		-o $(PKG_BUILD_DIR)/audiowrt-player-flac \
 		$(PKG_BUILD_DIR)/audiowrt-player-flac.c \
-		$(TARGET_LDFLAGS) -laudiowrt-player -lFLAC -lpthread
+		$(TARGET_LDFLAGS) -Wl,-rpath-link,$(STAGING_DIR)/usr/lib -laudiowrt-player -lFLAC -lpthread
 endef
 
 define Package/audiowrt-player-flac/install
