@@ -30,6 +30,7 @@ python3 "$repo_root/bluez-alsa/files/gdbus-codegen/gdbus-codegen" --help >/dev/n
 for option in \
     --disable-aplay \
     --disable-cli \
+    --disable-ctl \
     --disable-rfcomm \
     --disable-hcitop \
     --disable-manpages \
@@ -50,11 +51,14 @@ if grep -q 'bluealsa-aplay.*usr/bin' "$makefile"; then
 fi
 
 grep -q 'src/bluealsa.*usr/bin/bluealsa' "$makefile"
-grep -q 'libasound_module_.*_bluealsa' "$makefile"
+grep -q 'libasound_module_pcm_bluealsa.so' "$makefile"
+if grep -q 'libasound_module_\*_bluealsa' "$makefile"; then
+    echo 'ERROR: BlueALSA install must not wildcard-install the control plugin.' >&2
+    exit 1
+fi
 
-# BlueALSA builds external PCM and control plugins. Its PCM implementation uses
-# ALSA ioplug and its control implementation uses the external control API.
+# BlueALSA now exposes only the PCM plugin. ioplug is required; the external
+# ALSA control plugin is not part of the AudioWRT runtime path.
 grep -q -- '--with-pcm-plugins=.*ioplug' "$alsa_makefile"
-grep -q -- '--with-ctl-plugins=ext' "$alsa_makefile"
 
 echo 'Minimal BlueALSA build contract tests passed.'
