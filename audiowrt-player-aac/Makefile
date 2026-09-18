@@ -32,7 +32,7 @@ define Build/Compile
 		-I$(STAGING_DIR)/usr/include/audiowrt \
 		-o $(PKG_BUILD_DIR)/audiowrt-player-aac \
 		$(PKG_BUILD_DIR)/audiowrt-player-aac.c \
-		$(TARGET_LDFLAGS) -laudiowrt-player -lfaad -lpthread
+		$(TARGET_LDFLAGS) -Wl,-rpath-link,$(STAGING_DIR)/usr/lib -laudiowrt-player -lfaad -lpthread
 endef
 
 define Package/audiowrt-player-aac/install
