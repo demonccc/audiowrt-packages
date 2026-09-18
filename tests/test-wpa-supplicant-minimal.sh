@@ -7,7 +7,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 makefile="$repo_root/audiowrt-wpa-supplicant/Makefile"
 config="$repo_root/audiowrt-wpa-supplicant/files/wpa_supplicant-audiowrt.config"
 
-grep -q '^AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/package/network/services/hostapd/Makefile$' "$makefile"
+grep -q '^AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/hostapd/Makefile$' "$makefile"
 grep -q '^  PROVIDES:=wpa-supplicant$' "$makefile"
 grep -q '+libmbedtls' "$makefile"
 grep -q 'CONFIG_TLS=mbedtls' "$makefile"

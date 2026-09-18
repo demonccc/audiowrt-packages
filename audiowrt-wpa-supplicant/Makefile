@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 AUDIOWRT_DERIVED_NAME:=audiowrt-wpa-supplicant
-AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/package/network/services/hostapd/Makefile
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/hostapd/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
