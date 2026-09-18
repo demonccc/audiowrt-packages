@@ -25,7 +25,7 @@ define Package/audiowrt-bluez
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=AudioWRT minimal BlueZ audio daemon
-  DEPENDS:=+audiowrt-bluez-libs +glib2 +dbus +alsa-lib
+  DEPENDS:=+audiowrt-bluez-libs +glib2 +dbus
   URL:=https://www.bluez.org/
 endef
 
