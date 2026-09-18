@@ -19,7 +19,7 @@ if grep -q '^PKG_BUILD_DEPENDS:=glib2/host$' "$makefile"; then
 fi
 grep -q 'files/gdbus-codegen' "$makefile"
 grep -q 'GDBUS_CODEGEN=' "$makefile"
-grep -Fq 'PATH="$(PKG_BUILD_DIR)/host-tools:$$PATH"' "$makefile" || {
+grep -Fq 'PATH="$(PKG_BUILD_DIR)/host-tools:$$$$PATH"' "$makefile" || {
     echo 'ERROR: BlueALSA host PATH must survive OpenWrt double make expansion.' >&2
     exit 1
 }
