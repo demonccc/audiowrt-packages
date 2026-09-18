@@ -89,3 +89,16 @@ include $(AUDIOWRT_DERIVED_PREAMBLE)
 # patch set from the exact selected OpenWrt release plus only explicit 9xx
 # AudioWRT patches.
 PATCH_DIR:=$(AUDIOWRT_DERIVED_PATCH_DIR)
+
+
+# OpenWrt's default Build/Prepare copies a package-local ./src overlay into the
+# unpacked source tree before applying patches. Derived packages keep the
+# canonical overlay in AUDIOWRT_DERIVED_SRC_DIR instead, so recipes that need
+# it can opt into this equivalent prepare sequence.
+define Build/Prepare/AudioWRTDerived
+	$(PKG_UNPACK)
+	-find $(PKG_BUILD_DIR) -mindepth 1 -type f -not -name '.*' -not -name 'version.date' -printf '%T@\n' 2>/dev/null |\
+		cut -d. -f1 | sort -n | tail -n1 > $(PKG_BUILD_DIR)/version.date
+	[ ! -d "$(AUDIOWRT_DERIVED_SRC_DIR)" ] || $(CP) "$(AUDIOWRT_DERIVED_SRC_DIR)/." "$(PKG_BUILD_DIR)"
+	$(Build/Patch)
+endef
