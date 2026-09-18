@@ -64,7 +64,13 @@ grep -q "_('Primary DNS (optional)')" "$ui"
 grep -q '\${#key}.*-lt 8' "$script"
 grep -q '\${#key}.*-gt 63' "$script"
 
-# mDNS integration must preserve unrelated pre-existing interface entries.
+# Current AudioWRT images use the native renderer for mDNS/DNS-SD. umdns is
+# only a guarded backward-compatibility fallback and must never be required for
+# provisioning to succeed.
+grep -q '/usr/libexec/audiowrt-renderer' "$script"
+grep -q '/etc/init.d/audiowrt-renderer reload' "$script"
+grep -q '\[ -x /etc/init.d/umdns \]' "$script"
+grep -q 'return 0' "$script"
 if grep -q 'delete umdns.@umdns\[0\].network' "$script"; then
     echo 'ERROR: mDNS synchronization must not wipe unrelated OpenWrt network entries.' >&2
     exit 1
