@@ -31,6 +31,7 @@ grep -q 'AM_CONDITIONAL(\[ENABLE_CTL\]' "$ctl_helper"
 grep -q 'if ENABLE_CTL' "$ctl_helper"
 grep -q 'disable-ctl.py' "$makefile"
 
+# The source customization must be safe if prepare is repeated.
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/src/asound"
@@ -47,45 +48,7 @@ EOF
 python3 "$ctl_helper" "$tmp"
 python3 "$ctl_helper" "$tmp"
 grep -q 'AC_ARG_ENABLE(\[ctl\]' "$tmp/configure.ac"
-grep -q '^if ENABLE_CTL
-# The 8 MB baseline only needs the A2DP Source path. Do not build receiver-side
-# utilities or optional codecs/tools that increase compile and firmware size.
-for option in \
-    --disable-aplay \
-    --disable-cli \
-    --disable-ctl \
-    --disable-rfcomm \
-    --disable-hcitop \
-    --disable-manpages \
-    --disable-test \
-    --disable-aac \
-    --disable-aptx \
-    --disable-aptx-hd \
-    --disable-ldac \
-    --disable-mp3lame \
-    --disable-mpg123 \
-    --disable-msbc; do
-    grep -q -- "$option" "$makefile"
-done
-
-if grep -q 'bluealsa-aplay.*usr/bin' "$makefile"; then
-    echo 'ERROR: bluealsa-aplay must not be installed in the A2DP Source baseline.' >&2
-    exit 1
-fi
-
-grep -q 'src/bluealsa.*usr/bin/bluealsa' "$makefile"
-grep -q 'libasound_module_pcm_bluealsa.so' "$makefile"
-if grep -q 'libasound_module_\*_bluealsa' "$makefile"; then
-    echo 'ERROR: BlueALSA install must not wildcard-install the control plugin.' >&2
-    exit 1
-fi
-
-# BlueALSA now exposes only the PCM plugin. ioplug is required; the external
-# ALSA control plugin is not part of the AudioWRT runtime path.
-grep -q -- '--with-pcm-plugins=.*ioplug' "$alsa_makefile"
-
-echo 'Minimal BlueALSA build contract tests passed.'
- "$tmp/src/asound/Makefile.am"
+grep -q '^if ENABLE_CTL$' "$tmp/src/asound/Makefile.am"
 
 # The 8 MB baseline only needs the A2DP Source path. Do not build receiver-side
 # utilities or optional codecs/tools that increase compile and firmware size.
