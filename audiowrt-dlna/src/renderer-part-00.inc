@@ -24,7 +24,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include <uci.h>
 
 #define MAX_PLAYERS 16
 #define MAX_SUBSCRIBERS 12
@@ -293,7 +292,3 @@ static void load_descriptors(void)
     closedir(d);
 }
 
-static const char *uci_opt(struct uci_context *ctx, struct uci_section *s, const char *name)
-{
-    return uci_lookup_option_string(ctx, s, name);
-}
