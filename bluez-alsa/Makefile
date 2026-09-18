@@ -13,11 +13,23 @@ PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=AudioWRT
 PKG_FIXUP:=autoreconf
 PKG_BUILD_PARALLEL:=1
-# BlueALSA's configure step requires the host-side gdbus-codegen utility.
-# OpenWrt's glib2 HostBuild installs that tool into STAGING_DIR_HOSTPKG.
-PKG_BUILD_DEPENDS:=glib2/host
 
 include $(INCLUDE_DIR)/package.mk
+
+define Build/Prepare
+	$(call Build/Prepare/Default)
+	$(INSTALL_DIR) $(PKG_BUILD_DIR)/host-tools
+	$(CP) ./files/gdbus-codegen/* $(PKG_BUILD_DIR)/host-tools/
+	chmod +x $(PKG_BUILD_DIR)/host-tools/gdbus-codegen
+endef
+
+CONFIGURE_VARS += \
+	GDBUS_CODEGEN="$(PKG_BUILD_DIR)/host-tools/gdbus-codegen" \
+	PATH="$(PKG_BUILD_DIR)/host-tools:$$PATH"
+
+MAKE_VARS += \
+	GDBUS_CODEGEN="$(PKG_BUILD_DIR)/host-tools/gdbus-codegen" \
+	PATH="$(PKG_BUILD_DIR)/host-tools:$$PATH"
 
 define Package/bluez-alsa
   SECTION:=sound
