@@ -14,7 +14,6 @@ define Package/audiowrt-minimal-alsa
   TITLE:=AudioWRT minimal ALSA library
   URL:=https://www.alsa-project.org/
   DEPENDS:=@AUDIO_SUPPORT +libpthread +librt
-  EXTRA_DEPENDS:=kmod-sound-core (>=0)
   PROVIDES:=alsa-lib
 endef
 
