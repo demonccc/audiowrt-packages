@@ -244,14 +244,29 @@ setup_stop() {
 }
 
 mdns_sync() {
-	uci -q get umdns.@umdns[0] >/dev/null 2>&1 || uci -q add umdns umdns >/dev/null
-	for network in lan audiowrt_wifi audiowrt_setup; do
-		uci -q del_list umdns.@umdns[0].network="$network" 2>/dev/null || true
-		uci -q add_list umdns.@umdns[0].network="$network"
-	done
-	uci -q commit umdns
-	/etc/init.d/umdns enable >/dev/null 2>&1 || true
-	/etc/init.d/umdns restart >/dev/null 2>&1 || true
+	# Native AudioWRT renderer owns mDNS/DNS-SD in current images. It derives
+	# interface addresses dynamically, so a reload is only needed to refresh
+	# identity/friendly-name state after provisioning changes.
+	if [ -x /usr/libexec/audiowrt-renderer ] && [ -x /etc/init.d/audiowrt-renderer ]; then
+		/etc/init.d/audiowrt-renderer reload >/dev/null 2>&1 || true
+		return 0
+	fi
+
+	# Backward compatibility for older/non-renderer installations that still
+	# provide umdns. Never make Wi-Fi provisioning depend on mDNS availability.
+	if [ -x /etc/init.d/umdns ]; then
+		uci -q get umdns.@umdns[0] >/dev/null 2>&1 || uci -q add umdns umdns >/dev/null 2>&1 || true
+		if uci -q get umdns.@umdns[0] >/dev/null 2>&1; then
+			for network in lan audiowrt_wifi audiowrt_setup; do
+				uci -q del_list umdns.@umdns[0].network="$network" 2>/dev/null || true
+				uci -q add_list umdns.@umdns[0].network="$network" 2>/dev/null || true
+			done
+			uci -q commit umdns 2>/dev/null || true
+			/etc/init.d/umdns enable >/dev/null 2>&1 || true
+			/etc/init.d/umdns restart >/dev/null 2>&1 || true
+		fi
+	fi
+	return 0
 }
 
 case "${1:-}" in

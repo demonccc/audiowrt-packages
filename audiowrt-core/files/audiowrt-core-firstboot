@@ -26,7 +26,9 @@ uci -q commit audiowrt
 
 if [ -x /usr/sbin/audiowrt-wifi-client ]; then
 	/usr/sbin/audiowrt-wifi-client mdns-sync >/dev/null 2>&1 || true
-else
+elif [ -x /etc/init.d/audiowrt-renderer ]; then
+	/etc/init.d/audiowrt-renderer reload >/dev/null 2>&1 || true
+elif [ -x /etc/init.d/umdns ]; then
 	/etc/init.d/umdns restart >/dev/null 2>&1 || true
 fi
 exit 0
