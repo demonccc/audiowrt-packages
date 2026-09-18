@@ -38,6 +38,10 @@ jobs:
         shell: bash
         run: bash tests/test-wifi-client-package.sh
 
+      - name: Validate minimal WPA2/WPA3 supplicant contract
+        shell: bash
+        run: bash tests/test-wpa-supplicant-minimal.sh
+
       - name: Validate minimal BlueALSA contract
         shell: bash
         run: bash tests/test-bluealsa-minimal.sh
