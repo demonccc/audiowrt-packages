@@ -17,7 +17,6 @@ define Package/audiowrt-wpa-supplicant
   TITLE:=AudioWRT minimal WPA2/WPA3 station supplicant
   URL:=https://w1.fi/wpa_supplicant/
   DEPENDS:=+libnl-tiny +hostapd-common +ucode +libucode +ucode-mod-fs +ucode-mod-nl80211 +ucode-mod-rtnl +ucode-mod-ubus +ucode-mod-uloop +libubus +libblobmsg-json +libudebug +libmbedtls
-  EXTRA_DEPENDS:=hostapd-common (=$(PKG_VERSION)-r1)
   PROVIDES:=wpa-supplicant
   USERID:=network=101:network=101
 endef
