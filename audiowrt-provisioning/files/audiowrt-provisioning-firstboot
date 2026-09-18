@@ -38,7 +38,14 @@ uci -q commit wireless
 
 radio="$(/usr/sbin/audiowrt-wifi-client radios 2>/dev/null | sed -n '1s/|.*//p')"
 if [ -n "$radio" ]; then
-	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$name" "$setup_ip"
+	setup_error="$(mktemp)"
+	if ! /usr/sbin/audiowrt-wifi-client setup-start "$radio" "$name" "$setup_ip" 2>"$setup_error"; then
+		detail="$(tr '\r\n' '  ' < "$setup_error")"
+		rm -f "$setup_error"
+		logger -t audiowrt "Failed to start provisioning AP on $radio: ${detail:-unknown error}"
+		exit 1
+	fi
+	rm -f "$setup_error"
 else
 	logger -t audiowrt 'No Wi-Fi radio found; management remains available over Ethernet'
 fi
