@@ -5,7 +5,7 @@ AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/libs/alsa-lib/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -20,8 +20,8 @@ endef
 
 define Package/audiowrt-minimal-alsa/description
  ALSA userspace derived from the selected OpenWrt release. It retains PCM and
- mixer/control plus the hw, plug, rate, route, dmix and external I/O paths used
- by USB Audio and BlueALSA. MIDI, Sequencer, topology, UCM and unrelated
+ core PCM/control plus the hw, plug, rate, route, dmix and external PCM I/O paths
+ used by USB Audio and BlueALSA. MIDI, Sequencer, topology, UCM and unrelated
  plugins are omitted.
 endef
 
@@ -45,7 +45,7 @@ CONFIGURE_ARGS += \
 	--disable-alisp \
 	--disable-old-symbols \
 	--with-pcm-plugins=linear,route,rate,plug,dmix,ioplug \
-	--with-ctl-plugins=ext \
+	--with-ctl-plugins= \
 	--with-max-cards=8 \
 	$(SOFT_FLOAT_CONFIG_OPTION)
 

@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bluez-alsa
 PKG_VERSION:=4.1.1
-PKG_RELEASE:=7
+PKG_RELEASE:=8
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/Arkq/bluez-alsa/archive/v$(PKG_VERSION)
@@ -53,6 +53,7 @@ CONFIGURE_ARGS += \
 	--disable-aptx \
 	--disable-aptx-hd \
 	--disable-cli \
+	--disable-ctl \
 	--disable-debug \
 	--disable-faststream \
 	--disable-hcitop \
@@ -72,7 +73,7 @@ define Package/bluez-alsa/install
 	$(INSTALL_DIR) $(1)/etc/alsa/conf.d
 	$(CP) $(PKG_BUILD_DIR)/src/asound/20-bluealsa.conf $(1)/etc/alsa/conf.d/
 	$(INSTALL_DIR) $(1)/usr/lib/alsa-lib
-	$(CP) $(PKG_BUILD_DIR)/src/asound/.libs/libasound_module_*_bluealsa.so $(1)/usr/lib/alsa-lib/
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/src/asound/.libs/libasound_module_pcm_bluealsa.so $(1)/usr/lib/alsa-lib/
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/src/bluealsa $(1)/usr/bin/bluealsa
 	$(INSTALL_DIR) $(1)/etc/init.d

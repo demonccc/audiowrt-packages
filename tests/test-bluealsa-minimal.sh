@@ -6,6 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 makefile="$repo_root/bluez-alsa/Makefile"
 alsa_makefile="$repo_root/audiowrt-minimal-alsa/Makefile"
 patch="$repo_root/bluez-alsa/patches/005-fix-gcc14-musl-basename.patch"
+ctl_patch="$repo_root/bluez-alsa/patches/040-add-disable-ctl-option.patch"
 
 # GCC 14 + musl rejects the legacy basename() declaration used by BlueALSA 4.1.1.
 grep -q '^+#include <libgen.h>$' "$patch"
@@ -25,11 +26,16 @@ grep -Fq 'PATH="$(PKG_BUILD_DIR)/host-tools:$$$$PATH"' "$makefile" || {
 }
 python3 "$repo_root/bluez-alsa/files/gdbus-codegen/gdbus-codegen" --help >/dev/null
 
+grep -q 'AC_ARG_ENABLE(\[ctl\]' "$ctl_patch"
+grep -q 'AM_CONDITIONAL(\[ENABLE_CTL\]' "$ctl_patch"
+grep -q 'if ENABLE_CTL' "$ctl_patch"
+
 # The 8 MB baseline only needs the A2DP Source path. Do not build receiver-side
 # utilities or optional codecs/tools that increase compile and firmware size.
 for option in \
     --disable-aplay \
     --disable-cli \
+    --disable-ctl \
     --disable-rfcomm \
     --disable-hcitop \
     --disable-manpages \
@@ -50,11 +56,14 @@ if grep -q 'bluealsa-aplay.*usr/bin' "$makefile"; then
 fi
 
 grep -q 'src/bluealsa.*usr/bin/bluealsa' "$makefile"
-grep -q 'libasound_module_.*_bluealsa' "$makefile"
+grep -q 'libasound_module_pcm_bluealsa.so' "$makefile"
+if grep -q 'libasound_module_\*_bluealsa' "$makefile"; then
+    echo 'ERROR: BlueALSA install must not wildcard-install the control plugin.' >&2
+    exit 1
+fi
 
-# BlueALSA builds external PCM and control plugins. Its PCM implementation uses
-# ALSA ioplug and its control implementation uses the external control API.
+# BlueALSA now exposes only the PCM plugin. ioplug is required; the external
+# ALSA control plugin is not part of the AudioWRT runtime path.
 grep -q -- '--with-pcm-plugins=.*ioplug' "$alsa_makefile"
-grep -q -- '--with-ctl-plugins=ext' "$alsa_makefile"
 
 echo 'Minimal BlueALSA build contract tests passed.'

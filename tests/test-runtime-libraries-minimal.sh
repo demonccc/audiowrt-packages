@@ -9,9 +9,9 @@ mbedtls="$repo_root/audiowrt-minimal-mbedtls/Makefile"
 bluetooth="$repo_root/audiowrt-kmod-bluetooth/Makefile"
 bluetooth_integration="$repo_root/audiowrt-bluetooth/Makefile"
 
-# ALSA keeps every interface and PCM plugin used by the AudioWRT USB,
-# USB Audio and BlueALSA paths, but drops MIDI and general-purpose features.
-for keep in '--with-pcm-plugins=linear,route,rate,plug,dmix,ioplug' '--with-ctl-plugins=ext'; do
+# ALSA keeps the PCM paths and built-in hw control used by AudioWRT USB Audio
+# and BlueALSA, but drops external control, MIDI and general-purpose plugins.
+for keep in '--with-pcm-plugins=linear,route,rate,plug,dmix,ioplug' '--with-ctl-plugins='; do
 	grep -q -- "$keep" "$alsa"
 done
 for drop in '--disable-ucm' '--disable-topology' '--disable-alisp' '--disable-rawmidi' '--disable-seq' '--disable-hwdep'; do
