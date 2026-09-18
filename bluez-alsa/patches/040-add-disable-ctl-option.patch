@@ -1,0 +1,28 @@
+--- a/configure.ac
++++ b/configure.ac
+@@ -97,6 +97,11 @@ AC_PATH_PROGS([GDBUS_CODEGEN], [gdbus-codegen])
+ AS_IF([test "x$GDBUS_CODEGEN" = "x"], [AC_MSG_ERROR([[gdbus-codegen not found]])])
+ 
++AC_ARG_ENABLE([ctl],
++	[AS_HELP_STRING([--disable-ctl], [disable building of the BlueALSA ALSA control plugin])],
++	[], [enable_ctl=yes])
++AM_CONDITIONAL([ENABLE_CTL], [test "x$enable_ctl" != "xno"])
++
+ PKG_CHECK_MODULES([LIBBSD], [libbsd >= 0.8],
+ 	AC_DEFINE([HAVE_LIBBSD], [1], [Define to 1 if you have the libbsd library.]), [:])
+ 
+--- a/src/asound/Makefile.am
++++ b/src/asound/Makefile.am
+@@ -1,7 +1,11 @@
+ # BlueALSA - Makefile.am
+ # Copyright (c) 2016-2023 Arkadiusz Bokowy
+ 
+-asound_module_ctl_LTLIBRARIES = libasound_module_ctl_bluealsa.la
++asound_module_ctl_LTLIBRARIES =
++if ENABLE_CTL
++asound_module_ctl_LTLIBRARIES += libasound_module_ctl_bluealsa.la
++endif
++
+ asound_module_pcm_LTLIBRARIES = libasound_module_pcm_bluealsa.la
+ asound_module_conf_DATA = 20-bluealsa.conf
+ 
