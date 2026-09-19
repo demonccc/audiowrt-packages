@@ -90,8 +90,14 @@ ifeq ($(DEVICE_TYPE),nas)
 	echo "CONFIG_HDPARM=y" >> $(PKG_BUILD_DIR)/.config
 endif
 	grep 'CONFIG_BUSYBOX_$(BUSYBOX_SYM)' $(TOPDIR)/.config | sed -e "s,\\(# \\)\\?CONFIG_BUSYBOX_$(BUSYBOX_SYM)_\\(.*\\),\\1CONFIG_\\2,g" >> $(PKG_BUILD_DIR)/.config
-	sed -i -e '/^CONFIG_UDHCPD=/d' -e '/^# CONFIG_UDHCPD is not set/d' $(PKG_BUILD_DIR)/.config
+	sed -i \
+		-e '/^CONFIG_UDHCPD=/d' \
+		-e '/^# CONFIG_UDHCPD is not set/d' \
+		-e '/^CONFIG_DHCPD_LEASES_FILE=/d' \
+		-e '/^# CONFIG_DHCPD_LEASES_FILE is not set/d' \
+		$(PKG_BUILD_DIR)/.config
 	echo 'CONFIG_UDHCPD=y' >> $(PKG_BUILD_DIR)/.config
+	echo 'CONFIG_DHCPD_LEASES_FILE="/tmp/audiowrt-udhcpd.leases"' >> $(PKG_BUILD_DIR)/.config
 	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
 endef
 

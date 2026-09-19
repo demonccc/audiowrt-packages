@@ -21,7 +21,7 @@ function parseScan(text) {
 			var value = JSON.parse(json.join('\n'));
 			(value.results || []).forEach(function(n) {
 				if (!n.ssid) return;
-				networks.push({ radio: radio, band: band, ssid: n.ssid, bssid: n.bssid || '', channel: n.channel || '', signal: Number(n.signal || -999), encryption: n.encryption || {} });
+				networks.push({ radio: radio, band: scanBand(n, band), generation: wifiGeneration(n), ssid: n.ssid, bssid: n.bssid || '', channel: n.channel || '', signal: Number(n.signal || -999), encryption: n.encryption || {} });
 			});
 		} catch (e) { }
 	}
@@ -60,6 +60,30 @@ function bandLabel(value) {
 	return value || '-';
 }
 
+function scanBand(network, fallback) {
+	var band = String(network && network.band != null ? network.band : '').toLowerCase();
+	var mhz = Number(network && network.mhz || 0);
+	if (band === '2' || band === '2g' || band === '2.4') return '2g';
+	if (band === '5' || band === '5g') return '5g';
+	if (band === '6' || band === '6g') return '6g';
+	if (mhz >= 5925) return '6g';
+	if (mhz >= 4900) return '5g';
+	if (mhz >= 2400) return '2g';
+	return fallback || '';
+}
+
+function wifiGeneration(network) {
+	if (network && network.eht_operation) return 7;
+	if (network && network.he_operation) return 6;
+	if (network && network.vht_operation) return 5;
+	if (network && network.ht_operation) return 4;
+	return null;
+}
+
+function wifiLabel(generation) {
+	return generation ? _('Wi-Fi %d').format(generation) : _('Legacy Wi-Fi');
+}
+
 function groupedNetworks(networks) {
 	var groups = {};
 	networks.forEach(function(n) {
@@ -71,7 +95,12 @@ function groupedNetworks(networks) {
 		group.aps.sort(function(a, b) { return b.signal - a.signal; });
 		group.best = group.aps[0];
 		group.bands = [];
-		group.aps.forEach(function(ap) { if (group.bands.indexOf(ap.band) < 0) group.bands.push(ap.band); });
+		group.generations = [];
+		group.aps.forEach(function(ap) {
+			if (ap.band && group.bands.indexOf(ap.band) < 0) group.bands.push(ap.band);
+			if (ap.generation && group.generations.indexOf(ap.generation) < 0) group.generations.push(ap.generation);
+		});
+		group.generations.sort(function(a, b) { return a - b; });
 		return group;
 	}).sort(function(a, b) { return b.best.signal - a.best.signal; });
 }
@@ -159,15 +188,16 @@ return view.extend({
 			var nodes = groups.map(function(group) {
 				var details = E('div', { 'style': 'display:none;margin:.25rem 0 1rem 1rem' }, group.aps.map(function(ap) {
 					return E('div', { 'class': 'tr' }, [
-						E('div', { 'class': 'td left' }, bandLabel(ap.band) + ' · ' + _('Channel %s').format(ap.channel || '-')),
+						E('div', { 'class': 'td left' }, wifiLabel(ap.generation) + ' · ' + bandLabel(ap.band) + ' · ' + _('Channel %s').format(ap.channel || '-')),
 						E('div', { 'class': 'td left' }, String(ap.signal) + ' dBm'),
 						E('div', { 'class': 'td left' }, ap.bssid || '-'),
 						E('div', { 'class': 'td right' }, E('button', { 'class': 'btn', 'click': function() { self.connectDialog(ap, true); } }, _('Select')))
 					]);
 				}));
 				var bands = group.bands.map(bandLabel).join(' / ');
+				var standards = group.generations.length ? group.generations.map(wifiLabel).join(' / ') : _('Legacy Wi-Fi');
 				var main = E('div', { 'class': 'tr' }, [
-					E('div', { 'class': 'td left' }, [ E('strong', {}, group.ssid), E('div', {}, bands + ' · ' + _('Best: %s dBm').format(group.best.signal)) ]),
+					E('div', { 'class': 'td left' }, [ E('strong', {}, group.ssid), E('div', {}, standards + ' · ' + bands + ' · ' + _('Best: %s dBm').format(group.best.signal)) ]),
 					E('div', { 'class': 'td left' }, _('%d access points').format(group.aps.length)),
 					E('div', { 'class': 'td left' }, securityLabel(group.best.encryption)),
 					E('div', { 'class': 'td right' }, [
@@ -184,7 +214,7 @@ return view.extend({
 	connectDialog: function(network, pinBssid) {
 		var encryption = encryptionMode(network.encryption), password = passwordField(_('Wi-Fi password'));
 		var ip = ipConfigFields(this.status);
-		var info = bandLabel(network.band) + ' · ' + _('Channel %s').format(network.channel || '-');
+		var info = wifiLabel(network.generation) + ' · ' + bandLabel(network.band) + ' · ' + _('Channel %s').format(network.channel || '-');
 		if (pinBssid && network.bssid) info += ' · ' + network.bssid;
 		var self = this;
 		ui.showModal(_('Connect to %s').format(network.ssid), [

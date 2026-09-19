@@ -38,9 +38,9 @@ jobs:
         shell: bash
         run: bash tests/test-wifi-client-package.sh
 
-      - name: Validate minimal WPA2/WPA3 supplicant contract
+      - name: Validate minimal multicall wpad contract
         shell: bash
-        run: bash tests/test-wpa-supplicant-minimal.sh
+        run: bash tests/test-wpad-minimal.sh
 
       - name: Validate minimal BlueALSA contract
         shell: bash
@@ -132,11 +132,9 @@ jobs:
           for package in \
             audiowrt-busybox \
             audiowrt-minimal-alsa \
-            audiowrt-minimal-mbedtls \
-            audiowrt-dropbear \
             audiowrt-minimal-upmpdcli \
             audiowrt-umdns \
-            audiowrt-wpa-supplicant \
+            audiowrt-wpad \
             audiowrt-audio \
             audiowrt-core \
             audiowrt-provisioning \
@@ -154,8 +152,6 @@ jobs:
             audiowrt-airplay \
             librespot \
             audiowrt-spotify \
-            audiowrt-sbc \
-            audiowrt-bluez-libs \
             audiowrt-bluez \
             audiowrt-btctl \
             bluez-alsa \
