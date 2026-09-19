@@ -4,15 +4,15 @@
 set -eu
 
 setup_ip() { uci -q get audiowrt.main.setup_ip || echo '192.168.77.1'; }
+setup_ssid() { /usr/libexec/audiowrt/setup-ssid 2>/dev/null || echo 'AudioWRT-Setup'; }
 first_radio() { /usr/sbin/audiowrt-wifi-client radios 2>/dev/null | sed -n '1s/|.*//p'; }
 sync_internal() { [ -x /usr/sbin/audiowrt-storage ] && /usr/sbin/audiowrt-storage sync-core >/dev/null 2>&1 || true; }
 
 provisioning_start() {
 	radio="$(first_radio)"
 	[ -n "$radio" ] || { echo 'ERROR: no Wi-Fi radio is available.' >&2; exit 3; }
-	name="$(uci -q get system.@system[0].hostname || echo AudioWRT)"
 	/usr/sbin/audiowrt-wifi-client disconnect >/dev/null 2>&1 || true
-	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$name" "$(setup_ip)"
+	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$(setup_ssid)" "$(setup_ip)"
 	uci -q set audiowrt.main.provisioning='1'
 	uci -q set audiowrt.main.last_error=''
 	uci -q commit audiowrt
