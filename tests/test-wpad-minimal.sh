@@ -25,9 +25,9 @@ grep -q '$(LN) wpad $(1)/usr/sbin/wpa_supplicant' "$makefile"
 grep -q 'hostapd.uc' "$makefile"
 grep -q 'wpa_supplicant.uc' "$makefile"
 
-# The AP side is open-only and intentionally does not carry enterprise/router
-# features or its own TLS implementation.
-for keep in     CONFIG_DRIVER_NL80211=y     CONFIG_IEEE80211N=y     CONFIG_UBUS=y     CONFIG_DEBUG_SYSLOG=y     CONFIG_DEBUG_SYSLOG_FACILITY=LOG_DAEMON     CONFIG_NO_ACCOUNTING=y     CONFIG_NO_RADIUS=y     CONFIG_NO_VLAN=y     CONFIG_NO_DUMP_STATE=y     CONFIG_NO_STDOUT_DEBUG=y     CONFIG_TLS=none; do
+# The AP side is open-only. It shares the supplicant's mbedTLS crypto backend
+# for multicall deduplication but enables no EAP/TLS server methods.
+for keep in     CONFIG_DRIVER_NL80211=y     CONFIG_IEEE80211N=y     CONFIG_UBUS=y     CONFIG_DEBUG_SYSLOG=y     CONFIG_DEBUG_SYSLOG_FACILITY=LOG_DAEMON     CONFIG_NO_ACCOUNTING=y     CONFIG_NO_RADIUS=y     CONFIG_NO_VLAN=y     CONFIG_NO_DUMP_STATE=y     CONFIG_NO_STDOUT_DEBUG=y     CONFIG_TLS=mbedtls; do
     grep -qx "$keep" "$hostapd_config"
 done
 
