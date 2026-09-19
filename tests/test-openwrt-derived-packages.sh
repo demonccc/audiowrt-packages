@@ -7,10 +7,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 declare -A canonical=(
   [audiowrt-busybox]='$(TOPDIR)/feeds/base/utils/busybox/Makefile'
   [audiowrt-minimal-alsa]='$(TOPDIR)/feeds/packages/libs/alsa-lib/Makefile'
-  [audiowrt-dropbear]='$(TOPDIR)/feeds/base/network/services/dropbear/Makefile'
   [audiowrt-wpad]='$(TOPDIR)/feeds/base/network/services/hostapd/Makefile'
   [audiowrt-umdns]='$(TOPDIR)/feeds/base/network/services/umdns/Makefile'
-  [audiowrt-sbc]='$(TOPDIR)/feeds/packages/libs/sbc/Makefile'
   [audiowrt-bluez]='$(TOPDIR)/feeds/packages/utils/bluez/Makefile'
 )
 
@@ -122,6 +120,9 @@ if grep -Fq 'audiowrt-openwrt-derived.mk' "$renderer_makefile"; then
 fi
 
 test ! -e "$repo_root/audiowrt-minimal-mpd/Makefile"
+test ! -e "$repo_root/audiowrt-dropbear/Makefile"
+test ! -e "$repo_root/audiowrt-sbc/Makefile"
+
 
 grep -Fq 'PROVIDES:=hostapd wpa-supplicant' "$repo_root/audiowrt-wpad/Makefile"
 grep -Fq '$(Build/Prepare/AudioWRTDerived)' "$repo_root/audiowrt-wpad/Makefile"
