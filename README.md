@@ -30,13 +30,14 @@ Current source-derived userspace packages are:
 - `audiowrt-minimal-alsa` -> OpenWrt packages feed `alsa-lib`;
 - `audiowrt-minimal-mbedtls` -> OpenWrt `mbedtls`;
 - `audiowrt-dropbear` -> OpenWrt `dropbear`;
+- `audiowrt-wpad` -> OpenWrt `hostapd` source, linked as one multicall `hostapd` + `wpa_supplicant` binary;
 - `audiowrt-umdns` -> OpenWrt `umdns`;
 - `audiowrt-sbc` -> OpenWrt packages feed `sbc`;
 - `audiowrt-bluez` -> OpenWrt packages feed `bluez`.
 
 Not every AudioWRT package that customizes behavior should rebuild upstream source. If the AudioWRT delta is only runtime policy/configuration, the exact official release binary must be reused instead. This avoids rebuilding OpenWrt dependency graphs that already exist as release packages.
 
-`audiowrt-wpa-supplicant` is a selector rather than a source fork: it depends on the exact `wpa-supplicant-mbedtls` package shipped by the selected OpenWrt SDK/release.
+`audiowrt-wpad` is deliberately source-derived because AudioWRT changes the compiled feature set. It uses the exact hostap source and OpenWrt patch set from the selected release, builds a single multicall ELF, and exposes it through `/usr/sbin/hostapd` and `/usr/sbin/wpa_supplicant`. The station side keeps only WPA2/WPA3 Personal + PMF; the AP side is only the temporary open provisioning AP.
 
 `audiowrt-minimal-upmpdcli` follows the same binary-reuse rule. It depends on the exact OpenWrt `upmpdcli` and `mpd-mini` release packages and only applies the AudioWRT renderer runtime profile: OpenHome disabled, MPD on loopback and a constrained FLAC/MP3 protocol advertisement. It is deliberately built with `NO_DEPS=1`; it must never cause MPD, libupnpp or their dependency graphs to be rebuilt.
 
