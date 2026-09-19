@@ -24,6 +24,7 @@ grep -q '$(LN) wpad $(1)/usr/sbin/hostapd' "$makefile"
 grep -q '$(LN) wpad $(1)/usr/sbin/wpa_supplicant' "$makefile"
 grep -q 'hostapd.uc' "$makefile"
 grep -q 'wpa_supplicant.uc' "$makefile"
+grep -q '900-noop-syslog-without-debug.patch' < <(find "$repo_root/audiowrt-wpad/patches" -maxdepth 1 -type f -printf '%f\n')
 
 # The AP side is open-only. It shares the supplicant's mbedTLS crypto backend
 # for multicall deduplication but enables no EAP/TLS server methods.
