@@ -9,8 +9,7 @@ declare -A canonical=(
   [audiowrt-minimal-alsa]='$(TOPDIR)/feeds/packages/libs/alsa-lib/Makefile'
   [audiowrt-minimal-mbedtls]='$(TOPDIR)/feeds/base/libs/mbedtls/Makefile'
   [audiowrt-dropbear]='$(TOPDIR)/feeds/base/network/services/dropbear/Makefile'
-  [audiowrt-wpa-supplicant]='$(TOPDIR)/feeds/base/network/services/hostapd/Makefile'
-  [audiowrt-hostapd]='$(TOPDIR)/feeds/base/network/services/hostapd/Makefile'
+  [audiowrt-wpad]='$(TOPDIR)/feeds/base/network/services/hostapd/Makefile'
   [audiowrt-umdns]='$(TOPDIR)/feeds/base/network/services/umdns/Makefile'
   [audiowrt-sbc]='$(TOPDIR)/feeds/packages/libs/sbc/Makefile'
   [audiowrt-bluez]='$(TOPDIR)/feeds/packages/utils/bluez/Makefile'
@@ -125,12 +124,12 @@ fi
 
 test ! -e "$repo_root/audiowrt-minimal-mpd/Makefile"
 
-grep -Fq 'PROVIDES:=wpa-supplicant' "$repo_root/audiowrt-wpa-supplicant/Makefile"
-grep -Fq 'PROVIDES:=hostapd' "$repo_root/audiowrt-hostapd/Makefile"
-grep -Fq '$(Build/Prepare/AudioWRTDerived)' "$repo_root/audiowrt-hostapd/Makefile"
-grep -Fq '$(Build/Prepare/AudioWRTDerived)' "$repo_root/audiowrt-wpa-supplicant/Makefile"
-if grep -Fq '+wpa-supplicant-mbedtls' "$repo_root/audiowrt-wpa-supplicant/Makefile"; then
-  echo 'ERROR: minimal WPA package regressed to the full OpenWrt supplicant metapackage.' >&2
+grep -Fq 'PROVIDES:=hostapd wpa-supplicant' "$repo_root/audiowrt-wpad/Makefile"
+grep -Fq '$(Build/Prepare/AudioWRTDerived)' "$repo_root/audiowrt-wpad/Makefile"
+grep -Fq 'hostapd_multi.a' "$repo_root/audiowrt-wpad/Makefile"
+grep -Fq 'wpa_supplicant_multi.a' "$repo_root/audiowrt-wpad/Makefile"
+if grep -Fq '+wpa-supplicant-mbedtls' "$repo_root/audiowrt-wpad/Makefile"; then
+  echo 'ERROR: AudioWRT wpad regressed to the full OpenWrt supplicant metapackage.' >&2
   exit 1
 fi
 grep -Fq 'Repackages the exact-release OpenWrt Bluetooth core' "$repo_root/audiowrt-kmod-bluetooth/Makefile"
