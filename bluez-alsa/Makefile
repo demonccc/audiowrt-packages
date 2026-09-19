@@ -36,7 +36,7 @@ define Package/bluez-alsa
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=BlueALSA Bluetooth audio backend
-  DEPENDS:=+alsa-lib +audiowrt-bluez +audiowrt-bluez-libs +glib2 +audiowrt-sbc +dbus
+  DEPENDS:=+alsa-lib +audiowrt-bluez +bluez-libs +glib2 +sbc +dbus
   URL:=https://github.com/arkq/bluez-alsa
 endef
 
