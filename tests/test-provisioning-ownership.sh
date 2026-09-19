@@ -32,7 +32,7 @@ grep -q 'SERVER_ADDR' "$root_router"
 grep -q "provisioning.*=.*'1'" "$root_router"
 grep -q "redirect '/cgi-bin/luci/'" "$root_router"
 grep -q 'tail -c 4' "$setup_ssid"
-grep -q '+audiowrt-hostapd' "$provisioning_makefile"
+grep -q '+hostapd' "$provisioning_makefile"
 grep -q '+audiowrt-udhcpd' "$provisioning_makefile"
 grep -q 'audiowrt-storage.main' "$storage"
 
