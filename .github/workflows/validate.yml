@@ -132,7 +132,6 @@ jobs:
           for package in \
             audiowrt-busybox \
             audiowrt-minimal-alsa \
-            audiowrt-dropbear \
             audiowrt-minimal-upmpdcli \
             audiowrt-umdns \
             audiowrt-wpad \
@@ -153,8 +152,6 @@ jobs:
             audiowrt-airplay \
             librespot \
             audiowrt-spotify \
-            audiowrt-sbc \
-            audiowrt-bluez-libs \
             audiowrt-bluez \
             audiowrt-btctl \
             bluez-alsa \
