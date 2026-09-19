@@ -47,12 +47,7 @@ if grep -Eq 'DEPENDS:=.*(\+audiowrt-bluez-libs|\+audiowrt-sbc)' "$bluealsa"; the
     exit 1
 fi
 
-# BlueALSA and the product wrapper must use only the minimal AudioWRT packages.
-grep -q 'DEPENDS:=.*+audiowrt-bluez.*+audiowrt-bluez-libs.*+glib2.*+audiowrt-sbc' "$bluealsa"
-if grep -Eq 'DEPENDS:=.*(\+bluez-daemon|\+bluez-libs|\+sbc([[:space:]]|$))' "$bluealsa"; then
-    echo 'ERROR: BlueALSA still depends on the generic BlueZ/SBC runtime.' >&2
-    exit 1
-fi
+# BlueALSA and the product wrapper keep only AudioWRT-specific integration code.
 grep -q 'DEPENDS:=.*+audiowrt-bluez.*+audiowrt-btctl' "$bluetooth"
 grep -q '^  EXTRA_DEPENDS:=kmod-bluetooth (>=0), kmod-btusb (>=0)$' "$bluetooth"
 if grep -q 'DEPENDS:=.*+kmod-bluetooth.*+kmod-btusb' "$bluetooth"; then
