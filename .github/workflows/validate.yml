@@ -132,7 +132,6 @@ jobs:
           for package in \
             audiowrt-busybox \
             audiowrt-minimal-alsa \
-            audiowrt-minimal-mbedtls \
             audiowrt-dropbear \
             audiowrt-minimal-upmpdcli \
             audiowrt-umdns \
