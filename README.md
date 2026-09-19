@@ -28,14 +28,13 @@ Current source-derived userspace packages are:
 
 - `audiowrt-busybox` -> OpenWrt `busybox`;
 - `audiowrt-minimal-alsa` -> OpenWrt packages feed `alsa-lib`;
-- `audiowrt-minimal-mbedtls` -> OpenWrt `mbedtls`;
 - `audiowrt-dropbear` -> OpenWrt `dropbear`;
 - `audiowrt-wpad` -> OpenWrt `hostapd` source, linked as one multicall `hostapd` + `wpa_supplicant` binary;
 - `audiowrt-umdns` -> OpenWrt `umdns`;
 - `audiowrt-sbc` -> OpenWrt packages feed `sbc`;
 - `audiowrt-bluez` -> OpenWrt packages feed `bluez`.
 
-Not every AudioWRT package that customizes behavior should rebuild upstream source. If the AudioWRT delta is only runtime policy/configuration, the exact official release binary must be reused instead. This avoids rebuilding OpenWrt dependency graphs that already exist as release packages.
+Not every AudioWRT package that customizes behavior should rebuild upstream source. If the AudioWRT delta is only runtime policy/configuration, the exact official release binary must be reused instead. This avoids rebuilding OpenWrt dependency graphs that already exist as release packages. TLS is intentionally kept on the official OpenWrt `libmbedtls` runtime; AudioWRT does not replace or trim it.
 
 `audiowrt-wpad` is deliberately source-derived because AudioWRT changes the compiled feature set. It uses the exact hostap source and OpenWrt patch set from the selected release, builds a single multicall ELF, and exposes it through `/usr/sbin/hostapd` and `/usr/sbin/wpa_supplicant`. The station side keeps only WPA2/WPA3 Personal + PMF; the AP side is only the temporary open provisioning AP.
 
