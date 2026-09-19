@@ -178,26 +178,59 @@ disconnect_wifi() {
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
 }
 
+setup_interface_device() {
+	ubus call network.interface.audiowrt_setup status 2>/dev/null |
+		sed -n 's/^[[:space:]]*"device":[[:space:]]*"\([^"]*\)".*/\1/p' |
+		head -n 1
+}
+
+wait_setup_interface() {
+	tries=0
+	while [ "$tries" -lt 15 ]; do
+		status="$(ubus call network.interface.audiowrt_setup status 2>/dev/null || true)"
+		device="$(printf '%s\n' "$status" |
+			sed -n 's/^[[:space:]]*"device":[[:space:]]*"\([^"]*\)".*/\1/p' |
+			head -n 1)"
+		if [ -n "$device" ] &&
+		   printf '%s\n' "$status" | grep -q '"up":[[:space:]]*true' &&
+		   ip link show "$device" >/dev/null 2>&1; then
+			printf '%s\n' "$device"
+			return 0
+		fi
+		sleep 1
+		tries=$((tries + 1))
+	done
+	return 1
+}
+
 setup_dhcp_enable() {
 	setup_ip="$1"
+	interface="$2"
 	# Provisioning is the only DHCP server use case. Use the standalone BusyBox
 	# udhcpd binary instead of installing OpenWrt's long-running DHCP daemon.
 	[ -x /usr/sbin/udhcpd ] || return 0
+	[ -n "$interface" ] || {
+		echo 'ERROR: provisioning interface is not available for DHCP.' >&2
+		return 1
+	}
 	cat > /tmp/audiowrt-udhcpd.conf <<-EOF
 	start ${setup_ip%.*}.100
 	end ${setup_ip%.*}.199
-	interface br-audiowrt_setup
+	interface $interface
+	max_leases 100
+	lease_file /tmp/audiowrt-udhcpd.leases
+	pidfile /var/run/audiowrt-udhcpd.pid
 	option lease 600
 	option router $setup_ip
 	option dns $setup_ip
 	option subnet 255.255.255.0
 	EOF
-	killall udhcpd 2>/dev/null || true
+	: > /tmp/audiowrt-udhcpd.leases
 }
 
 setup_dhcp_disable() {
 	killall udhcpd 2>/dev/null || true
-	rm -f /tmp/audiowrt-udhcpd.conf
+	rm -f /tmp/audiowrt-udhcpd.conf /tmp/audiowrt-udhcpd.leases /var/run/audiowrt-udhcpd.pid
 }
 
 setup_start() {
@@ -211,8 +244,6 @@ setup_start() {
 	uci -q set network.audiowrt_setup.ipaddr="$setup_ip"
 	uci -q set network.audiowrt_setup.netmask='255.255.255.0'
 
-	uci -q delete dhcp.audiowrt_setup 2>/dev/null || true
-
 	uci -q delete wireless.audiowrt_setup 2>/dev/null || true
 	uci -q set wireless.audiowrt_setup='wifi-iface'
 	uci -q set wireless.audiowrt_setup.device="$radio"
@@ -224,21 +255,43 @@ setup_start() {
 	uci -q set wireless.audiowrt_setup.disabled='0'
 
 	uci -q commit network
-	uci -q commit dhcp
 	uci -q commit wireless
-	setup_dhcp_enable "$setup_ip"
-	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
-	/etc/init.d/audiowrt-udhcpd restart >/dev/null 2>&1 || true
+
+	if ! wifi reload >/dev/null 2>&1 && ! wifi >/dev/null 2>&1; then
+		echo 'ERROR: failed to reload Wi-Fi for provisioning AP.' >&2
+		return 13
+	fi
+
+	setup_if="$(wait_setup_interface || true)"
+	[ -n "$setup_if" ] || {
+		echo 'ERROR: provisioning AP did not become operational.' >&2
+		return 14
+	}
+
+	if [ -x /usr/sbin/udhcpd ]; then
+		setup_dhcp_enable "$setup_ip" "$setup_if" || return 15
+		[ -x /etc/init.d/audiowrt-udhcpd ] || {
+			echo 'ERROR: AudioWRT DHCP service is missing.' >&2
+			return 16
+		}
+		/etc/init.d/audiowrt-udhcpd restart >/dev/null 2>&1 || {
+			echo 'ERROR: failed to start provisioning DHCP.' >&2
+			return 17
+		}
+		sleep 1
+		ps w | grep -q '[u]dhcpd .*audiowrt-udhcpd.conf' || {
+			echo 'ERROR: provisioning DHCP did not stay running.' >&2
+			return 18
+		}
+	fi
+
 	mdns_sync
 }
 
 setup_stop() {
-	setup_ip="$(uci -q get network.audiowrt_setup.ipaddr || true)"
 	uci -q set wireless.audiowrt_setup.disabled='1' 2>/dev/null || true
-	uci -q set dhcp.audiowrt_setup.dhcpv4='disabled' 2>/dev/null || true
 	uci -q commit wireless
-	uci -q commit dhcp
-	setup_dhcp_disable "$setup_ip"
+	setup_dhcp_disable
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
 	mdns_sync
 }
