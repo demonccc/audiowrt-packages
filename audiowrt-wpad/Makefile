@@ -30,7 +30,7 @@ define Package/audiowrt-wpad/description
  client-only and keeps WPA2-PSK, WPA3-SAE, PMF, nl80211 and OpenWrt UBus/UCode
  integration. The hostapd entry point exists only for the temporary open
  provisioning AP and omits enterprise authentication, RADIUS, VLAN, WPS,
- ACS, VHT/HE/EHT and TLS functionality.
+ ACS, VHT/HE/EHT and EAP/TLS server methods.
 endef
 
 TARGET_CPPFLAGS := \
