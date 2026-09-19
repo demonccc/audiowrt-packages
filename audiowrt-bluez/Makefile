@@ -9,24 +9,11 @@ PKG_RELEASE:=2
 
 include $(INCLUDE_DIR)/package.mk
 
-define Package/audiowrt-bluez-libs
-  SECTION:=libs
-  CATEGORY:=Libraries
-  TITLE:=AudioWRT minimal BlueZ library
-  DEPENDS:=+libpthread
-  URL:=https://www.bluez.org/
-endef
-
-define Package/audiowrt-bluez-libs/description
- Minimal libbluetooth runtime derived from the BlueZ package of the selected
- OpenWrt release and built together with the AudioWRT BlueZ daemon.
-endef
-
 define Package/audiowrt-bluez
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=AudioWRT minimal BlueZ audio daemon
-  DEPENDS:=+audiowrt-bluez-libs +glib2 +dbus
+  DEPENDS:=+bluez-libs +glib2 +dbus
   URL:=https://www.bluez.org/
 endef
 
@@ -77,20 +64,6 @@ CONFIGURE_ARGS += \
 	--disable-vcp \
 	--enable-threads
 
-define Build/InstallDev
-	$(INSTALL_DIR) $(1)/usr/include
-	$(CP) $(PKG_INSTALL_DIR)/usr/include/bluetooth $(1)/usr/include/
-	$(INSTALL_DIR) $(1)/usr/lib
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libbluetooth.{a,so*} $(1)/usr/lib/
-	$(INSTALL_DIR) $(1)/usr/lib/pkgconfig
-	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/lib/pkgconfig/bluez.pc $(1)/usr/lib/pkgconfig/
-endef
-
-define Package/audiowrt-bluez-libs/install
-	$(INSTALL_DIR) $(1)/usr/lib
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libbluetooth.so.* $(1)/usr/lib/
-endef
-
 define Package/audiowrt-bluez/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/lib/bluetooth/bluetoothd $(1)/usr/sbin/bluetoothd
@@ -102,5 +75,4 @@ define Package/audiowrt-bluez/install
 	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/bluetoothd.init $(1)/etc/init.d/bluetoothd
 endef
 
-$(eval $(call BuildPackage,audiowrt-bluez-libs))
 $(eval $(call BuildPackage,audiowrt-bluez))
