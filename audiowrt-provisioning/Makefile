@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-provisioning
-PKG_RELEASE:=5
+PKG_RELEASE:=6
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 
@@ -33,6 +33,7 @@ define Package/audiowrt-provisioning/install
 
 	$(INSTALL_DIR) $(1)/usr/libexec/audiowrt
 	$(INSTALL_BIN) ./files/audiowrt-provision $(1)/usr/libexec/audiowrt/provision-wifi
+	$(INSTALL_BIN) ./files/audiowrt-setup-ssid $(1)/usr/libexec/audiowrt/setup-ssid
 
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/audiowrt-provisioning-firstboot $(1)/etc/uci-defaults/10-audiowrt-provisioning
@@ -56,6 +57,7 @@ define Package/audiowrt-provisioning/install
 	$(INSTALL_BIN) ./files/audiowrt-scan.cgi $(1)/www/cgi-bin/audiowrt-scan
 	$(INSTALL_BIN) ./files/audiowrt-radios.cgi $(1)/www/cgi-bin/audiowrt-radios
 	$(INSTALL_BIN) ./files/audiowrt-provision.cgi $(1)/www/cgi-bin/audiowrt-provision
+	$(INSTALL_BIN) ./files/audiowrt-root.cgi $(1)/www/cgi-bin/audiowrt-root
 endef
 
 $(eval $(call BuildPackage,audiowrt-provisioning))
