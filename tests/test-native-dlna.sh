@@ -58,6 +58,14 @@ check_player() {
 }
 
 check_player flac libflac
+flac_source="audiowrt-player-flac/src/audiowrt-player-flac.c"
+grep -q 'SND_PCM_FORMAT_S16 : SND_PCM_FORMAT_S32' "$flac_source" || fail "FLAC player must use native-endian ALSA PCM formats"
+if grep -Eq 'SND_PCM_FORMAT_(S16|S32)_(LE|BE)' "$flac_source"; then
+  fail "FLAC player must not hard-code PCM byte order"
+fi
+if awk '/FLAC__stream_decoder_finish\(decoder\)/ { finished=1 } finished && /fclose\(input\)/ { bad=1 } END { exit bad ? 0 : 1 }' "$flac_source"; then
+  fail "FLAC player must not fclose the FILE after libFLAC finish takes ownership"
+fi
 check_player mp3 libmpg123
 check_player aac libfaad2
 check_player wav ''
