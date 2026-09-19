@@ -1,0 +1,42 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+valid_mac() {
+	case "$1" in
+		''|00:00:00:00:00:00|ff:ff:ff:ff:ff:ff) return 1 ;;
+		*) return 0 ;;
+	esac
+}
+
+mac=''
+
+# Prefer the base Ethernet MAC when the platform exposes the traditional
+# OpenWrt eth0 device. This stays stable while AP virtual interfaces may use
+# adjacent MAC addresses.
+for path in /sys/class/net/eth0/address /sys/class/net/wan/address /sys/class/net/lan/address; do
+	[ -r "$path" ] || continue
+	value="$(cat "$path" 2>/dev/null || true)"
+	valid_mac "$value" || continue
+	mac="$value"
+	break
+done
+
+# Generic fallback for x86/other platforms: first physical, non-wireless link.
+if [ -z "$mac" ]; then
+	for dev in /sys/class/net/*; do
+		[ -e "$dev" ] || continue
+		name="${dev##*/}"
+		[ "$name" = 'lo' ] && continue
+		[ -d "$dev/wireless" ] && continue
+		[ -e "$dev/device" ] || continue
+		[ -r "$dev/address" ] || continue
+		value="$(cat "$dev/address" 2>/dev/null || true)"
+		valid_mac "$value" || continue
+		mac="$value"
+		break
+	done
+fi
+
+suffix="$(printf '%s' "$mac" | tr -d ':' | tail -c 4 | tr '[:upper:]' '[:lower:]')"
+[ -n "$suffix" ] || suffix='setup'
+printf 'AudioWRT-%s\n' "$suffix"
