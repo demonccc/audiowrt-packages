@@ -26,7 +26,7 @@ if grep -Eq 'hostapd$|wpad$|wpa_cli$|eapol_test$' "$makefile"; then
     exit 1
 fi
 
-for keep in     CONFIG_DRIVER_NL80211=y     CONFIG_CTRL_IFACE=y     CONFIG_IEEE80211W=y     CONFIG_SAE=y     CONFIG_UBUS=y     CONFIG_NO_STDOUT_DEBUG=y     CONFIG_NO_CONFIG_WRITE=y     CONFIG_NO_CONFIG_BLOBS=y; do
+for keep in     CONFIG_DRIVER_NL80211=y     CONFIG_CTRL_IFACE=y     CONFIG_IEEE80211W=y     CONFIG_SAE=y     CONFIG_UBUS=y     CONFIG_NO_STDOUT_DEBUG=y     CONFIG_DEBUG_SYSLOG=y     CONFIG_DEBUG_SYSLOG_FACILITY=LOG_DAEMON     CONFIG_NO_CONFIG_WRITE=y     CONFIG_NO_CONFIG_BLOBS=y; do
     grep -qx "$keep" "$config"
 done
 
