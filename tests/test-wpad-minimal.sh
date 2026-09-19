@@ -11,6 +11,7 @@ supplicant_config="$repo_root/audiowrt-wpad/files/wpa_supplicant-audiowrt.config
 grep -q '^AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/hostapd/Makefile$' "$makefile"
 grep -q '^  PROVIDES:=hostapd wpa-supplicant$' "$makefile"
 grep -q '+libmbedtls' "$makefile"
+! grep -q 'audiowrt-minimal-mbedtls' "$makefile" "$supplicant_config" "$hostapd_config"
 grep -q '+libubox' "$makefile"
 grep -q -- '-DCONFIG_MSG_MIN_PRIORITY=3' "$makefile"
 
