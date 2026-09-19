@@ -7,6 +7,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 makefile="$repo_root/audiowrt-wifi-client/Makefile"
 script="$repo_root/audiowrt-wifi-client/files/audiowrt-wifi-client"
 ui="$repo_root/luci-app-audiowrt-wifi-client/htdocs/luci-static/resources/view/audiowrt-wifi-client/client.js"
+wizard="$repo_root/audiowrt-provisioning/files/audiowrt.html"
 busybox_makefile="$repo_root/audiowrt-busybox/Makefile"
 udhcpd_makefile="$repo_root/audiowrt-udhcpd/Makefile"
 
@@ -37,9 +38,23 @@ grep -q 'audiowrt_setup' "$script"
 grep -q 'standalone BusyBox' "$script"
 grep -q '\[ -x /usr/sbin/udhcpd \] || return 0' "$script"
 grep -q '/etc/init.d/audiowrt-udhcpd restart' "$script"
+grep -q '^wait_setup_interface()' "$script"
+grep -q 'network.interface.audiowrt_setup status' "$script"
+grep -q 'interface $interface' "$script"
+grep -q 'max_leases 100' "$script"
+grep -q 'lease_file /tmp/audiowrt-udhcpd.leases' "$script"
+grep -q 'pidfile /var/run/audiowrt-udhcpd.pid' "$script"
 grep -q 'option lease 600' "$script"
 grep -q 'option router' "$script"
 grep -q 'option dns' "$script"
+if grep -q 'br-audiowrt_setup' "$script"; then
+    echo 'ERROR: provisioning DHCP must bind the netifd-created AP interface, not a guessed bridge.' >&2
+    exit 1
+fi
+if grep -Eq 'uci -q commit dhcp|dhcp\.audiowrt_setup' "$script"; then
+    echo 'ERROR: standalone provisioning DHCP must not depend on /etc/config/dhcp.' >&2
+    exit 1
+fi
 if grep -Eq 'dnsmasq|setup_dns|odhcpd' "$script"; then
     echo 'ERROR: Wi-Fi provisioning must use BusyBox udhcpd, not dnsmasq/odhcpd.' >&2
     exit 1
@@ -59,6 +74,19 @@ grep -q "_('IP address')" "$ui"
 grep -q "_('Netmask')" "$ui"
 grep -q "_('Gateway')" "$ui"
 grep -q "_('Primary DNS (optional)')" "$ui"
+
+# Scan presentation must use per-BSSID capability data instead of inferring
+# Wi-Fi generation from frequency alone.
+for view in "$ui" "$wizard"; do
+    grep -q 'ht_operation' "$view"
+    grep -q 'vht_operation' "$view"
+    grep -q 'he_operation' "$view"
+    grep -q 'eht_operation' "$view"
+    grep -q 'Wi-Fi' "$view"
+    grep -q '2.4 GHz' "$view"
+    grep -q '5 GHz' "$view"
+    grep -q '6 GHz' "$view"
+done
 
 # WPA personal credentials must be bounded to the normal 8..63 character PSK range.
 grep -q '\${#key}.*-lt 8' "$script"
