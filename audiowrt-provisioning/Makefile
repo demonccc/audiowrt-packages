@@ -11,7 +11,7 @@ define Package/audiowrt-provisioning
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT first-boot provisioning
-  DEPENDS:=+audiowrt-core +audiowrt-audio +audiowrt-wifi-client +audiowrt-hostapd +audiowrt-udhcpd +ubus +uci +uhttpd +luci-base +jsonfilter
+  DEPENDS:=+audiowrt-core +audiowrt-audio +audiowrt-wifi-client +hostapd +audiowrt-udhcpd +ubus +uci +uhttpd +luci-base +jsonfilter
 endef
 
 define Package/audiowrt-provisioning/description
