@@ -39,7 +39,7 @@ static void flac_metadata(const FLAC__StreamDecoder *decoder,
         return;
     }
 
-    fmt = ctx->bits <= 16 ? SND_PCM_FORMAT_S16_LE : SND_PCM_FORMAT_S32_LE;
+    fmt = ctx->bits <= 16 ? SND_PCM_FORMAT_S16 : SND_PCM_FORMAT_S32;
     if (aw_pcm_open(&ctx->pcm, ctx->rate, ctx->channels, fmt) < 0)
         ctx->rc = EIO;
 }
@@ -147,7 +147,6 @@ static void *decode_thread(void *arg)
     FLAC__stream_decoder_delete(decoder);
     aw_pcm_close(ctx->pcm);
     ctx->pcm = NULL;
-    fclose(input);
     return NULL;
 }
 
