@@ -28,9 +28,9 @@ endef
 define Package/audiowrt-hostapd/description
  Open-AP-only hostapd derived from the selected OpenWrt release for AudioWRT
  provisioning. It keeps nl80211, OpenWrt UBus/UCode integration, the global
- control socket and syslog support while omitting WPA, EAP, RADIUS, WPS,
- VLAN, wired-authenticator and other features unnecessary for the temporary
- unencrypted setup network.
+ control socket and syslog support while omitting optional EAP, RADIUS, WPS,
+ VLAN, wired-authenticator, VHT/HE/EHT and other features unnecessary for the
+ temporary unencrypted setup network.
 endef
 
 TARGET_CPPFLAGS := \
