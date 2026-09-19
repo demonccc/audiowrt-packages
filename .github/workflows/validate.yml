@@ -42,6 +42,10 @@ jobs:
         shell: bash
         run: bash tests/test-wpa-supplicant-minimal.sh
 
+      - name: Validate minimal open provisioning hostapd contract
+        shell: bash
+        run: bash tests/test-hostapd-minimal.sh
+
       - name: Validate minimal BlueALSA contract
         shell: bash
         run: bash tests/test-bluealsa-minimal.sh
@@ -137,6 +141,7 @@ jobs:
             audiowrt-minimal-upmpdcli \
             audiowrt-umdns \
             audiowrt-wpa-supplicant \
+            audiowrt-hostapd \
             audiowrt-audio \
             audiowrt-core \
             audiowrt-provisioning \
