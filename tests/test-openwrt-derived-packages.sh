@@ -7,7 +7,6 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 declare -A canonical=(
   [audiowrt-busybox]='$(TOPDIR)/feeds/base/utils/busybox/Makefile'
   [audiowrt-minimal-alsa]='$(TOPDIR)/feeds/packages/libs/alsa-lib/Makefile'
-  [audiowrt-minimal-mbedtls]='$(TOPDIR)/feeds/base/libs/mbedtls/Makefile'
   [audiowrt-dropbear]='$(TOPDIR)/feeds/base/network/services/dropbear/Makefile'
   [audiowrt-wpad]='$(TOPDIR)/feeds/base/network/services/hostapd/Makefile'
   [audiowrt-umdns]='$(TOPDIR)/feeds/base/network/services/umdns/Makefile'
