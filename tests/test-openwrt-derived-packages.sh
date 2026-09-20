@@ -9,6 +9,7 @@ declare -A canonical=(
   [libaudiowrt-alsa-minimal]='$(TOPDIR)/feeds/packages/libs/alsa-lib/Makefile'
   [audiowrt-wpad]='$(TOPDIR)/feeds/base/network/services/hostapd/Makefile'
   [audiowrt-umdns]='$(TOPDIR)/feeds/base/network/services/umdns/Makefile'
+  [audiowrt-sbc]='$(TOPDIR)/feeds/packages/libs/sbc/Makefile'
   [audiowrt-bluez]='$(TOPDIR)/feeds/packages/utils/bluez/Makefile'
 )
 
@@ -121,7 +122,6 @@ fi
 
 test ! -e "$repo_root/audiowrt-minimal-mpd/Makefile"
 test ! -e "$repo_root/audiowrt-dropbear/Makefile"
-test ! -e "$repo_root/audiowrt-sbc/Makefile"
 
 
 grep -Fq 'PROVIDES:=hostapd wpa-supplicant' "$repo_root/audiowrt-wpad/Makefile"
