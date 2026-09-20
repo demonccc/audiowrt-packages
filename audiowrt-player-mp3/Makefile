@@ -11,7 +11,7 @@ define Package/audiowrt-player-mp3
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT native MP3 player
-  DEPENDS:=+audiowrt-player-core +libmpg123 +libpthread
+  DEPENDS:=+libaudiowrt-player +libmpg123 +libpthread
 endef
 
 define Build/Prepare
