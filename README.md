@@ -30,6 +30,7 @@ Current source-derived userspace packages are:
 - `libaudiowrt-alsa-minimal` -> OpenWrt packages feed `alsa-lib`;
 - `audiowrt-wpad` -> OpenWrt `hostapd` source, linked as one multicall `hostapd` + `wpa_supplicant` binary;
 - `audiowrt-umdns` -> OpenWrt `umdns`;
+- `audiowrt-sbc` -> OpenWrt packages feed `sbc`, stripped to the runtime library only;
 - `audiowrt-bluez` -> OpenWrt packages feed `bluez`.
 
 Not every AudioWRT package that customizes behavior should rebuild upstream source. If the AudioWRT delta is only runtime policy/configuration, the exact official release binary must be reused instead. This avoids rebuilding OpenWrt dependency graphs that already exist as release packages. TLS is intentionally kept on the official OpenWrt `libmbedtls` runtime; AudioWRT does not replace or trim it.
@@ -110,7 +111,7 @@ Packages librespot with the selected OpenWrt Rust toolchain, ALSA backend, rustl
 
 ### Bluetooth stack
 
-`audiowrt-bluez` and the minimal Bluetooth kmod package follow the exact selected OpenWrt release. AudioWRT reuses the official OpenWrt `bluez-libs` and `sbc` packages. `bluez-alsa` remains AudioWRT-owned because it has no canonical OpenWrt package recipe in the supported feed set. `audiowrt-bluetooth` provides the AudioWRT integration/service layer.
+`audiowrt-bluez`, `audiowrt-sbc` and the minimal Bluetooth kmod package follow the exact selected OpenWrt release. AudioWRT reuses the official OpenWrt `bluez-libs` package, while `audiowrt-sbc` derives from the exact OpenWrt SBC recipe but disables the tester and installs only `libsbc`, saving about 14.7 KiB in the constrained image. `bluez-alsa` remains AudioWRT-owned because it has no canonical OpenWrt package recipe in the supported feed set. `audiowrt-bluetooth` provides the AudioWRT integration/service layer.
 
 ### `audiowrt-wifi-client`
 
