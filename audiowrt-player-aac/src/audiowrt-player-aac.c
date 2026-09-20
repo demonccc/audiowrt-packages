@@ -139,7 +139,7 @@ static void *decode_thread(void *arg)
                     break;
                 }
                 if (aw_pcm_open(&ctx->pcm, info.samplerate, info.channels,
-                                SND_PCM_FORMAT_S16_LE) < 0) {
+                                SND_PCM_FORMAT_S16) < 0) {
                     ctx->rc = EIO;
                     break;
                 }
