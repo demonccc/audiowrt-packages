@@ -83,6 +83,7 @@ struct renderer {
     char metadata[8192];
     char codec[32];
     char active_player[64];
+    uint32_t attempted_players;
     char controller[INET6_ADDRSTRLEN];
     pid_t player_pid;
     enum transport_state state;
