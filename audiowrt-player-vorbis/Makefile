@@ -33,7 +33,7 @@ define Build/Compile
 		-o $(PKG_BUILD_DIR)/audiowrt-player-vorbis \
 		$(PKG_BUILD_DIR)/audiowrt-player-vorbis.c \
 		$(TARGET_LDFLAGS) -Wl,-rpath-link,$(STAGING_DIR)/usr/lib \
-		-laudiowrt-player -lvorbisfile -lvorbis -logg -lpthread
+		-laudiowrt-player -lvorbisfile -lpthread
 endef
 
 define Package/audiowrt-player-vorbis/install
