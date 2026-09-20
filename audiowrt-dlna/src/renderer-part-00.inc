@@ -93,6 +93,7 @@ struct renderer {
 
 static struct renderer g;
 static volatile sig_atomic_t running = 1;
+static volatile sig_atomic_t reload_requested = 0;
 
 static void notify_service(const char *service);
 
