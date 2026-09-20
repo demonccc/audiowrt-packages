@@ -153,6 +153,7 @@ jobs:
             librespot \
             audiowrt-spotify \
             audiowrt-bluez \
+            audiowrt-sbc \
             audiowrt-btctl \
             bluez-alsa \
             audiowrt-bluetooth \
