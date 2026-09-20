@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-wav
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
 
@@ -33,8 +33,22 @@ endef
 define Package/audiowrt-player-wav/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-player-wav $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/usr/share/audiowrt/dlna/players
-	$(INSTALL_DATA) ./files/wav.conf $(1)/usr/share/audiowrt/dlna/players/wav.conf
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/wav.defaults $(1)/etc/uci-defaults/70-audiowrt-player-wav
+endef
+
+define Package/audiowrt-player-wav/postinst
+#!/bin/sh
+[ -n "${IPKG_INSTROOT}" ] && exit 0
+/usr/libexec/audiowrt-player-registry register wav native_wav 'AudioWRT WAV/PCM Player' /usr/bin/audiowrt-player-wav 'audio/wav audio/x-wav audio/wave' 'wav' >/dev/null 2>&1 || true
+exit 0
+endef
+
+define Package/audiowrt-player-wav/prerm
+#!/bin/sh
+[ -n "${IPKG_INSTROOT}" ] && exit 0
+/usr/libexec/audiowrt-player-registry unregister native_wav >/dev/null 2>&1 || true
+exit 0
 endef
 
 $(eval $(call BuildPackage,audiowrt-player-wav))
