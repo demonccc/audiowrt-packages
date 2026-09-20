@@ -10,7 +10,7 @@ on:
         default: tplink-tl-wdr4300-v1-minimal-usb-bluetooth-25.12.5
         type: string
       package:
-        description: "Package name, or 'all' for every AudioWRT package selected by the profile"
+        description: "Package name, APK filename, or 'all' for every AudioWRT package selected by the profile"
         required: true
         default: all
         type: string
@@ -70,10 +70,33 @@ jobs:
         run: |
           set -euo pipefail
           package_ref="$(git rev-parse HEAD)"
+          requested_package='${{ inputs.package }}'
+          package="$requested_package"
+
+          # Accept an APK filename from a previous build as a convenience.
+          # Resolve it back to the longest matching AudioWRT package name so,
+          # for example, audiowrt-renderer-2.apk selects audiowrt-renderer.
+          if [[ "$requested_package" == *.apk ]]; then
+            stem="${requested_package%.apk}"
+            package=""
+            while IFS='|' read -r candidate _; do
+              [[ -n "$candidate" && "$candidate" != \#* ]] || continue
+              if [[ "$stem" == "$candidate" || "$stem" == "$candidate"-* ]]; then
+                if (( ${#candidate} > ${#package} )); then
+                  package="$candidate"
+                fi
+              fi
+            done < builder/config/build/package-build-targets
+            if [[ -z "$package" ]]; then
+              echo "ERROR: could not map APK filename to an AudioWRT package: $requested_package" >&2
+              exit 2
+            fi
+            echo "Normalized package input: $requested_package -> $package"
+          fi
 
           make -C builder packages \
             AUDIOWRT_PROFILE='${{ inputs.audiowrt_profile }}' \
-            PACKAGE='${{ inputs.package }}' \
+            PACKAGE="$package" \
             AUDIOWRT_PACKAGES_REF="$package_ref" \
             JOBS='${{ inputs.jobs }}' \
             VERBOSITY='${{ inputs.verbosity }}' \
