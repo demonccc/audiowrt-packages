@@ -11,7 +11,7 @@ define Package/audiowrt-player-wav
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT native WAV/PCM player
-  DEPENDS:=+audiowrt-player-core +libpthread
+  DEPENDS:=+libaudiowrt-player +libpthread
 endef
 
 define Build/Prepare
