@@ -2,7 +2,6 @@
 
 #include <arpa/inet.h>
 #include <ctype.h>
-#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <ifaddrs.h>
@@ -25,28 +24,27 @@
 #include <unistd.h>
 
 
-#define MAX_PLAYERS 16
+#define MAX_PLAYERS 32
+#define MAX_CODECS 32
 #define MAX_SUBSCRIBERS 12
 #define HTTP_BUFFER 65536
 #define SSDP_ADDR "239.255.255.250"
 #define SSDP_PORT 1900
 #define DEFAULT_PORT 49152
-#define DEFAULT_PLAYER_DIR "/usr/share/audiowrt/dlna/players"
 #define DEFAULT_RUNTIME_DIR "/var/run/audiowrt-dlna"
 
-struct player {
+struct codec {
     char id[32];
-    char name[96];
-    char command[512];
-    char auto_command[256];
-    char pause_command[512];
-    char resume_command[512];
-    char stop_command[512];
     char mime[384];
     char extensions[192];
-    char package[96];
-    bool custom;
-    bool managed;
+    char default_player[64];
+};
+
+struct player {
+    char id[64];
+    char name[96];
+    char executable[512];
+    char codecs[384];
 };
 
 struct subscriber {
@@ -70,12 +68,13 @@ enum transport_state {
 struct renderer {
     char friendly_name[128];
     char uuid[80];
-    char player_dir[256];
     char runtime_dir[256];
     char alsa_device[128];
     int port;
     int volume;
     bool mute;
+    struct codec codecs[MAX_CODECS];
+    size_t codec_count;
     struct player players[MAX_PLAYERS];
     size_t player_count;
     struct subscriber subscribers[MAX_SUBSCRIBERS];
@@ -83,6 +82,7 @@ struct renderer {
     char uri[2048];
     char metadata[8192];
     char codec[32];
+    char active_player[64];
     char controller[INET6_ADDRSTRLEN];
     pid_t player_pid;
     enum transport_state state;
@@ -206,6 +206,7 @@ static void write_status(void)
     format_time(current_position(), pos, sizeof(pos));
     fputs("{\"state\":\"", f); json_escape(f, state_name(g.state));
     fputs("\",\"codec\":\"", f); json_escape(f, g.codec);
+    fputs("\",\"player\":\"", f); json_escape(f, g.active_player);
     fputs("\",\"uri\":\"", f); json_escape(f, g.uri);
     fputs("\",\"controller\":\"", f); json_escape(f, g.controller);
     fputs("\",\"position\":\"", f); json_escape(f, pos);
@@ -225,70 +226,70 @@ static struct player *find_player_id(const char *id)
     return NULL;
 }
 
+static struct codec *find_codec_id(const char *id)
+{
+    size_t i;
+    for (i = 0; i < g.codec_count; i++)
+        if (!strcmp(g.codecs[i].id, id))
+            return &g.codecs[i];
+    return NULL;
+}
+
 static int token_in_list(const char *list, const char *needle)
 {
     char copy[512], *save = NULL, *tok;
     if (!list || !needle)
         return 0;
     copystr(copy, sizeof(copy), list);
-    for (tok = strtok_r(copy, " ,\t", &save); tok; tok = strtok_r(NULL, " ,\t", &save))
+    for (tok = strtok_r(copy, " ,\t\n", &save); tok;
+         tok = strtok_r(NULL, " ,\t\n", &save))
         if (!strcasecmp(tok, needle))
             return 1;
     return 0;
 }
 
-static int descriptor_load(const char *path, struct player *p)
+static void append_token(char *list, size_t len, const char *value)
 {
-    FILE *f = fopen(path, "r");
-    char line[1024];
-    if (!f)
-        return -1;
-    memset(p, 0, sizeof(*p));
-    p->managed = true;
-    while (fgets(line, sizeof(line), f)) {
-        char *eq;
-        trim(line);
-        if (!*line || *line == '#')
-            continue;
-        eq = strchr(line, '=');
-        if (!eq)
-            continue;
-        *eq++ = 0;
-        trim(line);
-        trim(eq);
-        if (!strcmp(line, "id")) copystr(p->id, sizeof(p->id), eq);
-        else if (!strcmp(line, "name")) copystr(p->name, sizeof(p->name), eq);
-        else if (!strcmp(line, "command")) copystr(p->command, sizeof(p->command), eq);
-        else if (!strcmp(line, "mime")) copystr(p->mime, sizeof(p->mime), eq);
-        else if (!strcmp(line, "extensions")) copystr(p->extensions, sizeof(p->extensions), eq);
-        else if (!strcmp(line, "package")) copystr(p->package, sizeof(p->package), eq);
-    }
-    fclose(f);
-    if (!p->id[0] || !p->command[0])
-        return -1;
-    copystr(p->auto_command, sizeof(p->auto_command), p->command);
-    if (!p->name[0])
-        copystr(p->name, sizeof(p->name), p->id);
-    return 0;
-}
-
-static void load_descriptors(void)
-{
-    DIR *d;
-    struct dirent *de;
-    g.player_count = 0;
-    d = opendir(g.player_dir);
-    if (!d)
+    size_t used;
+    if (!value || !*value || token_in_list(list, value))
         return;
-    while ((de = readdir(d)) && g.player_count < MAX_PLAYERS) {
-        char path[512];
-        size_t n = strlen(de->d_name);
-        if (n < 6 || strcmp(de->d_name + n - 5, ".conf"))
-            continue;
-        snprintf(path, sizeof(path), "%s/%s", g.player_dir, de->d_name);
-        if (!descriptor_load(path, &g.players[g.player_count]))
-            g.player_count++;
-    }
-    closedir(d);
+    used = strlen(list);
+    if (used && used + 1 < len)
+        list[used++] = ' ';
+    if (used < len)
+        copystr(list + used, len - used, value);
 }
 
+static int player_supports_codec(const struct player *p, const char *codec)
+{
+    return p && codec && token_in_list(p->codecs, codec);
+}
+
+static int player_available(const struct player *p)
+{
+    return p && p->executable[0] && access(p->executable, X_OK) == 0;
+}
+
+static struct player *effective_player(struct codec *codec)
+{
+    struct player *p;
+    size_t i;
+
+    if (!codec)
+        return NULL;
+
+    if (codec->default_player[0]) {
+        p = find_player_id(codec->default_player);
+        if (player_supports_codec(p, codec->id) && player_available(p))
+            return p;
+    }
+
+    for (i = 0; i < g.player_count; i++) {
+        p = &g.players[i];
+        if (codec->default_player[0] && !strcmp(p->id, codec->default_player))
+            continue;
+        if (player_supports_codec(p, codec->id) && player_available(p))
+            return p;
+    }
+    return NULL;
+}
