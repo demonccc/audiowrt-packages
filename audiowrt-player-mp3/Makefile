@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-mp3
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
 
@@ -33,8 +33,22 @@ endef
 define Package/audiowrt-player-mp3/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-player-mp3 $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/usr/share/audiowrt/dlna/players
-	$(INSTALL_DATA) ./files/mp3.conf $(1)/usr/share/audiowrt/dlna/players/mp3.conf
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/mp3.defaults $(1)/etc/uci-defaults/70-audiowrt-player-mp3
+endef
+
+define Package/audiowrt-player-mp3/postinst
+#!/bin/sh
+[ -n "${IPKG_INSTROOT}" ] && exit 0
+/usr/libexec/audiowrt-player-registry register mp3 native_mp3 'AudioWRT MP3 Player' /usr/bin/audiowrt-player-mp3 'audio/mpeg audio/mp3' 'mp3' >/dev/null 2>&1 || true
+exit 0
+endef
+
+define Package/audiowrt-player-mp3/prerm
+#!/bin/sh
+[ -n "${IPKG_INSTROOT}" ] && exit 0
+/usr/libexec/audiowrt-player-registry unregister native_mp3 >/dev/null 2>&1 || true
+exit 0
 endef
 
 $(eval $(call BuildPackage,audiowrt-player-mp3))
