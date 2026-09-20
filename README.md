@@ -56,6 +56,18 @@ The distribution must not treat every selected runtime package as source-build i
 
 This boundary is particularly important on constrained-device builds: selecting an AudioWRT runtime capability must not silently turn the SDK step into a broad OpenWrt source build.
 
+## Package naming convention
+
+AudioWRT-owned packages are named after the artifact they primarily install:
+
+- `libaudiowrt-*` for shared userspace libraries;
+- `audiowrt-player-*` for player executables/codecs;
+- `audiowrt-*` for services, applications and helpers;
+- `luci-app-audiowrt-*` for LuCI applications;
+- `kmod-audiowrt-*` for kernel-module packages.
+
+A package is not renamed to `libaudiowrt-*` merely because it contains a plugin `.so`; the prefix is reserved for packages whose primary runtime artifact is a reusable shared library.
+
 ## Responsibility boundary
 
 Reusable packages in this feed provide capabilities. They do not decide that an OpenWrt device should become an AudioWRT appliance.
