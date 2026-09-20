@@ -5,6 +5,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 bluez="$repo_root/audiowrt-bluez/Makefile"
 bluez_vcp_patch="$repo_root/audiowrt-bluez/releases/25.12/patches/900-transport-fix-build-with-vcp-disabled.patch"
+sbc="$repo_root/audiowrt-sbc/Makefile"
 bluealsa="$repo_root/bluez-alsa/Makefile"
 bluetooth="$repo_root/audiowrt-bluetooth/Makefile"
 wrapper="$repo_root/audiowrt-bluetooth/files/audiowrt-bluetooth"
@@ -41,12 +42,20 @@ grep -q 'c6dcf6b714501768ab7ea293e75d945be0eec188' "$bluez_vcp_patch"
 grep -q '#ifdef HAVE_VCP' "$bluez_vcp_patch"
 grep -q 'return -ENODEV' "$bluez_vcp_patch"
 
-# Small runtime libraries use the official OpenWrt packages. The size savings of
-# custom SBC/BlueZ library packages are not large enough to justify forks.
-test ! -e "$repo_root/audiowrt-sbc/Makefile"
-grep -q 'DEPENDS:=.*+audiowrt-bluez.*+bluez-libs.*+glib2.*+sbc' "$bluealsa"
-if grep -Eq 'DEPENDS:=.*(\+audiowrt-bluez-libs|\+audiowrt-sbc)' "$bluealsa"; then
-    echo 'ERROR: BlueALSA must use official bluez-libs and sbc packages.' >&2
+# Keep the exact-release OpenWrt SBC source but strip tester/tools. This saves
+# about 14.7 KiB in the constrained image while retaining the same libsbc ABI.
+test -f "$sbc"
+grep -Fq 'AUDIOWRT_DERIVED_NAME:=audiowrt-sbc' "$sbc"
+grep -Fq 'AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/libs/sbc/Makefile' "$sbc"
+grep -q -- '--disable-tester' "$sbc"
+if grep -Eq 'DEPENDS:=.*libsndfile|usr/bin' "$sbc"; then
+    echo 'ERROR: minimal SBC must not pull tester/tool dependencies.' >&2
+    exit 1
+fi
+grep -q 'libsbc.so' "$sbc"
+grep -q 'DEPENDS:=.*+audiowrt-bluez.*+bluez-libs.*+glib2.*+audiowrt-sbc' "$bluealsa"
+if grep -Eq 'DEPENDS:=.*(\+audiowrt-bluez-libs|\+sbc([[:space:]]|$))' "$bluealsa"; then
+    echo 'ERROR: BlueALSA must use official bluez-libs and AudioWRT minimal SBC.' >&2
     exit 1
 fi
 
