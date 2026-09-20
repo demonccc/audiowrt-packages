@@ -1,0 +1,10 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+/usr/libexec/audiowrt-player-registry register \
+	vorbis native_vorbis \
+	'AudioWRT Ogg Vorbis Player' \
+	/usr/bin/audiowrt-player-vorbis \
+	'audio/ogg audio/vorbis audio/vorbis+ogg application/ogg' \
+	'ogg oga' >/dev/null 2>&1 || true
+exit 0
