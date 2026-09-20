@@ -131,7 +131,7 @@ jobs:
 
           for package in \
             audiowrt-busybox \
-            audiowrt-minimal-alsa \
+            libaudiowrt-alsa-minimal \
             audiowrt-minimal-upmpdcli \
             audiowrt-umdns \
             audiowrt-wpad \
@@ -143,7 +143,7 @@ jobs:
             audiowrt-extensions \
             audiowrt-mpd \
             audiowrt-renderer \
-            audiowrt-player-core \
+            libaudiowrt-player \
             audiowrt-player-flac \
             audiowrt-player-mp3 \
             audiowrt-player-aac \
