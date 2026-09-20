@@ -11,7 +11,7 @@ define Package/audiowrt-player-aac
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT native AAC player
-  DEPENDS:=+audiowrt-player-core +libfaad2 +libpthread
+  DEPENDS:=+libaudiowrt-player +libfaad2 +libpthread
 endef
 
 define Package/audiowrt-player-aac/description

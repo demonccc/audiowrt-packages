@@ -1,6 +1,6 @@
 include $(TOPDIR)/rules.mk
 
-AUDIOWRT_DERIVED_NAME:=audiowrt-minimal-alsa
+AUDIOWRT_DERIVED_NAME:=libaudiowrt-alsa-minimal
 AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/libs/alsa-lib/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
@@ -9,7 +9,7 @@ PKG_RELEASE:=3
 
 include $(INCLUDE_DIR)/package.mk
 
-define Package/audiowrt-minimal-alsa
+define Package/libaudiowrt-alsa-minimal
   SECTION:=libs
   CATEGORY:=Libraries
   TITLE:=AudioWRT minimal ALSA library
@@ -18,14 +18,14 @@ define Package/audiowrt-minimal-alsa
   PROVIDES:=alsa-lib
 endef
 
-define Package/audiowrt-minimal-alsa/description
+define Package/libaudiowrt-alsa-minimal/description
  ALSA userspace derived from the selected OpenWrt release. It retains PCM and
  core PCM/control plus the hw, plug, rate, route, dmix and external PCM I/O paths
  used by USB Audio and BlueALSA. MIDI, Sequencer, topology, UCM and unrelated
  plugins are omitted.
 endef
 
-define Package/audiowrt-minimal-alsa/conffiles
+define Package/libaudiowrt-alsa-minimal/conffiles
 /etc/asound.conf
 endef
 
@@ -60,7 +60,7 @@ define Build/InstallDev
 	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/aclocal/alsa.m4 $(1)/usr/share/aclocal/
 endef
 
-define Package/audiowrt-minimal-alsa/install
+define Package/libaudiowrt-alsa-minimal/install
 	$(INSTALL_DIR) $(1)/usr/lib
 	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libasound.so.* $(1)/usr/lib/
 	$(INSTALL_DIR) $(1)/usr/share/alsa/ctl $(1)/usr/share/alsa/pcm
@@ -73,4 +73,4 @@ define Package/audiowrt-minimal-alsa/install
 		$(1)/usr/share/alsa/pcm/
 endef
 
-$(eval $(call BuildPackage,audiowrt-minimal-alsa))
+$(eval $(call BuildPackage,libaudiowrt-alsa-minimal))

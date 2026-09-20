@@ -27,7 +27,7 @@ Release-family-specific AudioWRT compatibility deltas may live under `releases/<
 Current source-derived userspace packages are:
 
 - `audiowrt-busybox` -> OpenWrt `busybox`;
-- `audiowrt-minimal-alsa` -> OpenWrt packages feed `alsa-lib`;
+- `libaudiowrt-alsa-minimal` -> OpenWrt packages feed `alsa-lib`;
 - `audiowrt-wpad` -> OpenWrt `hostapd` source, linked as one multicall `hostapd` + `wpa_supplicant` binary;
 - `audiowrt-umdns` -> OpenWrt `umdns`;
 - `audiowrt-bluez` -> OpenWrt packages feed `bluez`.
@@ -56,6 +56,18 @@ The distribution must not treat every selected runtime package as source-build i
 
 This boundary is particularly important on constrained-device builds: selecting an AudioWRT runtime capability must not silently turn the SDK step into a broad OpenWrt source build.
 
+## Package naming convention
+
+AudioWRT-owned packages are named after the artifact they primarily install:
+
+- `libaudiowrt-*` for shared userspace libraries;
+- `audiowrt-player-*` for player executables/codecs;
+- `audiowrt-*` for services, applications and helpers;
+- `luci-app-audiowrt-*` for LuCI applications;
+- `kmod-audiowrt-*` for kernel-module packages.
+
+A package is not renamed to `libaudiowrt-*` merely because it contains a plugin `.so`; the prefix is reserved for packages whose primary runtime artifact is a reusable shared library.
+
 ## Responsibility boundary
 
 Reusable packages in this feed provide capabilities. They do not decide that an OpenWrt device should become an AudioWRT appliance.
@@ -74,7 +86,7 @@ Common reusable audio state and helper CLI. The device/audio name is derived fro
 
 ### `audiowrt-usb-audio`
 
-Detects the first USB Audio Class playback device, creates the ALSA `default` output and reacts to USB hotplug. Minimal builds use `audiowrt-minimal-alsa`; standard builds use the normal OpenWrt ALSA package.
+Detects the first USB Audio Class playback device, creates the ALSA `default` output and reacts to USB hotplug. Minimal builds use `libaudiowrt-alsa-minimal`; standard builds use the normal OpenWrt ALSA package.
 
 ### `audiowrt-minimal-upmpdcli`
 

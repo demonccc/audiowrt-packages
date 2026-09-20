@@ -1,21 +1,21 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=audiowrt-player-core
+PKG_NAME:=libaudiowrt-player
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
 
 include $(INCLUDE_DIR)/package.mk
 
-define Package/audiowrt-player-core
-  SECTION:=sound
-  CATEGORY:=Sound
-  TITLE:=AudioWRT native player transport and PCM core
+define Package/libaudiowrt-player
+  SECTION:=libs
+  CATEGORY:=Libraries
+  TITLE:=AudioWRT native player transport and PCM library
   DEPENDS:=+libuclient +libubox +alsa-lib
 endef
 
-define Package/audiowrt-player-core/description
- Shared native AudioWRT player runtime. Streams HTTP/HTTPS with libuclient and
+define Package/libaudiowrt-player/description
+ Shared native AudioWRT player library. Streams HTTP/HTTPS with libuclient and
  writes PCM directly through ALSA without invoking wget, uclient-fetch or curl.
 endef
 
@@ -43,9 +43,9 @@ define Build/InstallDev
 	$(CP) $(PKG_BUILD_DIR)/libaudiowrt-player.so* $(1)/usr/lib/
 endef
 
-define Package/audiowrt-player-core/install
+define Package/libaudiowrt-player/install
 	$(INSTALL_DIR) $(1)/usr/lib
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/libaudiowrt-player.so.0 $(1)/usr/lib/libaudiowrt-player.so.0
 endef
 
-$(eval $(call BuildPackage,audiowrt-player-core))
+$(eval $(call BuildPackage,libaudiowrt-player))

@@ -11,7 +11,7 @@ define Package/audiowrt-player-flac
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT native FLAC player
-  DEPENDS:=+audiowrt-player-core +libflac +libpthread
+  DEPENDS:=+libaudiowrt-player +libflac +libpthread
 endef
 
 define Build/Prepare

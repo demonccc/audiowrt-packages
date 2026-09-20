@@ -4,7 +4,7 @@
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 makefile="$repo_root/bluez-alsa/Makefile"
-alsa_makefile="$repo_root/audiowrt-minimal-alsa/Makefile"
+alsa_makefile="$repo_root/libaudiowrt-alsa-minimal/Makefile"
 patch="$repo_root/bluez-alsa/patches/005-fix-gcc14-musl-basename.patch"
 ctl_helper="$repo_root/bluez-alsa/files/disable-ctl.py"
 

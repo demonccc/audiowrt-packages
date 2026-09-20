@@ -4,7 +4,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-alsa="$repo_root/audiowrt-minimal-alsa/Makefile"
+alsa="$repo_root/libaudiowrt-alsa-minimal/Makefile"
 bluetooth="$repo_root/audiowrt-kmod-bluetooth/Makefile"
 bluetooth_integration="$repo_root/audiowrt-bluetooth/Makefile"
 
@@ -21,9 +21,10 @@ if grep -q 'libatopology' "$alsa"; then
 	exit 1
 fi
 grep -q 'libasound.so' "$alsa"
-grep -q '^define Package/audiowrt-minimal-alsa$' "$alsa"
+grep -q '^define Package/libaudiowrt-alsa-minimal$' "$alsa"
 grep -q '^  PROVIDES:=alsa-lib$' "$alsa"
 ! grep -q '^  CONFLICTS:=' "$alsa"
+test ! -e "$repo_root/audiowrt-minimal-alsa/Makefile"
 
 # ALSA is a userspace library. Kernel sound modules belong to the concrete
 # USB-audio flavor, not to the library package. Any kmod dependency here makes
