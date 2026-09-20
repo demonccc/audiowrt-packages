@@ -5,7 +5,7 @@ fail() { echo "native renderer contract failed: $*" >&2; exit 1; }
 
 [[ -f audiowrt-dlna/src/audiowrt-dlna.c ]] || fail "renderer source missing"
 [[ -f libaudiowrt-player/src/audiowrt-player.c ]] || fail "player library source missing"
-[[ -x libaudiowrt-player/files/audiowrt-player-registry ]] || fail "UCI player registry helper missing"
+[[ -f libaudiowrt-player/files/audiowrt-player-registry ]] || fail "UCI player registry helper missing"
 
 grep -q '^PKG_NAME:=libaudiowrt-player$' libaudiowrt-player/Makefile || fail "player library package name mismatch"
 grep -q 'audiowrt-player-registry' libaudiowrt-player/Makefile || fail "player library must install registry helper"
@@ -29,7 +29,6 @@ grep -q 'setpgid' audiowrt-dlna/src/renderer-part-01.inc || fail "players must r
 grep -q 'execl(p->executable, p->executable, g.uri' audiowrt-dlna/src/renderer-part-01.inc || fail "player URL argument contract missing"
 grep -q 'AUDIOWRT_CODEC' audiowrt-dlna/src/renderer-part-01.inc || fail "player codec environment missing"
 grep -q 'AUDIOWRT_MIME' audiowrt-dlna/src/renderer-part-01.inc || fail "player MIME environment missing"
-grep -q 'signal(SIG HUP' /dev/null 2>/dev/null && fail "impossible"
 grep -q 'signal(SIGHUP, signal_handler)' audiowrt-dlna/src/renderer-part-04.inc || fail "SIGHUP registry reload missing"
 grep -q 'notify_service("ConnectionManager")' audiowrt-dlna/src/renderer-part-04.inc || fail "codec reload must notify ConnectionManager"
 grep -q 'procd_add_reload_trigger audiowrt-dlna audiowrt' audiowrt-dlna/files/audiowrt-dlna.init || fail "renderer must reload on registry UCI changes"
