@@ -10,6 +10,20 @@
     return (int)used;
 }
 
+static bool avtransport_action_changes_state(const char *action)
+{
+    return !strcmp(action, "SetAVTransportURI") ||
+           !strcmp(action, "Play") ||
+           !strcmp(action, "Pause") ||
+           !strcmp(action, "Stop");
+}
+
+static bool rendering_action_changes_state(const char *action)
+{
+    return !strcmp(action, "SetVolume") ||
+           !strcmp(action, "SetMute");
+}
+
 static void handle_http_client(int fd, struct sockaddr_storage *peer)
 {
     char *req = malloc(HTTP_BUFFER);
@@ -47,8 +61,15 @@ static void handle_http_client(int fd, struct sockaddr_storage *peer)
             }
         }
         if (!action[0]) soap_fault(fd, 401, "Invalid Action");
-        else if (!strcmp(path + 9, "AVTransport")) { handle_avtransport(fd, action, body); notify_service("AVTransport"); }
-        else if (!strcmp(path + 9, "RenderingControl")) { handle_rendering(fd, action, body); notify_service("RenderingControl"); }
+        else if (!strcmp(path + 9, "AVTransport")) {
+            handle_avtransport(fd, action, body);
+            if (avtransport_action_changes_state(action))
+                notify_service("AVTransport");
+        } else if (!strcmp(path + 9, "RenderingControl")) {
+            handle_rendering(fd, action, body);
+            if (rendering_action_changes_state(action))
+                notify_service("RenderingControl");
+        }
         else if (!strcmp(path + 9, "ConnectionManager")) handle_connection(fd, action);
         else soap_fault(fd, 401, "Invalid Action");
     } else {
