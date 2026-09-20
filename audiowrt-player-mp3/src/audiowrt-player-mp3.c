@@ -66,7 +66,7 @@ static void *decode_thread(void *arg)
             aw_pcm_close(ctx->pcm);
             ctx->pcm = NULL;
             if (aw_pcm_open(&ctx->pcm, (unsigned int)rate,
-                            (unsigned int)channels, SND_PCM_FORMAT_S16_LE) < 0) {
+                            (unsigned int)channels, SND_PCM_FORMAT_S16) < 0) {
                 ctx->rc = EIO;
                 break;
             }
