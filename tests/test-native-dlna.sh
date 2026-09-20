@@ -4,7 +4,7 @@ set -euo pipefail
 fail() { echo "native renderer contract failed: $*" >&2; exit 1; }
 
 [[ -f audiowrt-dlna/src/audiowrt-dlna.c ]] || fail "renderer source missing"
-[[ -f audiowrt-player-core/src/audiowrt-player.c ]] || fail "player core source missing"
+[[ -f libaudiowrt-player/src/audiowrt-player.c ]] || fail "player core source missing"
 
 grep -q '^PKG_NAME:=audiowrt-renderer$' audiowrt-dlna/Makefile || fail "renderer package name mismatch"
 grep -q 'PROVIDES:=audiowrt-dlna' audiowrt-dlna/Makefile || fail "renderer compatibility provide missing"
@@ -37,12 +37,12 @@ done
 [[ ! -e audiowrt-mdns/Makefile ]] || fail "standalone mDNS package must not exist"
 grep -q '/usr/libexec/audiowrt-renderer' audiowrt-dlna/files/audiowrt-dlna.init || fail "procd must launch unified renderer"
 
-grep -q '+libuclient' audiowrt-player-core/Makefile || fail "player core must depend on libuclient"
-grep -q '+alsa-lib' audiowrt-player-core/Makefile || fail "player core must depend on ALSA"
-grep -q 'uclient_new' audiowrt-player-core/src/audiowrt-player.c || fail "player core must use libuclient directly"
+grep -q '+libuclient' libaudiowrt-player/Makefile || fail "player core must depend on libuclient"
+grep -q '+alsa-lib' libaudiowrt-player/Makefile || fail "player core must depend on ALSA"
+grep -q 'uclient_new' libaudiowrt-player/src/audiowrt-player.c || fail "player core must use libuclient directly"
 
 if grep -REn 'execl.*(wget|uclient-fetch|curl)|system.*(wget|uclient-fetch|curl)' \
-  audiowrt-player-core/src audiowrt-player-flac/src audiowrt-player-mp3/src \
+  libaudiowrt-player/src audiowrt-player-flac/src audiowrt-player-mp3/src \
   audiowrt-player-aac/src audiowrt-player-wav/src; then
   fail "official players must not spawn an external HTTP client"
 fi
@@ -52,7 +52,7 @@ check_player() {
   [[ -f "$binary/Makefile" ]] || fail "$binary Makefile missing"
   [[ -f "$binary/src/$binary.c" ]] || fail "$binary source missing"
   [[ -f "$binary/files/$codec.conf" ]] || fail "$codec descriptor missing"
-  grep -q "+audiowrt-player-core" "$binary/Makefile" || fail "$binary must use player core"
+  grep -q "+libaudiowrt-player" "$binary/Makefile" || fail "$binary must use player core"
   [[ -z "$lib" ]] || grep -q "$lib" "$binary/Makefile" || fail "$binary must depend/link on $lib"
   grep -q "command=/usr/bin/$binary" "$binary/files/$codec.conf" || fail "$codec descriptor command mismatch"
 }
