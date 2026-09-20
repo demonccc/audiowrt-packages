@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=libaudiowrt-player
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
 
@@ -16,7 +16,7 @@ endef
 
 define Package/libaudiowrt-player/description
  Shared native AudioWRT player library. Streams HTTP/HTTPS with libuclient and
- writes PCM directly through ALSA without invoking wget, uclient-fetch or curl.
+ writes PCM directly through ALSA without invoking wget, uclient-fetch or curl.\n It also owns the idempotent UCI codec/player registry helper used by player packages.
 endef
 
 define Build/Prepare
@@ -46,6 +46,8 @@ endef
 define Package/libaudiowrt-player/install
 	$(INSTALL_DIR) $(1)/usr/lib
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/libaudiowrt-player.so.0 $(1)/usr/lib/libaudiowrt-player.so.0
+	$(INSTALL_DIR) $(1)/usr/libexec
+	$(INSTALL_BIN) ./files/audiowrt-player-registry $(1)/usr/libexec/audiowrt-player-registry
 endef
 
 $(eval $(call BuildPackage,libaudiowrt-player))
