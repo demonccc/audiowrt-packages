@@ -1,0 +1,10 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+/usr/libexec/audiowrt-player-registry register \
+	mp3 native_mp3 \
+	'AudioWRT MP3 Player' \
+	/usr/bin/audiowrt-player-mp3 \
+	'audio/mpeg audio/mp3' \
+	'mp3' >/dev/null 2>&1 || true
+exit 0
