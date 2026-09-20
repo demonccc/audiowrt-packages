@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-renderer
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
 
@@ -18,8 +18,8 @@ endef
 define Package/audiowrt-renderer/description
  Native AudioWRT network renderer. A single daemon provides DLNA/UPnP
  MediaRenderer functionality over SSDP, minimal authoritative mDNS/DNS-SD for
- the AudioWRT host and LuCI service, codec/player autodetection, custom player
- overrides and runtime playback status. It does not require MPD, upmpdcli or
+ the AudioWRT host and LuCI service, UCI-backed codec/player discovery, hot-reloadable player selection,
+ fallback execution and runtime playback status. It does not require MPD, upmpdcli or
  a separate mDNS daemon.
 endef
 
@@ -50,7 +50,6 @@ define Package/audiowrt-renderer/install
 	$(INSTALL_CONF) ./files/audiowrt-dlna.config $(1)/etc/config/audiowrt-dlna
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/audiowrt-dlna.init $(1)/etc/init.d/audiowrt-renderer
-	$(INSTALL_DIR) $(1)/usr/share/audiowrt/dlna/players
 endef
 
 $(eval $(call BuildPackage,audiowrt-renderer))
