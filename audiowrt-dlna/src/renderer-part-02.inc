@@ -139,12 +139,18 @@ static void build_protocol_info(char *out, size_t len)
 {
     size_t i;
     out[0] = 0;
-    for (i = 0; i < g.player_count; i++) {
+    for (i = 0; i < g.codec_count; i++) {
+        struct codec *codec = &g.codecs[i];
         char copy[384], *save = NULL, *tok;
-        copystr(copy, sizeof(copy), g.players[i].mime);
-        for (tok = strtok_r(copy, " ,\t", &save); tok; tok = strtok_r(NULL, " ,\t", &save)) {
+
+        if (!effective_player(codec))
+            continue;
+        copystr(copy, sizeof(copy), codec->mime);
+        for (tok = strtok_r(copy, " ,\t", &save); tok;
+             tok = strtok_r(NULL, " ,\t", &save)) {
             char item[512];
-            snprintf(item, sizeof(item), "%shttp-get:*:%s:*", out[0] ? "," : "", tok);
+            snprintf(item, sizeof(item), "%shttp-get:*:%s:*",
+                     out[0] ? "," : "", tok);
             if (strlen(out) + strlen(item) + 1 < len)
                 strcat(out, item);
         }
@@ -166,22 +172,22 @@ static int handle_avtransport(int fd, const char *action, const char *body)
 {
     char tmp[24576], timebuf[32];
     if (!strcmp(action, "SetAVTransportURI")) {
-        struct player *p;
+        struct codec *codec;
         char uri[2048], meta[8192];
         if (xml_value(body, "CurrentURI", uri, sizeof(uri)) < 0 || !uri[0]) {
             soap_fault(fd, 714, "Illegal MIME-type");
             return 0;
         }
         xml_value(body, "CurrentURIMetaData", meta, sizeof(meta));
-        p = player_for_uri(uri, meta);
-        if (!p) {
+        codec = player_for_uri(uri, meta);
+        if (!codec) {
             soap_fault(fd, 714, "Unsupported media");
             return 0;
         }
         stop_current(true);
         copystr(g.uri, sizeof(g.uri), uri);
         copystr(g.metadata, sizeof(g.metadata), meta);
-        copystr(g.codec, sizeof(g.codec), p->id);
+        copystr(g.codec, sizeof(g.codec), codec->id);
         g.state = STATE_STOPPED;
         write_status();
         soap_response(fd, "AVTransport", action, "");
