@@ -27,7 +27,7 @@ Release-family-specific AudioWRT compatibility deltas may live under `releases/<
 Current source-derived userspace packages are:
 
 - `audiowrt-busybox` -> OpenWrt `busybox`;
-- `audiowrt-minimal-alsa` -> OpenWrt packages feed `alsa-lib`;
+- `libaudiowrt-alsa-minimal` -> OpenWrt packages feed `alsa-lib`;
 - `audiowrt-wpad` -> OpenWrt `hostapd` source, linked as one multicall `hostapd` + `wpa_supplicant` binary;
 - `audiowrt-umdns` -> OpenWrt `umdns`;
 - `audiowrt-bluez` -> OpenWrt packages feed `bluez`.
@@ -74,7 +74,7 @@ Common reusable audio state and helper CLI. The device/audio name is derived fro
 
 ### `audiowrt-usb-audio`
 
-Detects the first USB Audio Class playback device, creates the ALSA `default` output and reacts to USB hotplug. Minimal builds use `audiowrt-minimal-alsa`; standard builds use the normal OpenWrt ALSA package.
+Detects the first USB Audio Class playback device, creates the ALSA `default` output and reacts to USB hotplug. Minimal builds use `libaudiowrt-alsa-minimal`; standard builds use the normal OpenWrt ALSA package.
 
 ### `audiowrt-minimal-upmpdcli`
 
