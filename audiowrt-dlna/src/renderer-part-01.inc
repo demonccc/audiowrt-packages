@@ -44,14 +44,13 @@ static int config_next_token(char **cursor, char *out, size_t len)
     return 1;
 }
 
+
 static void apply_renderer_option(const char *key, const char *value)
 {
     if (!strcmp(key, "friendly_name"))
         copystr(g.friendly_name, sizeof(g.friendly_name), value);
     else if (!strcmp(key, "uuid"))
         copystr(g.uuid, sizeof(g.uuid), value);
-    else if (!strcmp(key, "player_dir"))
-        copystr(g.player_dir, sizeof(g.player_dir), value);
     else if (!strcmp(key, "runtime_dir"))
         copystr(g.runtime_dir, sizeof(g.runtime_dir), value);
     else if (!strcmp(key, "alsa_device"))
@@ -102,116 +101,119 @@ static int load_renderer_options(const char *path)
     return 0;
 }
 
-static void commit_player_override(struct player *override, bool enabled)
+static struct codec *registry_codec(const char *id)
 {
-    struct player *p;
+    struct codec *codec;
 
-    if (!enabled || !override->id[0] || !override->command[0])
-        return;
+    codec = find_codec_id(id);
+    if (codec)
+        return codec;
+    if (!id || !*id || g.codec_count >= MAX_CODECS)
+        return NULL;
 
-    p = find_player_id(override->id);
-    if (!p && g.player_count < MAX_PLAYERS) {
-        p = &g.players[g.player_count++];
-        memset(p, 0, sizeof(*p));
-        copystr(p->id, sizeof(p->id), override->id);
-        copystr(p->name, sizeof(p->name), override->id);
-    }
-    if (!p)
-        return;
-
-    p->custom = true;
-    p->managed = override->managed;
-    copystr(p->command, sizeof(p->command), override->command);
-    if (override->pause_command[0])
-        copystr(p->pause_command, sizeof(p->pause_command), override->pause_command);
-    if (override->resume_command[0])
-        copystr(p->resume_command, sizeof(p->resume_command), override->resume_command);
-    if (override->stop_command[0])
-        copystr(p->stop_command, sizeof(p->stop_command), override->stop_command);
-    if (override->mime[0])
-        copystr(p->mime, sizeof(p->mime), override->mime);
-    if (override->extensions[0])
-        copystr(p->extensions, sizeof(p->extensions), override->extensions);
+    codec = &g.codecs[g.codec_count++];
+    memset(codec, 0, sizeof(*codec));
+    copystr(codec->id, sizeof(codec->id), id);
+    return codec;
 }
 
-static int load_player_overrides(const char *path)
+static struct player *registry_player(const char *id)
+{
+    struct player *player;
+
+    player = find_player_id(id);
+    if (player)
+        return player;
+    if (!id || !*id || g.player_count >= MAX_PLAYERS)
+        return NULL;
+
+    player = &g.players[g.player_count++];
+    memset(player, 0, sizeof(*player));
+    copystr(player->id, sizeof(player->id), id);
+    copystr(player->name, sizeof(player->name), id);
+    return player;
+}
+
+static int load_registry(const char *path)
 {
     FILE *f = fopen(path, "r");
     char line[2048];
-    struct player override;
-    bool in_player = false;
-    bool enabled = true;
+    struct codec *codec = NULL;
+    struct player *player = NULL;
+
+    g.codec_count = 0;
+    g.player_count = 0;
+    memset(g.codecs, 0, sizeof(g.codecs));
+    memset(g.players, 0, sizeof(g.players));
 
     if (!f)
         return -1;
 
-    memset(&override, 0, sizeof(override));
     while (fgets(line, sizeof(line), f)) {
         char *cursor = line;
-        char directive[32], type[64], ignored_name[128], key[128], value[1536];
+        char directive[32], type[64], name[128], key[128], value[1536];
 
         if (!config_next_token(&cursor, directive, sizeof(directive)))
             continue;
 
         if (!strcmp(directive, "config")) {
-            if (in_player)
-                commit_player_override(&override, enabled);
-
-            type[0] = ignored_name[0] = 0;
+            type[0] = name[0] = 0;
             config_next_token(&cursor, type, sizeof(type));
-            config_next_token(&cursor, ignored_name, sizeof(ignored_name));
-            in_player = !strcmp(type, "player");
-            memset(&override, 0, sizeof(override));
-            enabled = true;
+            config_next_token(&cursor, name, sizeof(name));
+            codec = NULL;
+            player = NULL;
+            if (!strcmp(type, "codec"))
+                codec = registry_codec(name);
+            else if (!strcmp(type, "player"))
+                player = registry_player(name);
             continue;
         }
 
-        if (!in_player || strcmp(directive, "option"))
+        if (strcmp(directive, "option") && strcmp(directive, "list"))
             continue;
         if (!config_next_token(&cursor, key, sizeof(key)) ||
             !config_next_token(&cursor, value, sizeof(value)))
             continue;
 
-        if (!strcmp(key, "codec"))
-            copystr(override.id, sizeof(override.id), value);
-        else if (!strcmp(key, "command"))
-            copystr(override.command, sizeof(override.command), value);
-        else if (!strcmp(key, "enabled"))
-            enabled = parse_bool(value, 1);
-        else if (!strcmp(key, "managed"))
-            override.managed = parse_bool(value, 0);
-        else if (!strcmp(key, "pause_command"))
-            copystr(override.pause_command, sizeof(override.pause_command), value);
-        else if (!strcmp(key, "resume_command"))
-            copystr(override.resume_command, sizeof(override.resume_command), value);
-        else if (!strcmp(key, "stop_command"))
-            copystr(override.stop_command, sizeof(override.stop_command), value);
-        else if (!strcmp(key, "mime"))
-            copystr(override.mime, sizeof(override.mime), value);
-        else if (!strcmp(key, "extensions"))
-            copystr(override.extensions, sizeof(override.extensions), value);
+        if (codec) {
+            if (!strcmp(directive, "list") && !strcmp(key, "mime"))
+                append_token(codec->mime, sizeof(codec->mime), value);
+            else if (!strcmp(directive, "list") && !strcmp(key, "extension"))
+                append_token(codec->extensions, sizeof(codec->extensions), value);
+            else if (!strcmp(directive, "option") && !strcmp(key, "default_player"))
+                copystr(codec->default_player, sizeof(codec->default_player), value);
+        } else if (player) {
+            if (!strcmp(directive, "option") && !strcmp(key, "name"))
+                copystr(player->name, sizeof(player->name), value);
+            else if (!strcmp(directive, "option") && !strcmp(key, "executable"))
+                copystr(player->executable, sizeof(player->executable), value);
+            else if (!strcmp(directive, "list") && !strcmp(key, "codec"))
+                append_token(player->codecs, sizeof(player->codecs), value);
+        }
     }
 
-    if (in_player)
-        commit_player_override(&override, enabled);
     fclose(f);
     return 0;
 }
 
+static int reload_registry(void)
+{
+    return load_registry("/etc/config/audiowrt");
+}
+
 static int load_config(void)
 {
-    const char *path = "/etc/config/audiowrt-dlna";
+    const char *renderer_path = "/etc/config/audiowrt-dlna";
 
     memset(&g, 0, sizeof(g));
     copystr(g.friendly_name, sizeof(g.friendly_name), "AudioWRT");
-    copystr(g.player_dir, sizeof(g.player_dir), DEFAULT_PLAYER_DIR);
     copystr(g.runtime_dir, sizeof(g.runtime_dir), DEFAULT_RUNTIME_DIR);
     copystr(g.alsa_device, sizeof(g.alsa_device), "default");
     g.port = DEFAULT_PORT;
     g.volume = 100;
     g.state = STATE_NO_MEDIA;
 
-    if (load_renderer_options(path) < 0)
+    if (load_renderer_options(renderer_path) < 0)
         return -1;
 
     if (g.port < 1024 || g.port > 65535)
@@ -219,9 +221,7 @@ static int load_config(void)
     if (g.volume < 0) g.volume = 0;
     if (g.volume > 100) g.volume = 100;
 
-    load_descriptors();
-    if (load_player_overrides(path) < 0)
-        return -1;
+    reload_registry();
 
     if (!g.uuid[0])
         copystr(g.uuid, sizeof(g.uuid), "00000000-0000-0000-0000-000000000000");
@@ -231,38 +231,57 @@ static int load_config(void)
 
 static void print_players_json(void)
 {
-    size_t i;
+    size_t i, j;
+
     putchar('[');
-    for (i = 0; i < g.player_count; i++) {
-        struct player *p = &g.players[i];
+    for (i = 0; i < g.codec_count; i++) {
+        struct codec *codec = &g.codecs[i];
+        struct player *effective = effective_player(codec);
+        bool first_player = true;
+
         if (i) putchar(',');
-        fputs("{\"id\":\"", stdout); json_escape(stdout, p->id);
-        fputs("\",\"name\":\"", stdout); json_escape(stdout, p->name);
-        fputs("\",\"mode\":\"", stdout); fputs(p->custom ? "custom" : "automatic", stdout);
-        fputs("\",\"command\":\"", stdout); json_escape(stdout, p->command);
-        fputs("\",\"auto_command\":\"", stdout); json_escape(stdout, p->auto_command);
-        fputs("\",\"package\":\"", stdout); json_escape(stdout, p->package);
-        fputs("\",\"mime\":\"", stdout); json_escape(stdout, p->mime);
-        fputs("\",\"extensions\":\"", stdout); json_escape(stdout, p->extensions);
-        fprintf(stdout, "\",\"available\":%s,\"managed\":%s}",
-                (!p->custom && access(p->command, X_OK) == 0) || p->custom ? "true" : "false",
-                p->managed ? "true" : "false");
+        fputs("{\"id\":\"", stdout); json_escape(stdout, codec->id);
+        fputs("\",\"mime\":\"", stdout); json_escape(stdout, codec->mime);
+        fputs("\",\"extensions\":\"", stdout); json_escape(stdout, codec->extensions);
+        fputs("\",\"default_player\":\"", stdout); json_escape(stdout, codec->default_player);
+        fputs("\",\"effective_player\":\"", stdout);
+        json_escape(stdout, effective ? effective->id : "");
+        fprintf(stdout, "\",\"available\":%s,\"players\":[", effective ? "true" : "false");
+
+        for (j = 0; j < g.player_count; j++) {
+            struct player *p = &g.players[j];
+            if (!player_supports_codec(p, codec->id))
+                continue;
+            if (!first_player)
+                putchar(',');
+            first_player = false;
+            fputs("{\"id\":\"", stdout); json_escape(stdout, p->id);
+            fputs("\",\"name\":\"", stdout); json_escape(stdout, p->name);
+            fputs("\",\"executable\":\"", stdout); json_escape(stdout, p->executable);
+            fprintf(stdout, "\",\"available\":%s}", player_available(p) ? "true" : "false");
+        }
+        fputs("]}", stdout);
     }
     puts("]");
 }
 
-static struct player *player_for_uri(const char *uri, const char *metadata)
+static struct codec *player_for_uri(const char *uri, const char *metadata)
 {
     size_t i;
     char ext[32] = "";
     const char *q, *dot, *slash;
 
-    for (i = 0; i < g.player_count; i++) {
+    for (i = 0; i < g.codec_count; i++) {
         char copy[384], *save = NULL, *tok;
-        copystr(copy, sizeof(copy), g.players[i].mime);
-        for (tok = strtok_r(copy, " ,\t", &save); tok; tok = strtok_r(NULL, " ,\t", &save))
+        struct codec *codec = &g.codecs[i];
+
+        if (!effective_player(codec))
+            continue;
+        copystr(copy, sizeof(copy), codec->mime);
+        for (tok = strtok_r(copy, " ,\t", &save); tok;
+             tok = strtok_r(NULL, " ,\t", &save))
             if (metadata && *metadata && strcasestr(metadata, tok))
-                return &g.players[i];
+                return codec;
     }
 
     q = uri ? strchr(uri, '?') : NULL;
@@ -273,44 +292,115 @@ static struct player *player_for_uri(const char *uri, const char *metadata)
         if (n >= sizeof(ext)) n = sizeof(ext) - 1;
         memcpy(ext, dot + 1, n);
         ext[n] = 0;
-        for (i = 0; ext[i]; i++) ext[i] = (char)tolower((unsigned char)ext[i]);
-        for (i = 0; i < g.player_count; i++)
-            if (token_in_list(g.players[i].extensions, ext))
-                return &g.players[i];
+        for (i = 0; ext[i]; i++)
+            ext[i] = (char)tolower((unsigned char)ext[i]);
+        for (i = 0; i < g.codec_count; i++) {
+            struct codec *codec = &g.codecs[i];
+            if (effective_player(codec) && token_in_list(codec->extensions, ext))
+                return codec;
+        }
     }
     return NULL;
 }
 
-static int shell_command(const char *command, bool wait_child)
+static int signal_player_group(int sig)
 {
+    if (g.player_pid <= 0)
+        return -1;
+    if (kill(-g.player_pid, sig) == 0)
+        return 0;
+    return kill(g.player_pid, sig);
+}
+
+static int spawn_player(struct player *p)
+{
+    int exec_pipe[2];
+    int child_errno = 0;
+    ssize_t n;
     pid_t pid;
-    int status = 0;
-    if (!command || !*command)
+
+    if (!p || !player_available(p))
         return -1;
+    if (pipe(exec_pipe) < 0)
+        return -1;
+    if (fcntl(exec_pipe[1], F_SETFD, FD_CLOEXEC) < 0) {
+        close(exec_pipe[0]);
+        close(exec_pipe[1]);
+        return -1;
+    }
+
     pid = fork();
-    if (pid < 0)
+    if (pid < 0) {
+        close(exec_pipe[0]);
+        close(exec_pipe[1]);
         return -1;
+    }
+
     if (pid == 0) {
-        execl("/bin/sh", "sh", "-c", command, (char *)NULL);
+        close(exec_pipe[0]);
+        setpgid(0, 0);
+        execl(p->executable, p->executable, g.uri, (char *)NULL);
+        child_errno = errno;
+        (void)write(exec_pipe[1], &child_errno, sizeof(child_errno));
         _exit(127);
     }
-    if (wait_child) {
-        if (waitpid(pid, &status, 0) < 0)
-            return -1;
-        return WIFEXITED(status) && WEXITSTATUS(status) == 0 ? 0 : -1;
+
+    close(exec_pipe[1]);
+    (void)setpgid(pid, pid);
+    do {
+        n = read(exec_pipe[0], &child_errno, sizeof(child_errno));
+    } while (n < 0 && errno == EINTR);
+    close(exec_pipe[0]);
+
+    if (n > 0) {
+        waitpid(pid, NULL, 0);
+        return -1;
     }
+
+    g.player_pid = pid;
+    copystr(g.active_player, sizeof(g.active_player), p->id);
     return 0;
+}
+
+static int launch_next_player(struct codec *codec)
+{
+    struct player *p;
+    size_t i;
+
+    if (!codec)
+        return -1;
+
+    if (codec->default_player[0]) {
+        p = find_player_id(codec->default_player);
+        if (p && player_supports_codec(p, codec->id)) {
+            i = (size_t)(p - g.players);
+            if (i < 32 && !(g.attempted_players & (1U << i))) {
+                g.attempted_players |= 1U << i;
+                if (spawn_player(p) == 0)
+                    return 0;
+            }
+        }
+    }
+
+    for (i = 0; i < g.player_count && i < 32; i++) {
+        p = &g.players[i];
+        if (g.attempted_players & (1U << i))
+            continue;
+        if (!player_supports_codec(p, codec->id))
+            continue;
+        g.attempted_players |= 1U << i;
+        if (spawn_player(p) == 0)
+            return 0;
+    }
+
+    return -1;
 }
 
 static void stop_current(bool reset_position)
 {
-    struct player *p = g.codec[0] ? find_player_id(g.codec) : NULL;
-    if (p && p->custom && p->stop_command[0])
-        shell_command(p->stop_command, true);
-
     if (g.player_pid > 0) {
         int i, status;
-        kill(g.player_pid, SIGTERM);
+        signal_player_group(SIGTERM);
         for (i = 0; i < 20; i++) {
             pid_t r = waitpid(g.player_pid, &status, WNOHANG);
             if (r == g.player_pid || r < 0)
@@ -318,11 +408,14 @@ static void stop_current(bool reset_position)
             usleep(50000);
         }
         if (waitpid(g.player_pid, &status, WNOHANG) == 0) {
-            kill(g.player_pid, SIGKILL);
+            signal_player_group(SIGKILL);
             waitpid(g.player_pid, &status, 0);
         }
         g.player_pid = 0;
     }
+
+    g.active_player[0] = 0;
+    g.attempted_players = 0;
     g.state = g.uri[0] ? STATE_STOPPED : STATE_NO_MEDIA;
     if (reset_position)
         g.position_base = 0;
@@ -332,22 +425,19 @@ static void stop_current(bool reset_position)
 
 static int start_current(void)
 {
-    struct player *p;
+    struct codec *codec;
     char volume_path[320];
+    char mime[384], *first_mime;
 
     if (!g.uri[0] || !g.codec[0])
         return -1;
-    p = find_player_id(g.codec);
-    if (!p || !p->command[0])
+    codec = find_codec_id(g.codec);
+    if (!codec)
         return -1;
 
     if (g.state == STATE_PAUSED) {
-        if (p->custom && p->resume_command[0]) {
-            if (shell_command(p->resume_command, true) < 0)
-                return -1;
-        } else if (g.player_pid > 0) {
-            kill(g.player_pid, SIGCONT);
-        }
+        if (g.player_pid <= 0 || signal_player_group(SIGCONT) < 0)
+            return -1;
         g.state = STATE_PLAYING;
         g.play_started = time(NULL);
         write_status();
@@ -359,30 +449,16 @@ static int start_current(void)
 
     snprintf(volume_path, sizeof(volume_path), "%s/volume", g.runtime_dir);
     setenv("AUDIOWRT_URI", g.uri, 1);
+    setenv("AUDIOWRT_CODEC", codec->id, 1);
+    copystr(mime, sizeof(mime), codec->mime);
+    first_mime = strtok(mime, " ,\t");
+    setenv("AUDIOWRT_MIME", first_mime ? first_mime : "", 1);
     setenv("AUDIOWRT_ALSA_DEVICE", g.alsa_device, 1);
     setenv("AUDIOWRT_VOLUME_FILE", volume_path, 1);
 
-    if (p->custom) {
-        if (p->managed) {
-            pid_t pid = fork();
-            if (pid < 0) return -1;
-            if (pid == 0) {
-                execl("/bin/sh", "sh", "-c", p->command, (char *)NULL);
-                _exit(127);
-            }
-            g.player_pid = pid;
-        } else if (shell_command(p->command, true) < 0) {
-            return -1;
-        }
-    } else {
-        pid_t pid = fork();
-        if (pid < 0) return -1;
-        if (pid == 0) {
-            execl(p->command, p->command, g.uri, (char *)NULL);
-            _exit(127);
-        }
-        g.player_pid = pid;
-    }
+    g.attempted_players = 0;
+    if (launch_next_player(codec) < 0)
+        return -1;
 
     g.state = STATE_PLAYING;
     g.play_started = time(NULL);
@@ -392,19 +468,13 @@ static int start_current(void)
 
 static int pause_current(void)
 {
-    struct player *p;
-    if (g.state != STATE_PLAYING)
+    if (g.state != STATE_PLAYING || g.player_pid <= 0)
         return -1;
-    p = find_player_id(g.codec);
+
     g.position_base = current_position();
-    if (p && p->custom && p->pause_command[0]) {
-        if (shell_command(p->pause_command, true) < 0)
-            return -1;
-    } else if (g.player_pid > 0) {
-        kill(g.player_pid, SIGSTOP);
-    } else {
+    if (signal_player_group(SIGSTOP) < 0)
         return -1;
-    }
+
     g.state = STATE_PAUSED;
     g.play_started = 0;
     write_status();
@@ -415,17 +485,32 @@ static void reap_player(void)
 {
     int status;
     pid_t r;
+
     if (g.player_pid <= 0)
         return;
+
     r = waitpid(g.player_pid, &status, WNOHANG);
-    if (r == g.player_pid) {
-        g.player_pid = 0;
-        if (g.state == STATE_PLAYING || g.state == STATE_PAUSED)
-            g.state = g.uri[0] ? STATE_STOPPED : STATE_NO_MEDIA;
-        g.play_started = 0;
-        write_status();
-        notify_service("AVTransport");
+    if (r != g.player_pid)
+        return;
+
+    g.player_pid = 0;
+
+    if (g.state == STATE_PLAYING &&
+        (!WIFEXITED(status) || WEXITSTATUS(status) != 0)) {
+        struct codec *codec = find_codec_id(g.codec);
+        if (launch_next_player(codec) == 0) {
+            write_status();
+            return;
+        }
     }
+
+    g.active_player[0] = 0;
+    g.attempted_players = 0;
+    if (g.state == STATE_PLAYING || g.state == STATE_PAUSED)
+        g.state = g.uri[0] ? STATE_STOPPED : STATE_NO_MEDIA;
+    g.play_started = 0;
+    write_status();
+    notify_service("AVTransport");
 }
 
 static void xml_escape_buf(const char *src, char *dst, size_t len)
