@@ -19,6 +19,21 @@ if grep -Rqs '#include <uci.h>' audiowrt-dlna/src; then
 fi
 grep -q 'config_next_token' audiowrt-dlna/src/renderer-part-01.inc || fail "minimal renderer config parser missing"
 
+grep -q 'avtransport_action_changes_state' audiowrt-dlna/src/renderer-part-03d.inc || fail "AVTransport state-change event filter missing"
+grep -q 'rendering_action_changes_state' audiowrt-dlna/src/renderer-part-03d.inc || fail "RenderingControl state-change event filter missing"
+for action in SetAVTransportURI Play Pause Stop; do
+  grep -q "\"$action\"" audiowrt-dlna/src/renderer-part-03d.inc || fail "AVTransport event filter missing $action"
+done
+for action in SetVolume SetMute; do
+  grep -q "\"$action\"" audiowrt-dlna/src/renderer-part-03d.inc || fail "RenderingControl event filter missing $action"
+done
+if grep -Fq 'handle_avtransport(fd, action, body); notify_service("AVTransport");' audiowrt-dlna/src/renderer-part-03d.inc; then
+  fail "AVTransport SOAP reads must not notify subscribers unconditionally"
+fi
+if grep -Fq 'handle_rendering(fd, action, body); notify_service("RenderingControl");' audiowrt-dlna/src/renderer-part-03d.inc; then
+  fail "RenderingControl SOAP reads must not notify subscribers unconditionally"
+fi
+
 renderer_sources=$(cat audiowrt-dlna/src/*)
 for token in \
   'MediaRenderer:1' \
