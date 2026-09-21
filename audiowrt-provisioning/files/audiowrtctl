@@ -6,41 +6,182 @@ set -eu
 setup_ip() { uci -q get audiowrt.main.setup_ip || echo '192.168.77.1'; }
 setup_ssid() { /usr/libexec/audiowrt/setup-ssid 2>/dev/null || echo 'AudioWRT-Setup'; }
 first_radio() { /usr/sbin/audiowrt-wifi-client radios 2>/dev/null | sed -n '1s/|.*//p'; }
-sync_internal() { [ -x /usr/sbin/audiowrt-storage ] && /usr/sbin/audiowrt-storage sync-core >/dev/null 2>&1 || true; }
+error_file=/tmp/audiowrt/provisioning.error
+done_file=/tmp/audiowrt/provisioning.done
+
+clear_error() { mkdir -p /tmp/audiowrt; rm -f "$error_file"; }
+
+has_persistent_wifi_client() {
+	uci -q get wireless.audiowrt_client >/dev/null 2>&1 || return 1
+	[ "$(uci -q get wireless.audiowrt_client.mode 2>/dev/null || true)" = 'sta' ] || return 1
+	[ -n "$(uci -q get wireless.audiowrt_client.device 2>/dev/null || true)" ] || return 1
+	[ -n "$(uci -q get wireless.audiowrt_client.ssid 2>/dev/null || true)" ] || return 1
+	return 0
+}
+
+carrier_up() {
+	device="$1"
+	[ -r "/sys/class/net/$device/carrier" ] || return 1
+	[ "$(cat "/sys/class/net/$device/carrier" 2>/dev/null || echo 0)" = '1' ]
+}
+
+lan_devices() {
+	lan_device="$(uci -q get network.lan.device 2>/dev/null || uci -q get network.lan.ifname 2>/dev/null || true)"
+	case "$lan_device" in
+		br-*)
+			if [ -d "/sys/class/net/$lan_device/brif" ]; then
+				for member in /sys/class/net/"$lan_device"/brif/*; do
+					[ -e "$member" ] || continue
+					basename "$member"
+				done
+			fi
+			;;
+		*)
+			for member in $lan_device; do
+				[ -n "$member" ] && printf '%s\n' "$member"
+			done
+			;;
+	esac
+}
+
+legacy_lan_vlan() {
+	for device in $(lan_devices); do
+		case "$device" in
+			*.*)
+				vlan="${device##*.}"
+				case "$vlan" in ''|*[!0-9]*) continue ;; esac
+				printf '%s\n' "$vlan"
+				return 0
+				;;
+		esac
+	done
+	return 1
+}
+
+swconfig_lan_link() {
+	command -v swconfig >/dev/null 2>&1 || return 1
+	vlan="$(legacy_lan_vlan 2>/dev/null || true)"
+	[ -n "$vlan" ] || return 1
+
+	for switch in $(swconfig list 2>/dev/null | sed -n 's/^Found: \([^ ]*\).*/\1/p'); do
+		state="$(swconfig dev "$switch" show 2>/dev/null || true)"
+		[ -n "$state" ] || continue
+		ports="$(printf '%s\n' "$state" | awk -v wanted="$vlan" '
+			$1 == "VLAN" && $2 == (wanted ":") { in_vlan=1; next }
+			in_vlan && $1 == "ports:" { for (i=2; i<=NF; i++) print $i; exit }
+			in_vlan && $1 == "VLAN" { exit }
+		')"
+		for token in $ports; do
+			case "$token" in
+				*t) continue ;;
+				*u) port="${token%u}" ;;
+				*) port="$token" ;;
+			esac
+			case "$port" in ''|*[!0-9]*) continue ;; esac
+			printf '%s\n' "$state" | grep -Eq "link: port:${port} link:up([[:space:]]|$)" && return 0
+		done
+	done
+	return 1
+}
+
+has_ethernet_link() {
+	physical_seen=0
+	for device in $(lan_devices); do
+		case "$device" in
+			lo|br-*|wlan*|phy*) continue ;;
+		esac
+		[ -d "/sys/class/net/$device/wireless" ] && continue
+		case "$device" in
+			*.*)
+				# Legacy swconfig LANs expose a VLAN netdev (for example eth0.1).
+				# Its carrier can reflect the CPU link, not a plugged RJ45 port.
+				if ! command -v swconfig >/dev/null 2>&1; then
+					base="${device%%.*}"
+					carrier_up "$base" && return 0
+				fi
+				continue
+				;;
+		esac
+		physical_seen=1
+		carrier_up "$device" && return 0
+	done
+
+	# If DSA/direct physical LAN devices were visible, their carrier values are
+	# authoritative. Otherwise fall back to the switch port status used by
+	# older targets such as ath79/swconfig devices.
+	[ "$physical_seen" -eq 0 ] || return 1
+	swconfig_lan_link
+}
+
+setup_active() {
+	status="$(ubus call network.interface.audiowrt_setup status 2>/dev/null || true)"
+	printf '%s\n' "$status" | grep -q '"up":[[:space:]]*true' || return 1
+	printf '%s\n' "$status" | grep -q "\"address\":[[:space:]]*\"$(setup_ip)\"" || return 1
+	return 0
+}
+
+wifi_up() {
+	ubus call network.interface.audiowrt_wifi status 2>/dev/null | grep -q '"up":[[:space:]]*true'
+}
+
+start_setup() {
+	reason="$1"
+	radio="$(first_radio)"
+	[ -n "$radio" ] || { echo 'ERROR: no Wi-Fi radio is available.' >&2; return 3; }
+	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$(setup_ssid)" "$(setup_ip)"
+	clear_error
+	rm -f "$done_file"
+	logger -t audiowrt "Provisioning mode enabled ($reason)"
+}
 
 provisioning_start() {
-	radio="$(first_radio)"
-	[ -n "$radio" ] || { echo 'ERROR: no Wi-Fi radio is available.' >&2; exit 3; }
-	/usr/sbin/audiowrt-wifi-client disconnect >/dev/null 2>&1 || true
-	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$(setup_ssid)" "$(setup_ip)"
-	uci -q set audiowrt.main.provisioning='1'
-	uci -q set audiowrt.main.last_error=''
-	uci -q commit audiowrt
-	logger -t audiowrt "Provisioning mode enabled"
+	# Manual recovery must not rewrite or destroy the saved Wi-Fi profile. Bring
+	# the current client down only for this boot, then expose the setup AP.
+	ubus call network.interface.audiowrt_wifi down >/dev/null 2>&1 || true
+	start_setup 'manual request'
+}
+
+provisioning_auto() {
+	if has_persistent_wifi_client; then
+		/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
+		logger -t audiowrt 'Setup AP not required: persistent Wi-Fi client configuration exists'
+		return 0
+	fi
+
+	if has_ethernet_link; then
+		/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
+		logger -t audiowrt 'Setup AP not required: Ethernet carrier detected'
+		return 0
+	fi
+
+	start_setup 'no saved Wi-Fi client and no Ethernet carrier'
 }
 
 provisioning_stop() {
 	/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
-	uci -q set audiowrt.main.provisioning='0'
-	uci -q commit audiowrt
-	sync_internal
 }
 
 status() {
+	provisioning=0
+	if setup_active && [ ! -f "$done_file" ]; then
+		provisioning=1
+	fi
 	printf 'device_name=%s\n' "$(uci -q get system.@system[0].hostname || echo AudioWRT)"
-	printf 'provisioning=%s\n' "$(uci -q get audiowrt.main.provisioning || echo 1)"
+	printf 'provisioning=%s\n' "$provisioning"
 	printf 'wifi_ssid=%s\n' "$(uci -q get wireless.audiowrt_client.ssid || true)"
-	printf 'last_error=%s\n' "$(uci -q get audiowrt.main.last_error || true)"
+	printf 'ethernet_link=%s\n' "$(has_ethernet_link && echo 1 || echo 0)"
+	printf 'last_error=%s\n' "$(cat "$error_file" 2>/dev/null || true)"
 }
 
 case "${1:-}" in
 	status) status ;;
 	provisioning)
 		case "${2:-}" in
+			auto) provisioning_auto ;;
 			start) provisioning_start ;;
 			stop) provisioning_stop ;;
-			*) echo 'Usage: audiowrtctl provisioning {start|stop}' >&2; exit 2 ;;
+			*) echo 'Usage: audiowrtctl provisioning {auto|start|stop}' >&2; exit 2 ;;
 		esac
 		;;
-	*) echo 'Usage: audiowrtctl {status|provisioning start|provisioning stop}' >&2; exit 2 ;;
+	*) echo 'Usage: audiowrtctl {status|provisioning auto|provisioning start|provisioning stop}' >&2; exit 2 ;;
 esac

@@ -59,7 +59,9 @@ jobs:
 
       - name: Validate audio runtime flash contract
         shell: bash
-        run: bash tests/test-audio-runtime-state.sh
+        run: |
+          bash tests/test-audio-runtime-state.sh
+          bash tests/test-flash-write-policy.sh
 
       - name: Validate native renderer, discovery and players
         shell: bash

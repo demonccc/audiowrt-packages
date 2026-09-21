@@ -4,12 +4,22 @@
 START=99
 
 start() {
-    [ "$(uci -q get audiowrt.main.provisioning_initialized || echo 0)" = "1" ] && return 0
+	if [ -x /etc/uci-defaults/10-audiowrt-provisioning ]; then
+		logger -t audiowrt "Running provisioning first-install migration"
+		if /etc/uci-defaults/10-audiowrt-provisioning; then
+			rm -f /etc/uci-defaults/10-audiowrt-provisioning
+			ubus call network reload >/dev/null 2>&1 || true
+		else
+			logger -t audiowrt "Provisioning first-install migration failed"
+			return 1
+		fi
+	fi
 
-    logger -t audiowrt "Running first-boot provisioning fallback"
-    if /etc/uci-defaults/10-audiowrt-provisioning; then
-        logger -t audiowrt "First-boot provisioning completed"
-    else
-        logger -t audiowrt "First-boot provisioning failed"
-    fi
+	# Boot-time decision only: a saved Wi-Fi client or real Ethernet carrier is
+	# enough to manage AudioWRT normally. Otherwise create the setup AP in RAM.
+	if /usr/sbin/audiowrtctl provisioning auto; then
+		logger -t audiowrt "Provisioning boot check completed"
+	else
+		logger -t audiowrt "Provisioning boot check failed"
+	fi
 }

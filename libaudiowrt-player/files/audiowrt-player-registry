@@ -19,6 +19,7 @@ ensure_section() {
 	current="$(section_type "$id")"
 	if [ -z "$current" ]; then
 		uci set "$CONFIG.$id=$type"
+		changed=1
 	elif [ "$current" != "$type" ]; then
 		echo "audiowrt-player-registry: $id already exists as $current, expected $type" >&2
 		return 1
@@ -49,31 +50,44 @@ first_available_player() {
 register_player() {
 	local codec="$1" player="$2" name="$3" executable="$4" mimes="$5" extensions="$6"
 	local item
+	changed=0
 
 	ensure_section "$codec" codec
 	for item in $mimes; do
-		list_has "$CONFIG.$codec.mime" "$item" || uci add_list "$CONFIG.$codec.mime=$item"
+		if ! list_has "$CONFIG.$codec.mime" "$item"; then uci add_list "$CONFIG.$codec.mime=$item"; changed=1; fi
 	done
 	for item in $extensions; do
-		list_has "$CONFIG.$codec.extension" "$item" || uci add_list "$CONFIG.$codec.extension=$item"
+		if ! list_has "$CONFIG.$codec.extension" "$item"; then uci add_list "$CONFIG.$codec.extension=$item"; changed=1; fi
 	done
 
 	ensure_section "$player" player
-	[ -n "$(uci -q get "$CONFIG.$player.name" 2>/dev/null || true)" ] ||
+	if [ -z "$(uci -q get "$CONFIG.$player.name" 2>/dev/null || true)" ]; then
 		uci set "$CONFIG.$player.name=$name"
-	[ -n "$(uci -q get "$CONFIG.$player.executable" 2>/dev/null || true)" ] ||
+		changed=1
+	fi
+	if [ -z "$(uci -q get "$CONFIG.$player.executable" 2>/dev/null || true)" ]; then
 		uci set "$CONFIG.$player.executable=$executable"
-	list_has "$CONFIG.$player.codec" "$codec" || uci add_list "$CONFIG.$player.codec=$codec"
+		changed=1
+	fi
+	if ! list_has "$CONFIG.$player.codec" "$codec"; then
+		uci add_list "$CONFIG.$player.codec=$codec"
+		changed=1
+	fi
 
-	[ -n "$(uci -q get "$CONFIG.$codec.default_player" 2>/dev/null || true)" ] ||
+	if [ -z "$(uci -q get "$CONFIG.$codec.default_player" 2>/dev/null || true)" ]; then
 		uci set "$CONFIG.$codec.default_player=$player"
+		changed=1
+	fi
 
-	uci commit "$CONFIG"
-	reload_renderer
+	if [ "$changed" -eq 1 ]; then
+		uci commit "$CONFIG"
+		reload_renderer
+	fi
 }
 
 unregister_player() {
 	local player="$1" codec default replacement codecs
+	[ -n "$(section_type "$player")" ] || return 0
 	codecs="$(uci -q get "$CONFIG.$player.codec" 2>/dev/null || true)"
 	uci -q delete "$CONFIG.$player" || true
 

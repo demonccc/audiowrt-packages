@@ -10,7 +10,11 @@ reply() {
 }
 
 [ "${REQUEST_METHOD:-}" = 'POST' ] || reply '405 Method Not Allowed' 'POST is required.'
-[ "$(uci -q get audiowrt.main.provisioning || echo 0)" = '1' ] || reply '409 Conflict' 'AudioWRT is already provisioned.'
+setup_ip="$(uci -q get audiowrt.main.setup_ip || echo 192.168.77.1)"
+host="${HTTP_HOST:-}"; host="${host%%:*}"
+if [ "${SERVER_ADDR:-}" != "$setup_ip" ] && [ "$host" != "$setup_ip" ]; then
+	reply '409 Conflict' 'Provisioning is available only on the temporary setup network.'
+fi
 length="${CONTENT_LENGTH:-0}"
 case "$length" in ''|*[!0-9]*) reply '400 Bad Request' 'Invalid request length.' ;; esac
 [ "$length" -le 8192 ] || reply '413 Payload Too Large' 'Request is too large.'
@@ -61,8 +65,8 @@ if ! { printf '%s\n' "$admin_password"; sleep 1; printf '%s\n' "$admin_password"
 	reply '500 Internal Server Error' 'Could not set the administrator password.'
 fi
 
-uci -q set audiowrt.main.last_error=''
-uci -q commit audiowrt
+mkdir -p /tmp/audiowrt
+rm -f /tmp/audiowrt/provisioning.error
 /usr/sbin/audiowrt-wifi-client mdns-sync >/dev/null 2>&1 || true
 
 umask 077

@@ -9,6 +9,7 @@ sbc="$repo_root/audiowrt-sbc/Makefile"
 bluealsa="$repo_root/bluez-alsa/Makefile"
 bluetooth="$repo_root/audiowrt-bluetooth/Makefile"
 wrapper="$repo_root/audiowrt-bluetooth/files/audiowrt-bluetooth"
+btctl_source="$repo_root/audiowrt-btctl/src/audiowrt-btctl.c"
 
 # AudioWRT keeps bluetoothd and A2DP/AVRCP only. The daemon links against the
 # official OpenWrt bluez-libs runtime instead of carrying a tiny library fork.
@@ -37,6 +38,7 @@ fi
 # VCP is disabled. Keep it release-scoped so other OpenWrt families never
 # receive a patch that was written for a different BlueZ version.
 grep -q -- '--disable-vcp' "$bluez"
+grep -q -- '--localstatedir=/tmp' "$bluez"
 test -f "$bluez_vcp_patch"
 grep -q 'c6dcf6b714501768ab7ea293e75d945be0eec188' "$bluez_vcp_patch"
 grep -q '#ifdef HAVE_VCP' "$bluez_vcp_patch"
@@ -69,6 +71,12 @@ fi
 grep -q '/usr/bin/audiowrt-btctl' "$wrapper"
 if grep -Eq '\b(bluetoothctl|hciconfig)\b' "$wrapper"; then
     echo 'ERROR: Bluetooth wrapper still requires generic BlueZ CLI utilities.' >&2
+    exit 1
+fi
+grep -Fq '#define BLUEZ_STORAGE "/tmp/lib/bluetooth"' "$btctl_source"
+grep -Fq 'mkdir -p /tmp/lib/bluetooth' "$wrapper"
+if grep -Rqs '/var/lib/bluetooth' "$wrapper" "$btctl_source"; then
+    echo 'ERROR: Bluetooth runtime state must not depend on /var persistence semantics.' >&2
     exit 1
 fi
 

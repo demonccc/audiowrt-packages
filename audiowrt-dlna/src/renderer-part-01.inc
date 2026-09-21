@@ -51,8 +51,6 @@ static void apply_renderer_option(const char *key, const char *value)
         copystr(g.friendly_name, sizeof(g.friendly_name), value);
     else if (!strcmp(key, "uuid"))
         copystr(g.uuid, sizeof(g.uuid), value);
-    else if (!strcmp(key, "runtime_dir"))
-        copystr(g.runtime_dir, sizeof(g.runtime_dir), value);
     else if (!strcmp(key, "alsa_device"))
         copystr(g.alsa_device, sizeof(g.alsa_device), value);
     else if (!strcmp(key, "port"))
