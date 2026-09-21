@@ -10,6 +10,8 @@ Usage:
   audiowrt-wifi-client scan
   audiowrt-wifi-client status
   audiowrt-wifi-client connect <radio> <ssid> <encryption> [password] [bssid] [ip-mode] [ipaddr] [netmask] [gateway] [dns1] [dns2]
+  audiowrt-wifi-client commit-client
+  audiowrt-wifi-client rollback-client
   audiowrt-wifi-client disconnect
   audiowrt-wifi-client setup-start <radio> <ssid> [setup-ip]
   audiowrt-wifi-client setup-stop
@@ -166,8 +168,10 @@ connect_wifi() {
 	else
 		uci -q set wireless.audiowrt_client.key="$key"
 	fi
-	uci -q commit network
-	uci -q commit wireless
+	if [ "${AUDIOWRT_WIFI_PERSIST:-1}" = '1' ]; then
+		uci -q commit network
+		uci -q commit wireless
+	fi
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
 	mdns_sync
 }
@@ -235,6 +239,41 @@ setup_dhcp_disable() {
 	rm -f /tmp/audiowrt-udhcpd.conf /tmp/audiowrt-udhcpd.leases /var/run/audiowrt-udhcpd.pid
 }
 
+stage_setup_config() {
+	radio="$1"; ssid="$2"; setup_ip="$3"
+	stage_setup_config "$radio" "$ssid" "$setup_ip"
+}
+
+commit_wifi_client() {
+	setup_radio="$(uci -q get wireless.audiowrt_setup.device 2>/dev/null || true)"
+	setup_ssid="$(uci -q get wireless.audiowrt_setup.ssid 2>/dev/null || true)"
+	setup_ip="$(uci -q get network.audiowrt_setup.ipaddr 2>/dev/null || true)"
+	setup_present=0
+	[ -n "$setup_radio" ] && [ -n "$setup_ip" ] && setup_present=1
+
+	# Package-level UCI commits include every staged delta. Temporarily remove
+	# the runtime-only setup sections so only the verified client is persisted.
+	if [ "$setup_present" -eq 1 ]; then
+		uci -q delete network.audiowrt_setup 2>/dev/null || true
+		uci -q delete wireless.audiowrt_setup 2>/dev/null || true
+	fi
+	uci -q commit network
+	uci -q commit wireless
+
+	# The AP is still running in netifd. Re-stage its UCI view without reload so
+	# the browser can render the Done page before setup-stop removes it.
+	if [ "$setup_present" -eq 1 ]; then
+		stage_setup_config "$setup_radio" "${setup_ssid:-AudioWRT-Setup}" "$setup_ip"
+	fi
+}
+
+rollback_wifi_client() {
+	radio="$(uci -q get wireless.audiowrt_client.device 2>/dev/null || true)"
+	uci -q revert network.audiowrt_wifi 2>/dev/null || true
+	uci -q revert wireless.audiowrt_client 2>/dev/null || true
+	[ -z "$radio" ] || uci -q revert wireless."$radio".disabled 2>/dev/null || true
+	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
+}
 setup_start() {
 	radio="${1:-}"; ssid="${2:-AudioWRT-Setup}"; setup_ip="${3:-192.168.77.1}"
 	[ -n "$radio" ] && uci -q get wireless."$radio" >/dev/null 2>&1 || { echo 'ERROR: valid radio is required.' >&2; exit 2; }
@@ -347,6 +386,8 @@ case "${1:-}" in
 	scan) scan ;;
 	status) status ;;
 	connect) shift; connect_wifi "$@" ;;
+	commit-client) commit_wifi_client ;;
+	rollback-client) rollback_wifi_client ;;
 	disconnect) disconnect_wifi ;;
 	setup-start) shift; setup_start "$@" ;;
 	setup-stop) setup_stop ;;
