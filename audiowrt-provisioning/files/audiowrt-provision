@@ -5,6 +5,7 @@ set -eu
 
 RUNTIME_DIR=/tmp/audiowrt
 ERROR_FILE="$RUNTIME_DIR/provisioning.error"
+DONE_FILE="$RUNTIME_DIR/provisioning.done"
 
 clear_error() {
 	mkdir -p "$RUNTIME_DIR"
@@ -35,6 +36,7 @@ setup_ssid="$(uci -q get wireless.audiowrt_setup.ssid || uci -q get system.@syst
 active_setup_radio="$setup_radio"
 
 clear_error
+rm -f "$DONE_FILE"
 
 # Provisioning must not depend on AP+STA support on the same PHY. If the
 # target STA uses the setup radio, move the setup AP to another radio when one
@@ -80,6 +82,7 @@ if [ "$connected" -eq 1 ]; then
 		exit 6
 	fi
 	clear_error
+	: > "$DONE_FILE"
 	/usr/sbin/audiowrt-wifi-client mdns-sync >/dev/null 2>&1 || true
 	logger -t audiowrt "Wi-Fi provisioning completed for SSID $ssid"
 
