@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-renderer
-PKG_VERSION:=1.0.1
+PKG_VERSION:=1.1.0
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -19,7 +19,7 @@ endef
 define Package/audiowrt-renderer/description
  Native AudioWRT network renderer. A single daemon provides DLNA/UPnP
  MediaRenderer functionality over SSDP, minimal authoritative mDNS/DNS-SD for
- the AudioWRT host and LuCI service, UCI-backed codec/player discovery, hot-reloadable player selection,
+ the AudioWRT host and LuCI service, split UCI codec/player discovery, module-owned default player selection,
  fallback execution and runtime playback status. It does not require MPD, upmpdcli or
  a separate mDNS daemon.
 endef
