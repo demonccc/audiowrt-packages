@@ -59,7 +59,7 @@ static int play_faad_wav(int fd)
     unsigned char hdr[12];
     unsigned int rate = 0, channels = 0, bits = 0;
     uint16_t audio_format = 0;
-    uint32_t data_left = 0;
+    int data_found = 0;
     snd_pcm_t *pcm = NULL;
     int rc = 0;
 
@@ -87,7 +87,7 @@ static int play_faad_wav(int fd)
             rate = le32(fmt + 4);
             bits = le16(fmt + 14);
         } else if (!memcmp(chdr, "data", 4)) {
-            data_left = size;
+            data_found = 1;
             break;
         } else if (skip_bytes(fd, size) < 0) {
             return EPROTO;
@@ -100,38 +100,55 @@ static int play_faad_wav(int fd)
         }
     }
 
-    if (audio_format != 1 || !channels || channels > 8 || !rate || bits != 16)
+    if (!data_found || audio_format != 1 || !channels || channels > 8 ||
+        !rate || bits != 16)
         return ENOTSUP;
 
     if (aw_pcm_open(&pcm, rate, channels, SND_PCM_FORMAT_S16) < 0)
         return EIO;
 
-    while (data_left >= (uint32_t)channels * 2U) {
-        int16_t samples[3072];
-        unsigned char raw[sizeof(samples)];
-        size_t frame_bytes = (size_t)channels * 2U;
-        size_t want = data_left > sizeof(raw) ? sizeof(raw) : data_left;
-        size_t frames, count, i;
+    {
+        unsigned char raw[6148];
+        size_t pending = 0;
+        const size_t frame_bytes = (size_t)channels * 2U;
 
-        want -= want % frame_bytes;
-        if (!want)
-            break;
-        if (read_exact(fd, raw, want) < 0) {
+        for (;;) {
+            ssize_t n;
+            size_t usable, frames, count, i;
+            int16_t samples[3074];
+
+            do {
+                n = read(fd, raw + pending, sizeof(raw) - pending);
+            } while (n < 0 && errno == EINTR);
+
+            if (n < 0) {
+                rc = errno ? errno : EIO;
+                break;
+            }
+            if (n == 0)
+                break;
+
+            pending += (size_t)n;
+            usable = pending - (pending % frame_bytes);
+            frames = usable / frame_bytes;
+            count = frames * channels;
+
+            for (i = 0; i < count; i++)
+                samples[i] = (int16_t)le16(raw + i * 2);
+
+            aw_scale_s16(samples, count);
+            if (aw_pcm_write(pcm, samples, frames) < 0) {
+                rc = EIO;
+                break;
+            }
+
+            pending -= usable;
+            if (pending)
+                memmove(raw, raw + usable, pending);
+        }
+
+        if (pending && !rc)
             rc = EPROTO;
-            break;
-        }
-        data_left -= (uint32_t)want;
-        frames = want / frame_bytes;
-        count = frames * channels;
-
-        for (i = 0; i < count; i++)
-            samples[i] = (int16_t)le16(raw + i * 2);
-
-        aw_scale_s16(samples, count);
-        if (aw_pcm_write(pcm, samples, frames) < 0) {
-            rc = EIO;
-            break;
-        }
     }
 
     aw_pcm_close(pcm);
