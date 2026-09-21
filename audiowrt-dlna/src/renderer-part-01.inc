@@ -269,6 +269,29 @@ static struct codec *player_for_uri(const char *uri, const char *metadata)
     char ext[32] = "";
     const char *q, *dot, *slash;
 
+    /*
+     * Prefer an explicit URI extension when present. DLNA servers often use
+     * generic MIME types such as audio/ogg for both Vorbis and Opus, while
+     * the file extension remains unambiguous.
+     */
+    q = uri ? strchr(uri, '?') : NULL;
+    slash = uri ? strrchr(uri, '/') : NULL;
+    dot = uri ? strrchr(uri, '.') : NULL;
+    if (dot && (!slash || dot > slash) && (!q || dot < q)) {
+        size_t n = q ? (size_t)(q - dot - 1) : strlen(dot + 1);
+        if (n >= sizeof(ext)) n = sizeof(ext) - 1;
+        memcpy(ext, dot + 1, n);
+        ext[n] = 0;
+        for (i = 0; ext[i]; i++)
+            ext[i] = (char)tolower((unsigned char)ext[i]);
+
+        for (i = 0; i < g.codec_count; i++) {
+            struct codec *codec = &g.codecs[i];
+            if (effective_player(codec) && token_in_list(codec->extensions, ext))
+                return codec;
+        }
+    }
+
     for (i = 0; i < g.codec_count; i++) {
         char copy[384], *save = NULL, *tok;
         struct codec *codec = &g.codecs[i];
@@ -280,23 +303,6 @@ static struct codec *player_for_uri(const char *uri, const char *metadata)
              tok = strtok_r(NULL, " ,\t", &save))
             if (metadata && *metadata && strcasestr(metadata, tok))
                 return codec;
-    }
-
-    q = uri ? strchr(uri, '?') : NULL;
-    slash = uri ? strrchr(uri, '/') : NULL;
-    dot = uri ? strrchr(uri, '.') : NULL;
-    if (dot && (!slash || dot > slash) && (!q || dot < q)) {
-        size_t n = q ? (size_t)(q - dot - 1) : strlen(dot + 1);
-        if (n >= sizeof(ext)) n = sizeof(ext) - 1;
-        memcpy(ext, dot + 1, n);
-        ext[n] = 0;
-        for (i = 0; ext[i]; i++)
-            ext[i] = (char)tolower((unsigned char)ext[i]);
-        for (i = 0; i < g.codec_count; i++) {
-            struct codec *codec = &g.codecs[i];
-            if (effective_player(codec) && token_in_list(codec->extensions, ext))
-                return codec;
-        }
     }
     return NULL;
 }
@@ -451,6 +457,7 @@ static int start_current(void)
     copystr(mime, sizeof(mime), codec->mime);
     first_mime = strtok(mime, " ,\t");
     setenv("AUDIOWRT_MIME", first_mime ? first_mime : "", 1);
+    setenv("AUDIOWRT_METADATA", g.metadata, 1);
     setenv("AUDIOWRT_ALSA_DEVICE", g.alsa_device, 1);
     setenv("AUDIOWRT_VOLUME_FILE", volume_path, 1);
 
