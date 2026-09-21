@@ -10,7 +10,7 @@ on:
         default: tplink-tl-wdr4300-v1-minimal-usb-bluetooth-25.12.5
         type: string
       package:
-        description: "Package name, APK filename, or 'all' for every AudioWRT package selected by the profile"
+        description: "Space-separated package names/APK filenames, or 'all' for every AudioWRT package selected by the profile"
         required: true
         default: all
         type: string
@@ -70,29 +70,48 @@ jobs:
         run: |
           set -euo pipefail
           package_ref="$(git rev-parse HEAD)"
-          requested_package='${{ inputs.package }}'
-          package="$requested_package"
-
-          # Accept an APK filename from a previous build as a convenience.
-          # Resolve it back to the longest matching AudioWRT package name so,
-          # for example, audiowrt-renderer-2.apk selects audiowrt-renderer.
-          if [[ "$requested_package" == *.apk ]]; then
-            stem="${requested_package%.apk}"
-            package=""
-            while IFS='|' read -r candidate _; do
-              [[ -n "$candidate" && "$candidate" != \#* ]] || continue
-              if [[ "$stem" == "$candidate" || "$stem" == "$candidate"-* ]]; then
-                if (( ${#candidate} > ${#package} )); then
-                  package="$candidate"
-                fi
-              fi
-            done < builder/config/build/package-build-targets
-            if [[ -z "$package" ]]; then
-              echo "ERROR: could not map APK filename to an AudioWRT package: $requested_package" >&2
-              exit 2
-            fi
-            echo "Normalized package input: $requested_package -> $package"
+          requested_packages='${{ inputs.package }}'
+          read -r -a requested <<< "$requested_packages"
+          if (( ${#requested[@]} == 0 )); then
+            echo "ERROR: package input must be 'all' or one or more space-separated package names/APK filenames." >&2
+            exit 2
           fi
+          if [[ " ${requested[*]} " == *" all "* && ${#requested[@]} -ne 1 ]]; then
+            echo "ERROR: 'all' cannot be combined with explicit package names." >&2
+            exit 2
+          fi
+
+          normalized=()
+          declare -A seen=()
+          for requested_package in "${requested[@]}"; do
+            package="$requested_package"
+
+            # Accept APK filenames from previous builds as a convenience.
+            # Resolve each one back to the longest matching AudioWRT package name.
+            if [[ "$requested_package" == *.apk ]]; then
+              stem="${requested_package%.apk}"
+              package=""
+              while IFS='|' read -r candidate _; do
+                [[ -n "$candidate" && "$candidate" != \#* ]] || continue
+                if [[ "$stem" == "$candidate" || "$stem" == "$candidate"-* ]]; then
+                  if (( ${#candidate} > ${#package} )); then
+                    package="$candidate"
+                  fi
+                fi
+              done < builder/config/build/package-build-targets
+              if [[ -z "$package" ]]; then
+                echo "ERROR: could not map APK filename to an AudioWRT package: $requested_package" >&2
+                exit 2
+              fi
+              echo "Normalized package input: $requested_package -> $package"
+            fi
+
+            if [[ -z "${seen[$package]+x}" ]]; then
+              normalized+=("$package")
+              seen["$package"]=1
+            fi
+          done
+          package="${normalized[*]}"
 
           make -C builder packages \
             AUDIOWRT_PROFILE='${{ inputs.audiowrt_profile }}' \
