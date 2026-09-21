@@ -6,31 +6,37 @@ set -eu
 setup_ip() { uci -q get audiowrt.main.setup_ip || echo '192.168.77.1'; }
 setup_ssid() { /usr/libexec/audiowrt/setup-ssid 2>/dev/null || echo 'AudioWRT-Setup'; }
 first_radio() { /usr/sbin/audiowrt-wifi-client radios 2>/dev/null | sed -n '1s/|.*//p'; }
-sync_internal() { [ -x /usr/sbin/audiowrt-storage ] && /usr/sbin/audiowrt-storage sync-core >/dev/null 2>&1 || true; }
+error_file=/tmp/audiowrt/provisioning.error
+
+clear_error() { mkdir -p /tmp/audiowrt; rm -f "$error_file"; }
+set_provisioning() {
+	value="$1"
+	current="$(uci -q get audiowrt.main.provisioning || echo 1)"
+	[ "$current" = "$value" ] && return 0
+	uci -q set audiowrt.main.provisioning="$value"
+	uci -q commit audiowrt
+}
 
 provisioning_start() {
 	radio="$(first_radio)"
 	[ -n "$radio" ] || { echo 'ERROR: no Wi-Fi radio is available.' >&2; exit 3; }
 	/usr/sbin/audiowrt-wifi-client disconnect >/dev/null 2>&1 || true
 	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$(setup_ssid)" "$(setup_ip)"
-	uci -q set audiowrt.main.provisioning='1'
-	uci -q set audiowrt.main.last_error=''
-	uci -q commit audiowrt
+	set_provisioning 1
+	clear_error
 	logger -t audiowrt "Provisioning mode enabled"
 }
 
 provisioning_stop() {
 	/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
-	uci -q set audiowrt.main.provisioning='0'
-	uci -q commit audiowrt
-	sync_internal
+	set_provisioning 0
 }
 
 status() {
 	printf 'device_name=%s\n' "$(uci -q get system.@system[0].hostname || echo AudioWRT)"
 	printf 'provisioning=%s\n' "$(uci -q get audiowrt.main.provisioning || echo 1)"
 	printf 'wifi_ssid=%s\n' "$(uci -q get wireless.audiowrt_client.ssid || true)"
-	printf 'last_error=%s\n' "$(uci -q get audiowrt.main.last_error || true)"
+	printf 'last_error=%s\n' "$(cat "$error_file" 2>/dev/null || true)"
 }
 
 case "${1:-}" in
