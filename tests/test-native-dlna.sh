@@ -71,9 +71,9 @@ grep -q '/usr/libexec/audiowrt-renderer' audiowrt-dlna/files/audiowrt-dlna.init 
 registry=libaudiowrt-player/files/audiowrt-playback-registry
 grep -q 'CODECS_CONFIG=audiowrt-codecs' "$registry" || fail "registry must own separate codec catalog"
 grep -q 'PLAYERS_CONFIG=audiowrt-players' "$registry" || fail "registry must own separate player catalog"
-grep -q 'uci add_list.*mime' "$registry" || fail "registry must merge MIME values"
-grep -q 'uci add_list.*extension' "$registry" || fail "registry must merge extensions"
-grep -q 'uci add_list.*codec' "$registry" || fail "registry must attach codecs to players"
+grep -Fq 'add_list_value "$CODECS_CONFIG" "$codec" mime "$item"' "$registry" || fail "registry must merge MIME values"
+grep -Fq 'add_list_value "$CODECS_CONFIG" "$codec" extension "$item"' "$registry" || fail "registry must merge extensions"
+grep -Fq 'add_list_value "$PLAYERS_CONFIG" "$player" codec "$codec"' "$registry" || fail "registry must attach codecs to players"
 grep -q 'reload_consumers' "$registry" || fail "registry changes must hot-reload consumers"
 grep -q 'audiowrt-renderer audiowrt-local-player' "$registry" || fail "registry reload must be consumer-neutral"
 if sed -n '/^register_player()/,/^unregister_player()/p' "$registry" | grep -q 'default_player'; then
