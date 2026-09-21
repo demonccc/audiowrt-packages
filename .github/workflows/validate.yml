@@ -57,6 +57,10 @@ jobs:
       - name: Validate minimal runtime libraries
         run: bash tests/test-runtime-libraries-minimal.sh
 
+      - name: Validate audio runtime flash contract
+        shell: bash
+        run: bash tests/test-audio-runtime-state.sh
+
       - name: Validate native renderer, discovery and players
         shell: bash
         run: bash tests/test-native-dlna.sh

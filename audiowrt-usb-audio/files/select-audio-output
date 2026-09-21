@@ -3,8 +3,38 @@
 
 set -eu
 
-output_type="$(uci -q get audiowrt-audio.main.output_type || echo auto)"
-[ "$output_type" = 'bluetooth' ] && exit 0
+RUNTIME_DIR=/tmp/audiowrt
+STATE_FILE="$RUNTIME_DIR/audio.state"
+ASOUND_FILE="$RUNTIME_DIR/asound.conf"
+
+state_value() {
+	key="$1"
+	[ -r "$STATE_FILE" ] || return 0
+	sed -n "s/^$key=//p" "$STATE_FILE" | head -n 1
+}
+
+write_state() {
+	ready="$1"
+	card="$2"
+	pcm="$3"
+	error="$4"
+	mkdir -p "$RUNTIME_DIR"
+	tmp="$STATE_FILE.$$"
+	{
+		printf 'output_type=usb\n'
+		printf 'ready=%s\n' "$ready"
+		printf 'device=default\n'
+		printf 'card=%s\n' "$card"
+		printf 'pcm=%s\n' "$pcm"
+		printf 'bluetooth_device=\n'
+		printf 'bluetooth_name=\n'
+		printf 'last_error=%s\n' "$error"
+	} > "$tmp"
+	mv -f "$tmp" "$STATE_FILE"
+}
+
+current_output="$(state_value output_type || true)"
+[ "$current_output" = 'bluetooth' ] && exit 0
 
 card=""
 if [ -r /proc/asound/cards ]; then
@@ -20,13 +50,10 @@ if [ -r /proc/asound/cards ]; then
 fi
 
 if [ -z "$card" ]; then
-	uci -q set audiowrt-audio.main.ready='0'
-	uci -q set audiowrt-audio.main.device=''
-	uci -q set audiowrt-audio.main.card=''
-	uci -q set audiowrt-audio.main.pcm=''
-	uci -q set audiowrt-audio.main.last_error='No USB audio playback device detected.'
-	uci -q commit audiowrt-audio
-	rm -f /etc/asound.conf
+	if [ -z "$current_output" ] || [ "$current_output" = 'usb' ]; then
+		write_state 0 "" "" "No USB audio playback device detected."
+		rm -f "$ASOUND_FILE"
+	fi
 	logger -t audiowrt-audio "No USB audio playback device detected"
 	exit 0
 fi
@@ -45,7 +72,8 @@ if [ -r /proc/asound/pcm ]; then
 fi
 [ -n "$pcm" ] || pcm="0"
 
-cat > /etc/asound.conf <<EOF
+mkdir -p "$RUNTIME_DIR"
+cat > "$ASOUND_FILE" <<EOF
 pcm.audiowrt_dmix {
 	type dmix
 	ipc_key 2468
@@ -67,16 +95,7 @@ ctl.!default {
 }
 EOF
 
-uci -q set audiowrt-audio.main.output_type='usb'
-uci -q set audiowrt-audio.main.ready='1'
-uci -q set audiowrt-audio.main.device='default'
-uci -q set audiowrt-audio.main.card="$card"
-uci -q set audiowrt-audio.main.pcm="$pcm"
-uci -q set audiowrt-audio.main.bluetooth_device=''
-uci -q set audiowrt-audio.main.bluetooth_name=''
-uci -q set audiowrt-audio.main.last_error=''
-uci -q commit audiowrt-audio
-
+write_state 1 "$card" "$pcm" ""
 logger -t audiowrt-audio "Selected USB audio card ${card}, PCM ${pcm}"
 
 for service in mpd shairport-sync librespot; do

@@ -3,42 +3,47 @@
 
 set -eu
 
+STATE_FILE=/tmp/audiowrt/audio.state
+
 name() {
 	hostname="$(uci -q get system.@system[0].hostname || true)"
 	[ -n "$hostname" ] || hostname='AudioWRT'
 	printf '%s\n' "$hostname"
 }
 
-restart_engines() {
-	for service in mpd shairport-sync librespot; do
-		[ -x "/etc/init.d/$service" ] || continue
-		"/etc/init.d/$service" restart >/dev/null 2>&1 || true
-	done
+state_value() {
+	key="$1"
+	[ -r "$STATE_FILE" ] || return 0
+	sed -n "s/^$key=//p" "$STATE_FILE" | head -n 1
 }
 
 status() {
 	printf 'device_name=%s\n' "$(name)"
-	printf 'output_type=%s\n' "$(uci -q get audiowrt-audio.main.output_type || echo auto)"
-	printf 'ready=%s\n' "$(uci -q get audiowrt-audio.main.ready || echo 0)"
-	printf 'device=%s\n' "$(uci -q get audiowrt-audio.main.device || true)"
-	printf 'card=%s\n' "$(uci -q get audiowrt-audio.main.card || true)"
-	printf 'pcm=%s\n' "$(uci -q get audiowrt-audio.main.pcm || true)"
-	printf 'bluetooth_device=%s\n' "$(uci -q get audiowrt-audio.main.bluetooth_device || true)"
-	printf 'bluetooth_name=%s\n' "$(uci -q get audiowrt-audio.main.bluetooth_name || true)"
-	printf 'last_error=%s\n' "$(uci -q get audiowrt-audio.main.last_error || true)"
+	printf 'output_type=%s\n' "$(state_value output_type || true)"
+	printf 'ready=%s\n' "$(state_value ready || true)"
+	printf 'device=%s\n' "$(state_value device || true)"
+	printf 'card=%s\n' "$(state_value card || true)"
+	printf 'pcm=%s\n' "$(state_value pcm || true)"
+	printf 'bluetooth_device=%s\n' "$(state_value bluetooth_device || true)"
+	printf 'bluetooth_name=%s\n' "$(state_value bluetooth_name || true)"
+	printf 'last_error=%s\n' "$(state_value last_error || true)"
 }
 
 set_usb() {
-	uci -q set audiowrt-audio.main.output_type='usb'
-	uci -q set audiowrt-audio.main.bluetooth_device=''
-	uci -q set audiowrt-audio.main.bluetooth_name=''
-	uci -q commit audiowrt-audio
 	if [ -x /usr/libexec/audiowrt/select-audio-output ]; then
 		/usr/libexec/audiowrt/select-audio-output
 	else
-		uci -q set audiowrt-audio.main.ready='0'
-		uci -q set audiowrt-audio.main.last_error='AudioWRT USB audio support is not installed.'
-		uci -q commit audiowrt-audio
+		mkdir -p /tmp/audiowrt
+		cat > "$STATE_FILE" <<EOF
+output_type=usb
+ready=0
+device=
+card=
+pcm=
+bluetooth_device=
+bluetooth_name=
+last_error=AudioWRT USB audio support is not installed.
+EOF
 		echo 'ERROR: audiowrt-usb-audio is not installed.' >&2
 		exit 3
 	fi

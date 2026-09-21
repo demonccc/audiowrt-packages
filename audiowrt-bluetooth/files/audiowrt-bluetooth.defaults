@@ -2,4 +2,5 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 /usr/sbin/audiowrt-extensions configure bluetooth >/dev/null 2>&1 || true
+/etc/init.d/audiowrt-bluetooth enable >/dev/null 2>&1 || true
 exit 0
