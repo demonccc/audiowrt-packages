@@ -241,7 +241,22 @@ setup_dhcp_disable() {
 
 stage_setup_config() {
 	radio="$1"; ssid="$2"; setup_ip="$3"
-	stage_setup_config "$radio" "$ssid" "$setup_ip"
+	uci -q set wireless."$radio".disabled='0'
+	uci -q delete network.audiowrt_setup 2>/dev/null || true
+	uci -q set network.audiowrt_setup='interface'
+	uci -q set network.audiowrt_setup.proto='static'
+	uci -q set network.audiowrt_setup.ipaddr="$setup_ip"
+	uci -q set network.audiowrt_setup.netmask='255.255.255.0'
+
+	uci -q delete wireless.audiowrt_setup 2>/dev/null || true
+	uci -q set wireless.audiowrt_setup='wifi-iface'
+	uci -q set wireless.audiowrt_setup.device="$radio"
+	uci -q set wireless.audiowrt_setup.mode='ap'
+	uci -q set wireless.audiowrt_setup.network='audiowrt_setup'
+	uci -q set wireless.audiowrt_setup.ssid="$ssid"
+	uci -q set wireless.audiowrt_setup.encryption='none'
+	uci -q set wireless.audiowrt_setup.isolate='1'
+	uci -q set wireless.audiowrt_setup.disabled='0'
 }
 
 commit_wifi_client() {
@@ -280,22 +295,7 @@ setup_start() {
 
 	# The setup network is runtime state. UCI stages these changes in /tmp and
 	# wifi reload consumes the staged values, so never commit them to flash.
-	uci -q set wireless."$radio".disabled='0'
-	uci -q delete network.audiowrt_setup 2>/dev/null || true
-	uci -q set network.audiowrt_setup='interface'
-	uci -q set network.audiowrt_setup.proto='static'
-	uci -q set network.audiowrt_setup.ipaddr="$setup_ip"
-	uci -q set network.audiowrt_setup.netmask='255.255.255.0'
-
-	uci -q delete wireless.audiowrt_setup 2>/dev/null || true
-	uci -q set wireless.audiowrt_setup='wifi-iface'
-	uci -q set wireless.audiowrt_setup.device="$radio"
-	uci -q set wireless.audiowrt_setup.mode='ap'
-	uci -q set wireless.audiowrt_setup.network='audiowrt_setup'
-	uci -q set wireless.audiowrt_setup.ssid="$ssid"
-	uci -q set wireless.audiowrt_setup.encryption='none'
-	uci -q set wireless.audiowrt_setup.isolate='1'
-	uci -q set wireless.audiowrt_setup.disabled='0'
+	stage_setup_config "$radio" "$ssid" "$setup_ip"
 
 	if ! wifi reload >/dev/null 2>&1 && ! wifi >/dev/null 2>&1; then
 		echo 'ERROR: failed to reload Wi-Fi for provisioning AP.' >&2
