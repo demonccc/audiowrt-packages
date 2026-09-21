@@ -62,5 +62,11 @@ define Package/libaudiowrt-player/install
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/audiowrt-playback-registry-migrate $(1)/etc/uci-defaults/60-audiowrt-playback-registry-migrate
 endef
+define Package/libaudiowrt-player/postinst
+#!/bin/sh
+[ -n "${IPKG_INSTROOT}" ] && exit 0
+/usr/libexec/audiowrt-playback-registry migrate >/dev/null 2>&1 || true
+exit 0
+endef
 
 $(eval $(call BuildPackage,libaudiowrt-player))
