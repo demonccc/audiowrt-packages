@@ -46,7 +46,7 @@ endef
 define Package/audiowrt-player-opus/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-player-registry register opus native_opus 'AudioWRT Opus Player' /usr/bin/audiowrt-player-opus 'audio/opus audio/ogg application/ogg' 'opus ogg oga' >/dev/null 2>&1 || true
+/usr/libexec/audiowrt-player-registry register opus native_opus 'AudioWRT Opus Player' /usr/bin/audiowrt-player-opus 'audio/opus audio/ogg;codecs=opus audio/ogg application/ogg' 'opus ogg oga' >/dev/null 2>&1 || true
 exit 0
 endef
 
