@@ -1,0 +1,10 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+/usr/libexec/audiowrt-player-registry register \
+	lpcm native_lpcm \
+	'AudioWRT DLNA LPCM Player' \
+	/usr/bin/audiowrt-player-lpcm \
+	'audio/L16 audio/l16' \
+	'l16 pcm' >/dev/null 2>&1 || true
+exit 0
