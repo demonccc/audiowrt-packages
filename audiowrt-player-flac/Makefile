@@ -39,14 +39,14 @@ endef
 
 define Package/audiowrt-player-flac/postinst
 #!/bin/sh
-[ -n "${IPKG_INSTROOT}" ] && exit 0
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
 /usr/libexec/audiowrt-player-registry register flac native_flac 'AudioWRT FLAC Player' /usr/bin/audiowrt-player-flac 'audio/flac audio/x-flac' 'flac' >/dev/null 2>&1 || true
 exit 0
 endef
 
 define Package/audiowrt-player-flac/prerm
 #!/bin/sh
-[ -n "${IPKG_INSTROOT}" ] && exit 0
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
 /usr/libexec/audiowrt-player-registry unregister native_flac >/dev/null 2>&1 || true
 exit 0
 endef
