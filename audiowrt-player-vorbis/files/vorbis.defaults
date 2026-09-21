@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
 
-/usr/libexec/audiowrt-player-registry register \
+/usr/libexec/audiowrt-playback-registry register \
 	vorbis native_vorbis \
 	'AudioWRT Ogg Vorbis Player' \
 	/usr/bin/audiowrt-player-vorbis \

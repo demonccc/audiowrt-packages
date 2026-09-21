@@ -68,6 +68,7 @@ jobs:
         run: |
           bash tests/test-native-dlna.sh
           bash tests/test-dlna-codecs.sh
+          bash tests/test-playback-registry.sh
           bash tests/test-renderer-xml-unescape.sh
 
       - name: Validate AudioWRT package versioning

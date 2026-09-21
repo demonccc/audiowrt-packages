@@ -24,7 +24,7 @@ audiowrtctl="$repo_root/audiowrt-provisioning/files/audiowrtctl"
 status_cgi="$repo_root/audiowrt-provisioning/files/audiowrt-status.cgi"
 core_config="$repo_root/audiowrt-core/files/audiowrt.config"
 wifi="$repo_root/audiowrt-wifi-client/files/audiowrt-wifi-client"
-registry="$repo_root/libaudiowrt-player/files/audiowrt-player-registry"
+registry="$repo_root/libaudiowrt-player/files/audiowrt-playback-registry"
 status_luci="$repo_root/luci-app-audiowrt/htdocs/luci-static/resources/view/status/include/90_audiowrt.js"
 upmpd_config="$repo_root/audiowrt-minimal-upmpdcli/files/upmpdcli.conf"
 librespot_init="$repo_root/librespot/files/librespot.init"
@@ -146,7 +146,9 @@ fi
 
 # Package registration is persistent configuration, but reinstalling the same
 # player must not cause a no-op UCI commit.
-grep -Fq 'if [ "$changed" -eq 1 ]; then' "$registry" ||
+grep -Fq '[ "$codecs_changed" -eq 0 ] || uci commit "$CODECS_CONFIG"' "$registry" ||
+    fail 'codec registry does not guard commits with a real-change check'
+grep -Fq '[ "$players_changed" -eq 0 ] || uci commit "$PLAYERS_CONFIG"' "$registry" ||
     fail 'player registry does not guard commits with a real-change check'
 
 # Status surfaces must consume the runtime file/command, not resurrect the old

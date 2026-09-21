@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-m4a
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
 
@@ -47,14 +47,14 @@ endef
 define Package/audiowrt-player-m4a/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-player-registry register m4a native_m4a 'AudioWRT M4A/AAC Player' /usr/bin/audiowrt-player-m4a 'audio/mp4 audio/x-m4a audio/m4a' 'm4a mp4' >/dev/null 2>&1 || true
+/usr/libexec/audiowrt-playback-registry register m4a native_m4a 'AudioWRT M4A/AAC Player' /usr/bin/audiowrt-player-m4a 'audio/mp4 audio/x-m4a audio/m4a' 'm4a mp4' >/dev/null 2>&1 || true
 exit 0
 endef
 
 define Package/audiowrt-player-m4a/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-player-registry unregister native_m4a >/dev/null 2>&1 || true
+/usr/libexec/audiowrt-playback-registry unregister native_m4a >/dev/null 2>&1 || true
 exit 0
 endef
 

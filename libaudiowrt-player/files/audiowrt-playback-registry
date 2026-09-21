@@ -1,0 +1,205 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+
+CODECS_CONFIG=audiowrt-codecs
+PLAYERS_CONFIG=audiowrt-players
+LEGACY_CONFIG=audiowrt
+DLNA_CONFIG=audiowrt-dlna
+
+codecs_changed=0
+players_changed=0
+legacy_changed=0
+dlna_changed=0
+
+mark_changed() {
+	case "$1" in
+		"$CODECS_CONFIG") codecs_changed=1 ;;
+		"$PLAYERS_CONFIG") players_changed=1 ;;
+		"$LEGACY_CONFIG") legacy_changed=1 ;;
+		"$DLNA_CONFIG") dlna_changed=1 ;;
+	esac
+}
+
+reload_consumers() {
+	local process pids
+	for process in audiowrt-renderer audiowrt-local-player; do
+		pids="$(pidof "$process" 2>/dev/null || true)"
+		[ -z "$pids" ] || kill -HUP $pids 2>/dev/null || true
+	done
+}
+
+section_type() {
+	local config="$1" id="$2"
+	uci -q get "$config.$id" 2>/dev/null || true
+}
+
+ensure_section() {
+	local config="$1" id="$2" type="$3" current
+	current="$(section_type "$config" "$id")"
+	if [ -z "$current" ]; then
+		uci set "$config.$id=$type"
+		mark_changed "$config"
+	elif [ "$current" != "$type" ]; then
+		echo "audiowrt-playback-registry: $config.$id already exists as $current, expected $type" >&2
+		return 1
+	fi
+}
+
+list_has() {
+	local key="$1" needle="$2" value values
+	values="$(uci -q get "$key" 2>/dev/null || true)"
+	for value in $values; do
+		[ "$value" = "$needle" ] && return 0
+	done
+	return 1
+}
+
+add_list_value() {
+	local config="$1" section="$2" option="$3" value="$4"
+	if ! list_has "$config.$section.$option" "$value"; then
+		uci add_list "$config.$section.$option=$value"
+		mark_changed "$config"
+	fi
+}
+
+set_value() {
+	local config="$1" section="$2" option="$3" value="$4" current
+	current="$(uci -q get "$config.$section.$option" 2>/dev/null || true)"
+	[ "$current" = "$value" ] && return 0
+	uci set "$config.$section.$option=$value"
+	mark_changed "$config"
+}
+
+codec_referenced() {
+	local codec="$1" id
+	for id in $(uci -q show "$PLAYERS_CONFIG" 2>/dev/null |
+		sed -n "s/^$PLAYERS_CONFIG\.\([^.=]*\)=player$/\1/p"); do
+		list_has "$PLAYERS_CONFIG.$id.codec" "$codec" && return 0
+	done
+	return 1
+}
+
+commit_changes() {
+	[ "$codecs_changed" -eq 0 ] || uci commit "$CODECS_CONFIG"
+	[ "$players_changed" -eq 0 ] || uci commit "$PLAYERS_CONFIG"
+	[ "$legacy_changed" -eq 0 ] || uci commit "$LEGACY_CONFIG"
+	[ "$dlna_changed" -eq 0 ] || uci commit "$DLNA_CONFIG"
+}
+
+register_player() {
+	local codec="$1" player="$2" name="$3" executable="$4" mimes="$5" extensions="$6"
+	local item
+
+	codecs_changed=0
+	players_changed=0
+
+	ensure_section "$CODECS_CONFIG" "$codec" codec
+	for item in $mimes; do
+		add_list_value "$CODECS_CONFIG" "$codec" mime "$item"
+	done
+	for item in $extensions; do
+		add_list_value "$CODECS_CONFIG" "$codec" extension "$item"
+	done
+
+	ensure_section "$PLAYERS_CONFIG" "$player" player
+	set_value "$PLAYERS_CONFIG" "$player" name "$name"
+	set_value "$PLAYERS_CONFIG" "$player" executable "$executable"
+	add_list_value "$PLAYERS_CONFIG" "$player" codec "$codec"
+
+	if [ "$codecs_changed" -eq 1 ] || [ "$players_changed" -eq 1 ]; then
+		commit_changes
+		reload_consumers
+	fi
+}
+
+unregister_player() {
+	local player="$1" codec codecs
+	codecs_changed=0
+	players_changed=0
+
+	[ "$(section_type "$PLAYERS_CONFIG" "$player")" = "player" ] || return 0
+	codecs="$(uci -q get "$PLAYERS_CONFIG.$player.codec" 2>/dev/null || true)"
+	uci -q delete "$PLAYERS_CONFIG.$player" || true
+	players_changed=1
+
+	for codec in $codecs; do
+		if ! codec_referenced "$codec"; then
+			uci -q delete "$CODECS_CONFIG.$codec" || true
+			codecs_changed=1
+		fi
+	done
+
+	commit_changes
+	reload_consumers
+}
+
+migrate_legacy() {
+	local id item name executable default
+
+	codecs_changed=0
+	players_changed=0
+	legacy_changed=0
+	dlna_changed=0
+
+	for id in $(uci -q show "$LEGACY_CONFIG" 2>/dev/null |
+		sed -n "s/^$LEGACY_CONFIG\.\([^.=]*\)=codec$/\1/p"); do
+		ensure_section "$CODECS_CONFIG" "$id" codec
+		for item in $(uci -q get "$LEGACY_CONFIG.$id.mime" 2>/dev/null || true); do
+			add_list_value "$CODECS_CONFIG" "$id" mime "$item"
+		done
+		for item in $(uci -q get "$LEGACY_CONFIG.$id.extension" 2>/dev/null || true); do
+			add_list_value "$CODECS_CONFIG" "$id" extension "$item"
+		done
+
+		default="$(uci -q get "$LEGACY_CONFIG.$id.default_player" 2>/dev/null || true)"
+		if [ -n "$default" ] && [ "$(section_type "$DLNA_CONFIG" main)" = "renderer" ]; then
+			set_value "$DLNA_CONFIG" main "default_player_$id" "$default"
+		fi
+
+		uci -q delete "$LEGACY_CONFIG.$id" || true
+		legacy_changed=1
+	done
+
+	for id in $(uci -q show "$LEGACY_CONFIG" 2>/dev/null |
+		sed -n "s/^$LEGACY_CONFIG\.\([^.=]*\)=player$/\1/p"); do
+		ensure_section "$PLAYERS_CONFIG" "$id" player
+		name="$(uci -q get "$LEGACY_CONFIG.$id.name" 2>/dev/null || true)"
+		executable="$(uci -q get "$LEGACY_CONFIG.$id.executable" 2>/dev/null || true)"
+		[ -z "$name" ] || set_value "$PLAYERS_CONFIG" "$id" name "$name"
+		[ -z "$executable" ] || set_value "$PLAYERS_CONFIG" "$id" executable "$executable"
+		for item in $(uci -q get "$LEGACY_CONFIG.$id.codec" 2>/dev/null || true); do
+			add_list_value "$PLAYERS_CONFIG" "$id" codec "$item"
+		done
+		uci -q delete "$LEGACY_CONFIG.$id" || true
+		legacy_changed=1
+	done
+
+	commit_changes
+	[ "$codecs_changed" -eq 0 ] && [ "$players_changed" -eq 0 ] &&
+		[ "$legacy_changed" -eq 0 ] && [ "$dlna_changed" -eq 0 ] || reload_consumers
+}
+
+case "${1:-}" in
+	register)
+		[ "$#" -eq 7 ] || {
+			echo "usage: $0 register <codec> <player-id> <name> <executable> <mime-list> <extension-list>" >&2
+			exit 2
+		}
+		register_player "$2" "$3" "$4" "$5" "$6" "$7"
+		;;
+	unregister)
+		[ "$#" -eq 2 ] || { echo "usage: $0 unregister <player-id>" >&2; exit 2; }
+		unregister_player "$2"
+		;;
+	migrate)
+		migrate_legacy
+		;;
+	reload)
+		reload_consumers
+		;;
+	*)
+		echo "usage: $0 {register|unregister|migrate|reload} ..." >&2
+		exit 2
+		;;
+esac

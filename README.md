@@ -62,12 +62,24 @@ This boundary is particularly important on constrained-device builds: selecting 
 AudioWRT-owned packages are named after the artifact they primarily install:
 
 - `libaudiowrt-*` for shared userspace libraries;
-- `audiowrt-player-*` for player executables/codecs;
+- `audiowrt-player-*` for playback implementations;
 - `audiowrt-*` for services, applications and helpers;
 - `luci-app-audiowrt-*` for LuCI applications;
 - `kmod-audiowrt-*` for kernel-module packages.
 
 A package is not renamed to `libaudiowrt-*` merely because it contains a plugin `.so`; the prefix is reserved for packages whose primary runtime artifact is a reusable shared library.
+
+## Playback registry
+
+AudioWRT keeps playback capabilities separate from module preferences:
+
+- `/etc/config/audiowrt-codecs` is the shared codec catalog. Player packages create missing codec sections and merge MIME types and file extensions when they are installed.
+- `/etc/config/audiowrt-players` is the shared player catalog. Player packages register their executable and the codecs they implement.
+- Consumer modules such as the DLNA renderer read both catalogs but keep their preferred/default player choices in their own UCI package, for example `/etc/config/audiowrt-dlna`.
+- Installing or removing a player never chooses a default for DLNA or another consumer. If no module-specific preference is configured, the consumer falls back to any available compatible player.
+- The registry is changed only by package installation/removal or explicit administration. Playback itself never writes these UCI catalogs.
+
+`/usr/libexec/audiowrt-playback-registry` implements idempotent registration. The old `audiowrt-player-registry` command remains as a compatibility alias.
 
 ## Responsibility boundary
 

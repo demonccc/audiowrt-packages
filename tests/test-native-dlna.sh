@@ -5,10 +5,15 @@ fail() { echo "native renderer contract failed: $*" >&2; exit 1; }
 
 [[ -f audiowrt-dlna/src/audiowrt-dlna.c ]] || fail "renderer source missing"
 [[ -f libaudiowrt-player/src/audiowrt-player.c ]] || fail "player library source missing"
-[[ -f libaudiowrt-player/files/audiowrt-player-registry ]] || fail "UCI player registry helper missing"
+[[ -f libaudiowrt-player/files/audiowrt-playback-registry ]] || fail "UCI playback registry helper missing"
+[[ -f libaudiowrt-player/files/audiowrt-player-registry ]] || fail "compatibility player registry alias missing"
+[[ -f libaudiowrt-player/files/audiowrt-codecs.config ]] || fail "codec catalog config missing"
+[[ -f libaudiowrt-player/files/audiowrt-players.config ]] || fail "player catalog config missing"
 
 grep -q '^PKG_NAME:=libaudiowrt-player$' libaudiowrt-player/Makefile || fail "player library package name mismatch"
-grep -q 'audiowrt-player-registry' libaudiowrt-player/Makefile || fail "player library must install registry helper"
+grep -q 'audiowrt-playback-registry' libaudiowrt-player/Makefile || fail "player library must install playback registry helper"
+grep -q '/etc/config/audiowrt-codecs' libaudiowrt-player/Makefile || fail "player library must install codec catalog"
+grep -q '/etc/config/audiowrt-players' libaudiowrt-player/Makefile || fail "player library must install player catalog"
 [[ ! -e audiowrt-player-core/Makefile ]] || fail "legacy player-core package must not exist"
 
 grep -q '^PKG_NAME:=audiowrt-renderer$' audiowrt-dlna/Makefile || fail "renderer package name mismatch"
@@ -22,8 +27,9 @@ if grep -Rqs '#include <uci.h>' audiowrt-dlna/src; then
 fi
 
 grep -q 'config_next_token' audiowrt-dlna/src/renderer-part-01.inc || fail "minimal UCI text parser missing"
-grep -q 'load_registry("/etc/config/audiowrt")' audiowrt-dlna/src/renderer-part-01.inc || fail "renderer must load player registry from /etc/config/audiowrt"
-grep -q 'default_player' audiowrt-dlna/src/renderer-part-01.inc || fail "default player selection missing"
+grep -q 'load_codec_registry("/etc/config/audiowrt-codecs")' audiowrt-dlna/src/renderer-part-01.inc || fail "renderer must load codec registry"
+grep -q 'load_player_registry("/etc/config/audiowrt-players")' audiowrt-dlna/src/renderer-part-01.inc || fail "renderer must load player registry"
+grep -q 'default_player_' audiowrt-dlna/src/renderer-part-01.inc || fail "DLNA module default player selection missing"
 grep -q 'launch_next_player' audiowrt-dlna/src/renderer-part-01.inc || fail "player fallback selection missing"
 grep -q 'setpgid' audiowrt-dlna/src/renderer-part-01.inc || fail "players must run in their own process group"
 grep -q 'execl(p->executable, p->executable, g.uri' audiowrt-dlna/src/renderer-part-01.inc || fail "player URL argument contract missing"
@@ -31,7 +37,7 @@ grep -q 'AUDIOWRT_CODEC' audiowrt-dlna/src/renderer-part-01.inc || fail "player 
 grep -q 'AUDIOWRT_MIME' audiowrt-dlna/src/renderer-part-01.inc || fail "player MIME environment missing"
 grep -q 'signal(SIGHUP, signal_handler)' audiowrt-dlna/src/renderer-part-04.inc || fail "SIGHUP registry reload missing"
 grep -q 'notify_service("ConnectionManager")' audiowrt-dlna/src/renderer-part-04.inc || fail "codec reload must notify ConnectionManager"
-grep -q 'procd_add_reload_trigger audiowrt-dlna audiowrt' audiowrt-dlna/files/audiowrt-dlna.init || fail "renderer must reload on registry UCI changes"
+grep -q 'procd_add_reload_trigger audiowrt-dlna audiowrt-codecs audiowrt-players' audiowrt-dlna/files/audiowrt-dlna.init || fail "renderer must reload on module and registry UCI changes"
 
 grep -q 'avtransport_action_changes_state' audiowrt-dlna/src/renderer-part-03d.inc || fail "AVTransport state-change event filter missing"
 grep -q 'rendering_action_changes_state' audiowrt-dlna/src/renderer-part-03d.inc || fail "RenderingControl state-change event filter missing"
@@ -62,12 +68,17 @@ done
 [[ ! -e audiowrt-mdns/Makefile ]] || fail "standalone mDNS package must not exist"
 grep -q '/usr/libexec/audiowrt-renderer' audiowrt-dlna/files/audiowrt-dlna.init || fail "procd must launch unified renderer"
 
-registry=libaudiowrt-player/files/audiowrt-player-registry
-grep -q 'uci add_list.*mime' "$registry" || fail "registry must merge MIME values"
-grep -q 'uci add_list.*extension' "$registry" || fail "registry must merge extensions"
-grep -q 'uci add_list.*codec' "$registry" || fail "registry must attach codecs to players"
-grep -q 'default_player' "$registry" || fail "registry must preserve/create codec defaults"
-grep -q 'kill -HUP' "$registry" || fail "registry changes must hot-reload renderer"
+registry=libaudiowrt-player/files/audiowrt-playback-registry
+grep -q 'CODECS_CONFIG=audiowrt-codecs' "$registry" || fail "registry must own separate codec catalog"
+grep -q 'PLAYERS_CONFIG=audiowrt-players' "$registry" || fail "registry must own separate player catalog"
+grep -Fq 'add_list_value "$CODECS_CONFIG" "$codec" mime "$item"' "$registry" || fail "registry must merge MIME values"
+grep -Fq 'add_list_value "$CODECS_CONFIG" "$codec" extension "$item"' "$registry" || fail "registry must merge extensions"
+grep -Fq 'add_list_value "$PLAYERS_CONFIG" "$player" codec "$codec"' "$registry" || fail "registry must attach codecs to players"
+grep -q 'reload_consumers' "$registry" || fail "registry changes must hot-reload consumers"
+grep -q 'audiowrt-renderer audiowrt-local-player' "$registry" || fail "registry reload must be consumer-neutral"
+if sed -n '/^register_player()/,/^unregister_player()/p' "$registry" | grep -q 'default_player'; then
+  fail "player registration must not create module defaults"
+fi
 
 grep -q '+libuclient' libaudiowrt-player/Makefile || fail "player library must depend on libuclient"
 grep -q '+alsa-lib' libaudiowrt-player/Makefile || fail "player library must depend on ALSA"
@@ -117,15 +128,18 @@ done
 grep -q '^PKG_NAME:=luci-app-audiowrt-renderer$' luci-app-audiowrt-dlna/Makefile || fail "LuCI package name mismatch"
 [[ -f luci-app-audiowrt-dlna/root/usr/share/luci/menu.d/luci-app-audiowrt-dlna.json ]] || fail "LuCI menu missing"
 [[ -f luci-app-audiowrt-dlna/root/usr/share/rpcd/acl.d/luci-app-audiowrt-dlna.json ]] || fail "LuCI ACL missing"
-grep -q "uci.load('audiowrt')" luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must load player registry"
-grep -q 'default_player' luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must expose codec default player"
-grep -q 'executable' luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must expose custom player executable"
-grep -q '"audiowrt"' luci-app-audiowrt-dlna/root/usr/share/rpcd/acl.d/luci-app-audiowrt-dlna.json || fail "LuCI ACL must allow registry UCI"
+grep -q "uci.load('audiowrt-codecs')" luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must load codec catalog"
+grep -q "uci.load('audiowrt-players')" luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must load player catalog"
+grep -q 'default_player_' luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must expose DLNA codec defaults"
+grep -q '"audiowrt-codecs"' luci-app-audiowrt-dlna/root/usr/share/rpcd/acl.d/luci-app-audiowrt-dlna.json || fail "LuCI ACL must read codec catalog"
+grep -q '"audiowrt-players"' luci-app-audiowrt-dlna/root/usr/share/rpcd/acl.d/luci-app-audiowrt-dlna.json || fail "LuCI ACL must read player catalog"
 
 sh -n audiowrt-dlna/files/audiowrt-dlna.init
+sh -n libaudiowrt-player/files/audiowrt-playback-registry
 sh -n libaudiowrt-player/files/audiowrt-player-registry
+sh -n libaudiowrt-player/files/audiowrt-playback-registry-migrate
 for defaults in audiowrt-player-{flac,mp3,aac,wav,vorbis}/files/*.defaults; do
   sh -n "$defaults"
 done
 
-echo "native renderer/discovery/UCI player registry contract OK"
+echo "native renderer/discovery/split playback registry contract OK"

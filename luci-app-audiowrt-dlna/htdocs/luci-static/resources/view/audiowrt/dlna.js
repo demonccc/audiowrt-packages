@@ -27,12 +27,12 @@ function statusRow(label, id, value) {
 
 function renderCodecs(codecs) {
 	if (!codecs.length)
-		return E('p', {}, _('No codecs are currently registered in /etc/config/audiowrt.'));
+		return E('p', {}, _('No codecs are currently registered in /etc/config/audiowrt-codecs.'));
 
 	return E('div', { 'class': 'table' }, [
 		E('div', { 'class': 'tr table-titles' }, [
 			E('div', { 'class': 'th left' }, _('Codec')),
-			E('div', { 'class': 'th left' }, _('Default player')),
+			E('div', { 'class': 'th left' }, _('DLNA default')),
 			E('div', { 'class': 'th left' }, _('Effective player')),
 			E('div', { 'class': 'th left' }, _('Fallbacks')),
 			E('div', { 'class': 'th left' }, _('MIME types'))
@@ -44,7 +44,7 @@ function renderCodecs(codecs) {
 
 		return E('div', { 'class': 'tr' }, [
 			E('div', { 'class': 'td left' }, [ E('strong', {}, String(c.id || '').toUpperCase()) ]),
-			E('div', { 'class': 'td left' }, c.default_player || '-'),
+			E('div', { 'class': 'td left' }, c.default_player || _('Automatic')),
 			E('div', { 'class': 'td left' }, c.effective_player || _('Unavailable')),
 			E('div', { 'class': 'td left' }, fallbacks.length ? fallbacks.join(', ') : '-'),
 			E('div', { 'class': 'td left' }, c.mime || '-')
@@ -56,27 +56,27 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			uci.load('audiowrt-dlna'),
-			uci.load('audiowrt'),
+			uci.load('audiowrt-codecs'),
+			uci.load('audiowrt-players'),
 			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'status' ]), { stdout: '{}' }),
 			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'players' ]), { stdout: '[]' })
 		]);
 	},
 
 	render: function(data) {
-		var status = parseJSON(data[2].stdout, {});
-		var codecs = parseJSON(data[3].stdout, []);
-		var codecSections = uci.sections('audiowrt', 'codec') || [];
-		var playerSections = uci.sections('audiowrt', 'player') || [];
-		var codecIds = codecSections.map(function(c) { return c['.name']; });
+		var status = parseJSON(data[3].stdout, {});
+		var codecs = parseJSON(data[4].stdout, []);
+		var codecSections = uci.sections('audiowrt-codecs', 'codec') || [];
+		var playerSections = uci.sections('audiowrt-players', 'player') || [];
 		var playerById = {};
-		var rendererMap, registryMap, s, o;
+		var rendererMap, s, o;
 
 		playerSections.forEach(function(p) {
 			playerById[p['.name']] = p;
 		});
 
-		rendererMap = new form.Map('audiowrt-dlna', _('AudioWRT Renderer & Discovery'),
-			_('A single native service exposes AudioWRT through SSDP/DLNA and minimal mDNS/DNS-SD. Codec and player capabilities are registered in /etc/config/audiowrt and can be reloaded without interrupting the renderer.'));
+		rendererMap = new form.Map('audiowrt-dlna', _('DLNA Renderer'),
+			_('DLNA reads codec capabilities from /etc/config/audiowrt-codecs and installed players from /etc/config/audiowrt-players. Player preferences configured here belong only to the DLNA module.'));
 
 		s = rendererMap.section(form.TypedSection, 'renderer', _('Renderer'));
 		s.anonymous = true;
@@ -101,47 +101,25 @@ return view.extend({
 		o.datatype = 'range(0,100)';
 		o.default = '100';
 
-		registryMap = new form.Map('audiowrt', _('Codec and player registry'),
-			_('Player packages register codecs and executables here. A player receives the media URL as its only argument and must remain in the foreground while playing. Other compatible players automatically act as fallbacks.'));
+		codecSections.forEach(function(codec) {
+			var codecId = codec['.name'];
+			var optionName = 'default_player_' + codecId;
+			var current = uci.get('audiowrt-dlna', 'main', optionName);
+			var compatible = playerSections.filter(function(p) {
+				return asList(p.codec).indexOf(codecId) >= 0;
+			});
 
-		s = registryMap.section(form.GridSection, 'codec', _('Codec defaults'));
-		s.anonymous = false;
-		s.addremove = false;
-		s.sortable = false;
-
-		o = s.option(form.ListValue, 'default_player', _('Default player'));
-		o.rmempty = true;
-		playerSections.forEach(function(p) {
-			o.value(p['.name'], (p.name || p['.name']) + ' (' + p['.name'] + ')');
+			o = s.option(form.ListValue, optionName,
+				_('%s default player').format(String(codecId).toUpperCase()));
+			o.rmempty = true;
+			o.value('', _('Automatic fallback'));
+			compatible.forEach(function(p) {
+				o.value(p['.name'], (p.name || p['.name']) + ' (' + p['.name'] + ')');
+			});
+			if (current && !playerById[current])
+				o.value(current, current + ' (' + _('not installed') + ')');
+			o.description = _('The selected player is preferred for this codec. If it is unavailable or fails, DLNA tries another compatible installed player.');
 		});
-		o.validate = function(section_id, value) {
-		var player, supported;
-		if (!value)
-			return true;
-		player = playerById[value];
-		if (!player)
-			return _('The selected player is not registered.');
-		supported = asList(player.codec);
-		return supported.indexOf(section_id) >= 0 ? true :
-			_('The selected player does not declare support for this codec.');
-	};
-
-		s = registryMap.section(form.GridSection, 'player', _('Registered players'));
-		s.anonymous = false;
-		s.addremove = true;
-		s.sortable = true;
-		s.description = _('Package players and custom players use the same contract. Custom wrappers for VLC, MPD or another engine can be added by registering their executable and supported codecs.');
-
-		o = s.option(form.Value, 'name', _('Name'));
-		o.rmempty = false;
-
-		o = s.option(form.Value, 'executable', _('Executable'));
-		o.rmempty = false;
-		o.placeholder = '/usr/libexec/audiowrt-player-vlc';
-
-		o = s.option(form.DynamicList, 'codec', _('Codecs'));
-		o.rmempty = false;
-		codecIds.forEach(function(id) { o.value(id, id.toUpperCase()); });
 
 		poll.add(function() {
 			return L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'status' ]), { stdout: '{}' }).then(function(res) {
@@ -161,7 +139,7 @@ return view.extend({
 			});
 		}, 2);
 
-		return Promise.all([ rendererMap.render(), registryMap.render() ]).then(function(nodes) {
+		return rendererMap.render().then(function(node) {
 			return E('div', { 'class': 'cbi-map' }, [
 				E('h2', {}, _('Renderer status')),
 				E('div', { 'class': 'cbi-section' }, [
@@ -178,8 +156,7 @@ return view.extend({
 				]),
 				E('h3', {}, _('Codec players')),
 				E('div', { 'class': 'cbi-section' }, [ renderCodecs(codecs) ]),
-				nodes[0],
-				nodes[1]
+				node
 			]);
 		});
 	}
