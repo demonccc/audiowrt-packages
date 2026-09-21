@@ -13,6 +13,8 @@ audio="$repo_root/audiowrt-audio/files/audiowrt-audio"
 usb="$repo_root/audiowrt-usb-audio/files/select-audio-output"
 usb_hotplug="$repo_root/audiowrt-usb-audio/files/audiowrt-audio.hotplug"
 bluetooth="$repo_root/audiowrt-bluetooth/files/audiowrt-bluetooth"
+bluez_makefile="$repo_root/audiowrt-bluez/Makefile"
+btctl_source="$repo_root/audiowrt-btctl/src/audiowrt-btctl.c"
 renderer_init="$repo_root/audiowrt-dlna/files/audiowrt-dlna.init"
 renderer_src="$repo_root/audiowrt-dlna/src"
 provision="$repo_root/audiowrt-provisioning/files/audiowrt-provision"
@@ -35,6 +37,13 @@ done
 
 grep -Fq 'RUNTIME_DIR=/tmp/audiowrt' "$usb" || fail 'USB runtime is not rooted in /tmp'
 grep -Fq 'RUNTIME_DIR=/tmp/audiowrt' "$bluetooth" || fail 'Bluetooth runtime is not rooted in /tmp'
+grep -Fq -- '--localstatedir=/tmp' "$bluez_makefile" ||
+    fail 'BlueZ pairing database is not forced into tmpfs'
+grep -Fq '#define BLUEZ_STORAGE "/tmp/lib/bluetooth"' "$btctl_source" ||
+    fail 'Bluetooth helper storage path is not rooted in tmpfs'
+if grep -q '/var/lib/bluetooth' "$bluetooth" "$btctl_source"; then
+    fail 'Bluetooth runtime pairing state still references /var/lib/bluetooth'
+fi
 grep -Fq '#define DEFAULT_RUNTIME_DIR "/var/run/audiowrt-dlna"' "$renderer_src/renderer-part-00.inc" ||
     fail 'renderer status is not rooted in /var/run'
 if grep -q 'option runtime_dir' "$repo_root/audiowrt-dlna/files/audiowrt-dlna.config"; then
