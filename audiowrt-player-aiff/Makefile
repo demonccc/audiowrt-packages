@@ -12,7 +12,7 @@ define Package/audiowrt-player-aiff
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT native AIFF player
-  DEPENDS:=+libaudiowrt-player +libpthread +libm
+  DEPENDS:=+libaudiowrt-player +libpthread
 endef
 
 define Package/audiowrt-player-aiff/description
