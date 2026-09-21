@@ -5,6 +5,8 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 audio="$repo_root/audiowrt-audio/files/audiowrt-audio"
+audio_makefile="$repo_root/audiowrt-audio/Makefile"
+audio_init="$repo_root/audiowrt-audio/files/audiowrt-audio.init"
 usb="$repo_root/audiowrt-usb-audio/files/select-audio-output"
 bluetooth="$repo_root/audiowrt-bluetooth/files/audiowrt-bluetooth"
 bluetooth_makefile="$repo_root/audiowrt-bluetooth/Makefile"
@@ -15,6 +17,11 @@ luci="$repo_root/luci-app-audiowrt/htdocs/luci-static/resources/view/audiowrt/ou
 
 # Recurrent runtime state belongs to tmpfs, never UCI/overlay.
 grep -q '/tmp/audiowrt/audio.state' "$audio"
+grep -q '^START=10$' "$audio_init"
+grep -Fq '[ -e /tmp/audiowrt/asound.conf ] || : > /tmp/audiowrt/asound.conf' "$audio_init"
+grep -Fq '[ -e /tmp/audiowrt/asound.conf ] || : > /tmp/audiowrt/asound.conf' "$audio_makefile"
+grep -Fq '/etc/init.d/audiowrt-audio enable' "$audio_makefile"
+grep -Fq './files/audiowrt-audio.init' "$audio_makefile"
 grep -q 'RUNTIME_DIR=/tmp/audiowrt' "$usb"
 grep -q 'RUNTIME_DIR=/tmp/audiowrt' "$bluetooth"
 grep -Fq 'ASOUND_FILE="$RUNTIME_DIR/asound.conf"' "$usb"
@@ -50,6 +57,8 @@ grep -q 'g_base64_encode' "$btctl"
 grep -q 'g_base64_decode' "$btctl"
 grep -q '#define BLUEZ_STORAGE "/var/lib/bluetooth"' "$btctl"
 
+# The base audio service creates an empty valid runtime ALSA config before
+# Bluetooth/USB services can replace it, so /etc/asound.conf is never dangling.
 # Saved state is restored before bluetoothd (START=60) and reconnect runs from RAM.
 grep -q '^START=59$' "$bluetooth_init"
 grep -q 'audiowrt-bluetooth restore' "$bluetooth_init"
