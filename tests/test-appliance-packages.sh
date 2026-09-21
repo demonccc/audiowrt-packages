@@ -16,14 +16,19 @@ fi
 grep -q 'system.@system\[0\].hostname' "$repo_root/audiowrt-core/files/audiowrt-core-firstboot"
 
 grep -q '+audiowrt-wifi-client' "$provisioning/Makefile"
-grep -q '/usr/sbin/audiowrt-wifi-client' "$provisioning/files/audiowrt-provisioning-firstboot"
+grep -q 'provisioning auto' "$provisioning/files/audiowrt-provisioning.init"
+grep -q '^has_persistent_wifi_client()' "$provisioning/files/audiowrtctl"
+grep -q '^has_ethernet_link()' "$provisioning/files/audiowrtctl"
 grep -q '/usr/sbin/audiowrt-wifi-client connect' "$provisioning/files/audiowrt-provision"
 grep -q '/bin/busybox passwd root' "$provisioning/files/audiowrt-provision.cgi"
 grep -q 'audiowrt-scan.cgi' "$provisioning/Makefile"
 grep -q 'audiowrt-radios.cgi' "$provisioning/Makefile"
 grep -q 'audiowrt-provisioning.init' "$provisioning/Makefile"
 grep -q 'S99audiowrt-provisioning' "$provisioning/Makefile"
-grep -q 'provisioning_initialized' "$provisioning/files/audiowrt-provisioning.init"
+if grep -q 'provisioning_initialized' "$provisioning/files/audiowrt-provisioning.init"; then
+    echo 'ERROR: provisioning init must not depend on a persistent initialized flag.' >&2
+    exit 1
+fi
 grep -q 'bssid' "$provisioning/files/audiowrt-provision.cgi"
 grep -q 'alternate_radio' "$provisioning/files/audiowrt-provision"
 
