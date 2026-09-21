@@ -178,7 +178,7 @@ static void *decode_thread(void *arg)
                 break;
             }
         } else {
-            int32_t out32[1536];
+            int32_t out32[6144];
             if (samples > sizeof(out32) / sizeof(out32[0])) {
                 ctx->rc = EOVERFLOW;
                 break;
