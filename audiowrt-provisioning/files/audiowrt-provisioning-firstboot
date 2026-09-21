@@ -56,7 +56,6 @@ fi
 
 uci -q set audiowrt.main.provisioning='1'
 uci -q set audiowrt.main.provisioning_initialized='1'
-uci -q set audiowrt.main.last_error=''
 uci -q commit audiowrt
 
 # Keep one permanent root dispatcher. During provisioning it sends
