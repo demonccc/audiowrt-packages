@@ -47,7 +47,7 @@ endef
 define Package/audiowrt-player-lpcm/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-player-registry register lpcm native_lpcm 'AudioWRT DLNA LPCM Player' /usr/bin/audiowrt-player-lpcm 'audio/L16 audio/l16' 'l16 pcm' >/dev/null 2>&1 || true
+/usr/libexec/audiowrt-player-registry register lpcm native_lpcm 'AudioWRT DLNA LPCM Player' /usr/bin/audiowrt-player-lpcm 'audio/L16 audio/l16 audio/L16;rate=44100;channels=2 audio/L16;rate=48000;channels=2' 'l16 pcm' >/dev/null 2>&1 || true
 exit 0
 endef
 
