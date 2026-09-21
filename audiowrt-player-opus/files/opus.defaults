@@ -5,6 +5,6 @@
 	opus native_opus \
 	'AudioWRT Opus Player' \
 	/usr/bin/audiowrt-player-opus \
-	'audio/opus audio/ogg application/ogg' \
+	'audio/opus audio/ogg;codecs=opus audio/ogg application/ogg' \
 	'opus ogg oga' >/dev/null 2>&1 || true
 exit 0
