@@ -12,6 +12,7 @@ define Package/audiowrt-renderer
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT native network renderer and discovery service
+  DEPENDS:=+libaudiowrt-player
   PROVIDES:=audiowrt-dlna
   CONFLICTS:=umdns audiowrt-umdns
 endef
