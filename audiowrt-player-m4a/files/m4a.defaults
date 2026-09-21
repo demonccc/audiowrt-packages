@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
 
-/usr/libexec/audiowrt-player-registry register \
+/usr/libexec/audiowrt-playback-registry register \
 	m4a native_m4a \
 	'AudioWRT M4A/AAC Player' \
 	/usr/bin/audiowrt-player-m4a \
