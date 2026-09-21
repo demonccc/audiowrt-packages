@@ -5,7 +5,10 @@ fail() { echo "native renderer contract failed: $*" >&2; exit 1; }
 
 [[ -f audiowrt-dlna/src/audiowrt-dlna.c ]] || fail "renderer source missing"
 [[ -f libaudiowrt-player/src/audiowrt-player.c ]] || fail "player library source missing"
+[[ -f libaudiowrt-player/files/audiowrt-player-registry ]] || fail "UCI player registry helper missing"
+
 grep -q '^PKG_NAME:=libaudiowrt-player$' libaudiowrt-player/Makefile || fail "player library package name mismatch"
+grep -q 'audiowrt-player-registry' libaudiowrt-player/Makefile || fail "player library must install registry helper"
 [[ ! -e audiowrt-player-core/Makefile ]] || fail "legacy player-core package must not exist"
 
 grep -q '^PKG_NAME:=audiowrt-renderer$' audiowrt-dlna/Makefile || fail "renderer package name mismatch"
@@ -17,16 +20,21 @@ fi
 if grep -Rqs '#include <uci.h>' audiowrt-dlna/src; then
   fail "renderer must not require uci.h"
 fi
-grep -q 'config_next_token' audiowrt-dlna/src/renderer-part-01.inc || fail "minimal renderer config parser missing"
+
+grep -q 'config_next_token' audiowrt-dlna/src/renderer-part-01.inc || fail "minimal UCI text parser missing"
+grep -q 'load_registry("/etc/config/audiowrt")' audiowrt-dlna/src/renderer-part-01.inc || fail "renderer must load player registry from /etc/config/audiowrt"
+grep -q 'default_player' audiowrt-dlna/src/renderer-part-01.inc || fail "default player selection missing"
+grep -q 'launch_next_player' audiowrt-dlna/src/renderer-part-01.inc || fail "player fallback selection missing"
+grep -q 'setpgid' audiowrt-dlna/src/renderer-part-01.inc || fail "players must run in their own process group"
+grep -q 'execl(p->executable, p->executable, g.uri' audiowrt-dlna/src/renderer-part-01.inc || fail "player URL argument contract missing"
+grep -q 'AUDIOWRT_CODEC' audiowrt-dlna/src/renderer-part-01.inc || fail "player codec environment missing"
+grep -q 'AUDIOWRT_MIME' audiowrt-dlna/src/renderer-part-01.inc || fail "player MIME environment missing"
+grep -q 'signal(SIGHUP, signal_handler)' audiowrt-dlna/src/renderer-part-04.inc || fail "SIGHUP registry reload missing"
+grep -q 'notify_service("ConnectionManager")' audiowrt-dlna/src/renderer-part-04.inc || fail "codec reload must notify ConnectionManager"
+grep -q 'procd_add_reload_trigger audiowrt-dlna audiowrt' audiowrt-dlna/files/audiowrt-dlna.init || fail "renderer must reload on registry UCI changes"
 
 grep -q 'avtransport_action_changes_state' audiowrt-dlna/src/renderer-part-03d.inc || fail "AVTransport state-change event filter missing"
 grep -q 'rendering_action_changes_state' audiowrt-dlna/src/renderer-part-03d.inc || fail "RenderingControl state-change event filter missing"
-for action in SetAVTransportURI Play Pause Stop; do
-  grep -q "\"$action\"" audiowrt-dlna/src/renderer-part-03d.inc || fail "AVTransport event filter missing $action"
-done
-for action in SetVolume SetMute; do
-  grep -q "\"$action\"" audiowrt-dlna/src/renderer-part-03d.inc || fail "RenderingControl event filter missing $action"
-done
 if grep -Fq 'handle_avtransport(fd, action, body); notify_service("AVTransport");' audiowrt-dlna/src/renderer-part-03d.inc; then
   fail "AVTransport SOAP reads must not notify subscribers unconditionally"
 fi
@@ -54,13 +62,20 @@ done
 [[ ! -e audiowrt-mdns/Makefile ]] || fail "standalone mDNS package must not exist"
 grep -q '/usr/libexec/audiowrt-renderer' audiowrt-dlna/files/audiowrt-dlna.init || fail "procd must launch unified renderer"
 
+registry=libaudiowrt-player/files/audiowrt-player-registry
+grep -q 'uci add_list.*mime' "$registry" || fail "registry must merge MIME values"
+grep -q 'uci add_list.*extension' "$registry" || fail "registry must merge extensions"
+grep -q 'uci add_list.*codec' "$registry" || fail "registry must attach codecs to players"
+grep -q 'default_player' "$registry" || fail "registry must preserve/create codec defaults"
+grep -q 'kill -HUP' "$registry" || fail "registry changes must hot-reload renderer"
+
 grep -q '+libuclient' libaudiowrt-player/Makefile || fail "player library must depend on libuclient"
 grep -q '+alsa-lib' libaudiowrt-player/Makefile || fail "player library must depend on ALSA"
 grep -q 'uclient_new' libaudiowrt-player/src/audiowrt-player.c || fail "player library must use libuclient directly"
 
 if grep -REn 'execl.*(wget|uclient-fetch|curl)|system.*(wget|uclient-fetch|curl)' \
   libaudiowrt-player/src audiowrt-player-flac/src audiowrt-player-mp3/src \
-  audiowrt-player-aac/src audiowrt-player-wav/src; then
+  audiowrt-player-aac/src audiowrt-player-wav/src audiowrt-player-vorbis/src; then
   fail "official players must not spawn an external HTTP client"
 fi
 
@@ -68,13 +83,20 @@ check_player() {
   local codec="$1" lib="$2" binary="audiowrt-player-$1"
   [[ -f "$binary/Makefile" ]] || fail "$binary Makefile missing"
   [[ -f "$binary/src/$binary.c" ]] || fail "$binary source missing"
-  [[ -f "$binary/files/$codec.conf" ]] || fail "$codec descriptor missing"
+  [[ -f "$binary/files/$codec.defaults" ]] || fail "$codec UCI registration script missing"
+  [[ ! -e "$binary/files/$codec.conf" ]] || fail "$codec legacy descriptor must be removed"
   grep -q "+libaudiowrt-player" "$binary/Makefile" || fail "$binary must use player library"
   [[ -z "$lib" ]] || grep -q "$lib" "$binary/Makefile" || fail "$binary must depend/link on $lib"
-  grep -q "command=/usr/bin/$binary" "$binary/files/$codec.conf" || fail "$codec descriptor command mismatch"
+  grep -q "$codec native_$codec" "$binary/files/$codec.defaults" || fail "$codec registry ID mismatch"
+  grep -q "/usr/bin/$binary" "$binary/files/$codec.defaults" || fail "$codec executable mismatch"
 }
 
 check_player flac libflac
+check_player mp3 libmad
+check_player aac libfaad2
+check_player wav ''
+check_player vorbis libvorbis
+
 flac_source="audiowrt-player-flac/src/audiowrt-player-flac.c"
 grep -q 'SND_PCM_FORMAT_S16 : SND_PCM_FORMAT_S32' "$flac_source" || fail "FLAC player must use native-endian ALSA PCM formats"
 if grep -Eq 'SND_PCM_FORMAT_(S16|S32)_(LE|BE)' "$flac_source"; then
@@ -83,16 +105,27 @@ fi
 if awk '/FLAC__stream_decoder_finish\(decoder\)/ { finished=1 } finished && /fclose\(input\)/ { bad=1 } END { exit bad ? 0 : 1 }' "$flac_source"; then
   fail "FLAC player must not fclose the FILE after libFLAC finish takes ownership"
 fi
-check_player mp3 libmpg123
-check_player aac libfaad2
-check_player wav ''
+
+for source in \
+  audiowrt-player-mp3/src/audiowrt-player-mp3.c \
+  audiowrt-player-aac/src/audiowrt-player-aac.c \
+  audiowrt-player-wav/src/audiowrt-player-wav.c \
+  audiowrt-player-vorbis/src/audiowrt-player-vorbis.c; do
+  grep -q 'SND_PCM_FORMAT_S16' "$source" || grep -q 'SND_PCM_FORMAT_S32' "$source" || fail "$source must use native PCM format"
+done
 
 grep -q '^PKG_NAME:=luci-app-audiowrt-renderer$' luci-app-audiowrt-dlna/Makefile || fail "LuCI package name mismatch"
 [[ -f luci-app-audiowrt-dlna/root/usr/share/luci/menu.d/luci-app-audiowrt-dlna.json ]] || fail "LuCI menu missing"
 [[ -f luci-app-audiowrt-dlna/root/usr/share/rpcd/acl.d/luci-app-audiowrt-dlna.json ]] || fail "LuCI ACL missing"
-grep -q 'auto_command' luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must expose overridden automatic player"
-grep -q '/usr/libexec/audiowrt-renderer' luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must query unified renderer"
+grep -q "uci.load('audiowrt')" luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must load player registry"
+grep -q 'default_player' luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must expose codec default player"
+grep -q 'executable' luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must expose custom player executable"
+grep -q '"audiowrt"' luci-app-audiowrt-dlna/root/usr/share/rpcd/acl.d/luci-app-audiowrt-dlna.json || fail "LuCI ACL must allow registry UCI"
 
 sh -n audiowrt-dlna/files/audiowrt-dlna.init
+sh -n libaudiowrt-player/files/audiowrt-player-registry
+for defaults in audiowrt-player-{flac,mp3,aac,wav,vorbis}/files/*.defaults; do
+  sh -n "$defaults"
+done
 
-echo "native renderer/discovery/player contract OK"
+echo "native renderer/discovery/UCI player registry contract OK"

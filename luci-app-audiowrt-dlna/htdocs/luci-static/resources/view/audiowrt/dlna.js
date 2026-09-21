@@ -10,6 +10,14 @@ function parseJSON(text, fallback) {
 	catch (e) { return fallback; }
 }
 
+function asList(value) {
+	if (Array.isArray(value))
+		return value;
+	if (value == null || value === '')
+		return [];
+	return [ value ];
+}
+
 function statusRow(label, id, value) {
 	return E('div', { 'class': 'tr' }, [
 		E('div', { 'class': 'td left', 'style': 'width:35%' }, [ E('strong', {}, label) ]),
@@ -17,27 +25,29 @@ function statusRow(label, id, value) {
 	]);
 }
 
-function renderPlayers(players) {
-	if (!players.length)
-		return E('p', {}, _('No AudioWRT codec player packages are installed.'));
+function renderCodecs(codecs) {
+	if (!codecs.length)
+		return E('p', {}, _('No codecs are currently registered in /etc/config/audiowrt.'));
 
 	return E('div', { 'class': 'table' }, [
 		E('div', { 'class': 'tr table-titles' }, [
 			E('div', { 'class': 'th left' }, _('Codec')),
-			E('div', { 'class': 'th left' }, _('Status')),
+			E('div', { 'class': 'th left' }, _('Default player')),
 			E('div', { 'class': 'th left' }, _('Effective player')),
+			E('div', { 'class': 'th left' }, _('Fallbacks')),
 			E('div', { 'class': 'th left' }, _('MIME types'))
 		])
-	].concat(players.map(function(p) {
-		var official = p.auto_command ? E('div', {
-			'class': 'cbi-value-description',
-			'style': p.mode === 'custom' ? 'opacity:.45' : ''
-		}, (p.mode === 'custom' ? _('Automatic (overridden): ') : _('Automatic: ')) + p.auto_command) : '';
+	].concat(codecs.map(function(c) {
+		var fallbacks = (c.players || []).filter(function(p) {
+			return p.available && p.id !== c.effective_player;
+		}).map(function(p) { return p.name || p.id; });
+
 		return E('div', { 'class': 'tr' }, [
-			E('div', { 'class': 'td left' }, [ E('strong', {}, String(p.id || '').toUpperCase()), official ]),
-			E('div', { 'class': 'td left' }, p.available ? (p.mode === 'custom' ? _('Custom override') : _('Autodetected')) : _('Unavailable')),
-			E('div', { 'class': 'td left' }, p.command || '-'),
-			E('div', { 'class': 'td left' }, p.mime || '-')
+			E('div', { 'class': 'td left' }, [ E('strong', {}, String(c.id || '').toUpperCase()) ]),
+			E('div', { 'class': 'td left' }, c.default_player || '-'),
+			E('div', { 'class': 'td left' }, c.effective_player || _('Unavailable')),
+			E('div', { 'class': 'td left' }, fallbacks.length ? fallbacks.join(', ') : '-'),
+			E('div', { 'class': 'td left' }, c.mime || '-')
 		]);
 	})));
 }
@@ -46,20 +56,29 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			uci.load('audiowrt-dlna'),
+			uci.load('audiowrt'),
 			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'status' ]), { stdout: '{}' }),
 			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'players' ]), { stdout: '[]' })
 		]);
 	},
 
 	render: function(data) {
-		var status = parseJSON(data[1].stdout, {});
-		var players = parseJSON(data[2].stdout, []);
-		var m, s, o;
+		var status = parseJSON(data[2].stdout, {});
+		var codecs = parseJSON(data[3].stdout, []);
+		var codecSections = uci.sections('audiowrt', 'codec') || [];
+		var playerSections = uci.sections('audiowrt', 'player') || [];
+		var codecIds = codecSections.map(function(c) { return c['.name']; });
+		var playerById = {};
+		var rendererMap, registryMap, s, o;
 
-		m = new form.Map('audiowrt-dlna', _('AudioWRT Renderer & Discovery'),
-			_('A single native service exposes AudioWRT through SSDP/DLNA and minimal mDNS/DNS-SD. It advertises only codecs whose AudioWRT player packages are installed. Custom mappings override autodetected players without deleting the automatic fallback.'));
+		playerSections.forEach(function(p) {
+			playerById[p['.name']] = p;
+		});
 
-		s = m.section(form.TypedSection, 'renderer', _('Renderer'));
+		rendererMap = new form.Map('audiowrt-dlna', _('AudioWRT Renderer & Discovery'),
+			_('A single native service exposes AudioWRT through SSDP/DLNA and minimal mDNS/DNS-SD. Codec and player capabilities are registered in /etc/config/audiowrt and can be reloaded without interrupting the renderer.'));
+
+		s = rendererMap.section(form.TypedSection, 'renderer', _('Renderer'));
 		s.anonymous = true;
 		s.addremove = false;
 
@@ -82,39 +101,47 @@ return view.extend({
 		o.datatype = 'range(0,100)';
 		o.default = '100';
 
-		s = m.section(form.GridSection, 'player', _('Custom player overrides'));
-		s.anonymous = true;
+		registryMap = new form.Map('audiowrt', _('Codec and player registry'),
+			_('Player packages register codecs and executables here. A player receives the media URL as its only argument and must remain in the foreground while playing. Other compatible players automatically act as fallbacks.'));
+
+		s = registryMap.section(form.GridSection, 'codec', _('Codec defaults'));
+		s.anonymous = false;
+		s.addremove = false;
+		s.sortable = false;
+
+		o = s.option(form.ListValue, 'default_player', _('Default player'));
+		o.rmempty = true;
+		playerSections.forEach(function(p) {
+			o.value(p['.name'], (p.name || p['.name']) + ' (' + p['.name'] + ')');
+		});
+		o.validate = function(section_id, value) {
+		var player, supported;
+		if (!value)
+			return true;
+		player = playerById[value];
+		if (!player)
+			return _('The selected player is not registered.');
+		supported = asList(player.codec);
+		return supported.indexOf(section_id) >= 0 ? true :
+			_('The selected player does not declare support for this codec.');
+	};
+
+		s = registryMap.section(form.GridSection, 'player', _('Registered players'));
+		s.anonymous = false;
 		s.addremove = true;
 		s.sortable = true;
-		s.description = _('A custom player supersedes the autodetected AudioWRT player for the same codec. The play command receives the URI in $AUDIOWRT_URI. Optional pause/resume/stop commands allow external players such as MPD to be controlled cleanly.');
+		s.description = _('Package players and custom players use the same contract. Custom wrappers for VLC, MPD or another engine can be added by registering their executable and supported codecs.');
 
-		o = s.option(form.Flag, 'enabled', _('Enabled'));
-		o.default = o.enabled;
-
-		o = s.option(form.Value, 'codec', _('Codec ID'));
+		o = s.option(form.Value, 'name', _('Name'));
 		o.rmempty = false;
-		[ 'flac', 'mp3', 'aac', 'wav' ].forEach(function(v) { o.value(v, v.toUpperCase()); });
 
-		o = s.option(form.Value, 'command', _('Play command'));
+		o = s.option(form.Value, 'executable', _('Executable'));
 		o.rmempty = false;
-		o.placeholder = 'mpc clear && mpc add "$AUDIOWRT_URI" && mpc play';
+		o.placeholder = '/usr/libexec/audiowrt-player-vlc';
 
-		o = s.option(form.Flag, 'managed', _('Managed process'));
-		o.default = o.disabled;
-		o.description = _('Enable only when the play command stays in the foreground for the whole playback session.');
-
-		o = s.option(form.Value, 'pause_command', _('Pause command'));
-		o.optional = true;
-		o = s.option(form.Value, 'resume_command', _('Resume command'));
-		o.optional = true;
-		o = s.option(form.Value, 'stop_command', _('Stop command'));
-		o.optional = true;
-		o = s.option(form.Value, 'mime', _('MIME types'));
-		o.optional = true;
-		o.placeholder = 'audio/flac audio/x-flac';
-		o = s.option(form.Value, 'extensions', _('Extensions'));
-		o.optional = true;
-		o.placeholder = 'flac';
+		o = s.option(form.DynamicList, 'codec', _('Codecs'));
+		o.rmempty = false;
+		codecIds.forEach(function(id) { o.value(id, id.toUpperCase()); });
 
 		poll.add(function() {
 			return L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'status' ]), { stdout: '{}' }).then(function(res) {
@@ -122,6 +149,7 @@ return view.extend({
 					'dlna-state': st.state || '-',
 					'dlna-controller': st.controller || '-',
 					'dlna-codec': st.codec ? String(st.codec).toUpperCase() : '-',
+					'dlna-player': st.player || '-',
 					'dlna-position': st.position || '-',
 					'dlna-volume': st.volume != null ? String(st.volume) + '%' : '-',
 					'dlna-uri': st.uri || '-'
@@ -133,7 +161,7 @@ return view.extend({
 			});
 		}, 2);
 
-		return Promise.resolve(m.render()).then(function(formNode) {
+		return Promise.all([ rendererMap.render(), registryMap.render() ]).then(function(nodes) {
 			return E('div', { 'class': 'cbi-map' }, [
 				E('h2', {}, _('Renderer status')),
 				E('div', { 'class': 'cbi-section' }, [
@@ -142,14 +170,16 @@ return view.extend({
 						statusRow(_('Playback'), 'dlna-state', status.state),
 						statusRow(_('Last controller'), 'dlna-controller', status.controller),
 						statusRow(_('Codec'), 'dlna-codec', status.codec ? String(status.codec).toUpperCase() : '-'),
+						statusRow(_('Player'), 'dlna-player', status.player),
 						statusRow(_('Position'), 'dlna-position', status.position),
 						statusRow(_('Volume'), 'dlna-volume', status.volume != null ? String(status.volume) + '%' : '-'),
 						statusRow(_('URI'), 'dlna-uri', status.uri)
 					])
 				]),
 				E('h3', {}, _('Codec players')),
-				E('div', { 'class': 'cbi-section' }, [ renderPlayers(players) ]),
-				formNode
+				E('div', { 'class': 'cbi-section' }, [ renderCodecs(codecs) ]),
+				nodes[0],
+				nodes[1]
 			]);
 		});
 	}

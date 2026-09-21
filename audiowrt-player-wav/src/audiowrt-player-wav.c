@@ -122,7 +122,7 @@ static void *decode_thread(void *arg)
         goto out;
     }
 
-    alsa_fmt = bits == 16 ? SND_PCM_FORMAT_S16_LE : SND_PCM_FORMAT_S32_LE;
+    alsa_fmt = bits == 16 ? SND_PCM_FORMAT_S16 : SND_PCM_FORMAT_S32;
     if (aw_pcm_open(&ctx->pcm, rate, channels, alsa_fmt) < 0) {
         ctx->rc = EIO;
         goto out;
@@ -144,6 +144,11 @@ static void *decode_thread(void *arg)
         frames = want / in_frame_bytes;
 
         if (bits == 16) {
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+            size_t i, samples = frames * channels;
+            for (i = 0; i < samples; i++)
+                ((int16_t *)in)[i] = (int16_t)le16(in + i * 2);
+#endif
             aw_scale_s16((int16_t *)in, frames * channels);
             if (aw_pcm_write(ctx->pcm, in, frames) < 0) {
                 ctx->rc = EIO;

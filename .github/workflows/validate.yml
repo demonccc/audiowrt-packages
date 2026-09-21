@@ -148,6 +148,7 @@ jobs:
             audiowrt-player-mp3 \
             audiowrt-player-aac \
             audiowrt-player-wav \
+            audiowrt-player-vorbis \
             luci-app-audiowrt-renderer \
             audiowrt-airplay \
             librespot \

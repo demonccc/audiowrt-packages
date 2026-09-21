@@ -150,8 +150,10 @@ static int open_http(void)
 
 static void signal_handler(int sig)
 {
-    (void)sig;
-    running = 0;
+    if (sig == SIGHUP)
+        reload_requested = 1;
+    else
+        running = 0;
 }
 
 static int daemon_main(void)
@@ -162,6 +164,7 @@ static int daemon_main(void)
 
     signal(SIGTERM, signal_handler);
     signal(SIGINT, signal_handler);
+    signal(SIGHUP, signal_handler);
     signal(SIGPIPE, SIG_IGN);
 
     write_status();
@@ -197,6 +200,13 @@ static int daemon_main(void)
             if (fds[2].revents & POLLIN) handle_mdns(mfd);
         }
         reap_player();
+        if (reload_requested) {
+            reload_requested = 0;
+            if (reload_registry() == 0) {
+                write_status();
+                notify_service("ConnectionManager");
+            }
+        }
         if (time(NULL) >= next_alive) {
             ssdp_notify(sfd, "ssdp:alive");
             next_alive = time(NULL) + 300;

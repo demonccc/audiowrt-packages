@@ -31,10 +31,15 @@ start_service() {
 }
 
 reload_service() {
-	stop
-	start
+	local pids
+	pids="$(pidof audiowrt-renderer 2>/dev/null)"
+	if [ -n "$pids" ]; then
+		kill -HUP $pids
+	else
+		start
+	fi
 }
 
 service_triggers() {
-	procd_add_reload_trigger audiowrt-dlna
+	procd_add_reload_trigger audiowrt-dlna audiowrt
 }
