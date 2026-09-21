@@ -57,6 +57,14 @@ grep -q 'audiowrt-bluetooth watch' "$bluetooth_init"
 grep -q 'bluetooth.blocked' "$bluetooth"
 grep -q 'watch_saved' "$bluetooth"
 
+# A persisted preferred device must recreate the volatile ALSA route and
+# selected runtime state during boot, before any successful reconnect.
+grep -q '^prime_saved_output()' "$bluetooth"
+grep -q 'prime_saved_output' "$bluetooth"
+grep -Fq 'write_asound_config "$mac"' "$bluetooth"
+grep -Fq 'write_runtime_state "$mac" "$name" 0 "Waiting for saved Bluetooth output."' "$bluetooth"
+grep -Fq '[ "$(runtime_ready)" != "1" ]' "$bluetooth"
+
 # LuCI separates known devices from discovery and polls runtime state.
 for token in 'My devices' 'Nearby devices' 'Scan for devices' "_('Pair')" "_('Connect')" "_('Use')" "_('Disconnect')" "_('Save')" 'poll.add'; do
 	grep -Fq "$token" "$luci" || {
