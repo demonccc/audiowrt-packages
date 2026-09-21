@@ -37,6 +37,15 @@ runtime_selected() {
 	sed -n 's/^bluetooth_device=//p' "$STATE_FILE" | head -n 1
 }
 
+runtime_ready() {
+	[ -r "$STATE_FILE" ] || { printf '0\n'; return 0; }
+	ready="$(sed -n 's/^ready=//p' "$STATE_FILE" | head -n 1)"
+	case "$ready" in
+		1) printf '1\n' ;;
+		*) printf '0\n' ;;
+	esac
+}
+
 preferred() {
 	uci -q get "$BT_CONFIG.main.preferred_device" || true
 }
@@ -77,6 +86,22 @@ write_runtime_state() {
 		printf 'last_error=%s\n' "$error"
 	} > "$tmp"
 	mv -f "$tmp" "$STATE_FILE"
+}
+
+write_asound_config() {
+	mac="$(upper_mac "$1")"
+	ensure_runtime
+
+	cat > "$ASOUND_FILE" <<EOF
+defaults.bluealsa.service "org.bluealsa"
+defaults.bluealsa.device "$mac"
+defaults.bluealsa.profile "a2dp"
+
+pcm.!default {
+	type plug
+	slave.pcm "bluealsa"
+}
+EOF
 }
 
 clear_runtime_state() {
@@ -123,21 +148,25 @@ device_name() {
 configure_device() {
 	mac="$(upper_mac "$1")"
 	name="$(device_name "$mac")"
-	ensure_runtime
-
-	cat > "$ASOUND_FILE" <<EOF
-defaults.bluealsa.service "org.bluealsa"
-defaults.bluealsa.device "$mac"
-defaults.bluealsa.profile "a2dp"
-
-pcm.!default {
-	type plug
-	slave.pcm "bluealsa"
-}
-EOF
-
+	write_asound_config "$mac"
 	write_runtime_state "$mac" "$name" 1 ""
 	restart_engines
+}
+
+prime_saved_output() {
+	mac="$(upper_mac "$(preferred)")"
+	[ -n "$mac" ] || return 0
+	valid_mac "$mac" || return 0
+	is_saved "$mac" || return 0
+
+	section="$(section_for_mac "$mac")"
+	name="$(uci -q get "$BT_CONFIG.$section.name" 2>/dev/null || printf '%s\n' "$mac")"
+
+	# The ALSA route is configuration derived from the explicit Save action.
+	# Recreate it in tmpfs on every boot even while the speaker is offline, so
+	# /etc/asound.conf never points at a missing runtime file after startup.
+	write_asound_config "$mac"
+	write_runtime_state "$mac" "$name" 0 "Waiting for saved Bluetooth output."
 }
 
 format_devices() {
@@ -277,6 +306,8 @@ restore_saved() {
 		[ -n "$mac" ] && [ -n "$adapter" ] && [ -n "$encoded" ] || continue
 		/usr/bin/audiowrt-btctl storage-import "$adapter" "$(upper_mac "$mac")" "$encoded" >/dev/null 2>&1 || true
 	done
+
+	prime_saved_output
 }
 
 watch_saved() {
@@ -291,7 +322,9 @@ watch_saved() {
 		[ -z "$current" ] || [ "$current" = "$mac" ] || continue
 
 		if device_connected "$mac"; then
-			[ "$current" = "$mac" ] || configure_device "$mac"
+			if [ "$current" != "$mac" ] || [ "$(runtime_ready)" != "1" ]; then
+				configure_device "$mac"
+			fi
 			continue
 		fi
 
