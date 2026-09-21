@@ -1,24 +1,35 @@
 'use strict';
 'require baseclass';
 'require uci';
+'require fs';
+
+function parseState(text) {
+	var state = {};
+	(text || '').split(/\n/).forEach(function(line) {
+		var p = line.indexOf('=');
+		if (p > 0) state[line.substring(0, p)] = line.substring(p + 1);
+	});
+	return state;
+}
 
 return baseclass.extend({
 	title: _('AudioWRT'),
 
 	load: function() {
 		return Promise.all([
-			uci.load('audiowrt-audio'),
-			uci.load('system')
+			uci.load('system'),
+			L.resolveDefault(fs.exec('/usr/sbin/audiowrt-audio', [ 'status' ]), { stdout: '' })
 		]);
 	},
 
-	render: function() {
+	render: function(data) {
 		var hostname = uci.get('system', '@system[0]', 'hostname') || 'OpenWrt';
-		var outputType = uci.get('audiowrt-audio', 'main', 'output_type') || 'auto';
-		var ready = uci.get('audiowrt-audio', 'main', 'ready') === '1';
-		var device = uci.get('audiowrt-audio', 'main', 'device') || '-';
-		var btName = uci.get('audiowrt-audio', 'main', 'bluetooth_name') || '-';
-		var error = uci.get('audiowrt-audio', 'main', 'last_error') || '';
+		var state = parseState(data[1].stdout || '');
+		var outputType = state.output_type || 'auto';
+		var ready = state.ready === '1';
+		var device = state.device || '-';
+		var btName = state.bluetooth_name || '-';
+		var error = state.last_error || '';
 		var fields = [
 			_('Audio name'), hostname,
 			_('Output type'), outputType,
