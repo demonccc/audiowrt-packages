@@ -8,6 +8,7 @@ start() {
 		logger -t audiowrt "Running provisioning first-install migration"
 		if /etc/uci-defaults/10-audiowrt-provisioning; then
 			rm -f /etc/uci-defaults/10-audiowrt-provisioning
+			ubus call network reload >/dev/null 2>&1 || true
 		else
 			logger -t audiowrt "Provisioning first-install migration failed"
 			return 1
