@@ -39,14 +39,14 @@ endef
 
 define Package/audiowrt-player-mp3/postinst
 #!/bin/sh
-[ -n "${IPKG_INSTROOT}" ] && exit 0
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
 /usr/libexec/audiowrt-player-registry register mp3 native_mp3 'AudioWRT MP3 Player' /usr/bin/audiowrt-player-mp3 'audio/mpeg audio/mp3' 'mp3' >/dev/null 2>&1 || true
 exit 0
 endef
 
 define Package/audiowrt-player-mp3/prerm
 #!/bin/sh
-[ -n "${IPKG_INSTROOT}" ] && exit 0
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
 /usr/libexec/audiowrt-player-registry unregister native_mp3 >/dev/null 2>&1 || true
 exit 0
 endef
