@@ -55,7 +55,11 @@ grep -q 'storage-export' "$bluetooth"
 grep -q 'storage-import' "$bluetooth"
 grep -q 'g_base64_encode' "$btctl"
 grep -q 'g_base64_decode' "$btctl"
-grep -q '#define BLUEZ_STORAGE "/var/lib/bluetooth"' "$btctl"
+grep -q '#define BLUEZ_STORAGE "/tmp/lib/bluetooth"' "$btctl"
+if grep -q '/var/lib/bluetooth' "$btctl" "$bluetooth"; then
+	echo 'ERROR: Bluetooth runtime pairing database must remain in tmpfs.' >&2
+	exit 1
+fi
 
 # The base audio service creates an empty valid runtime ALSA config before
 # Bluetooth/USB services can replace it, so /etc/asound.conf is never dangling.
