@@ -7,6 +7,7 @@ setup_ip() { uci -q get audiowrt.main.setup_ip || echo '192.168.77.1'; }
 setup_ssid() { /usr/libexec/audiowrt/setup-ssid 2>/dev/null || echo 'AudioWRT-Setup'; }
 first_radio() { /usr/sbin/audiowrt-wifi-client radios 2>/dev/null | sed -n '1s/|.*//p'; }
 error_file=/tmp/audiowrt/provisioning.error
+done_file=/tmp/audiowrt/provisioning.done
 
 clear_error() { mkdir -p /tmp/audiowrt; rm -f "$error_file"; }
 
@@ -129,6 +130,7 @@ start_setup() {
 	[ -n "$radio" ] || { echo 'ERROR: no Wi-Fi radio is available.' >&2; return 3; }
 	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$(setup_ssid)" "$(setup_ip)"
 	clear_error
+	rm -f "$done_file"
 	logger -t audiowrt "Provisioning mode enabled ($reason)"
 }
 
@@ -161,7 +163,7 @@ provisioning_stop() {
 
 status() {
 	provisioning=0
-	if setup_active && ! wifi_up; then
+	if setup_active && [ ! -f "$done_file" ]; then
 		provisioning=1
 	fi
 	printf 'device_name=%s\n' "$(uci -q get system.@system[0].hostname || echo AudioWRT)"
