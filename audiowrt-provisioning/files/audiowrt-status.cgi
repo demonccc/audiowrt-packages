@@ -6,6 +6,7 @@ name="$(uci -q get system.@system[0].hostname || echo AudioWRT)"
 wifi_ssid="$(uci -q get wireless.audiowrt_client.ssid || true)"
 last_error="$(cat /tmp/audiowrt/provisioning.error 2>/dev/null || true)"
 setup_ip="$(uci -q get audiowrt.main.setup_ip || echo 192.168.77.1)"
+done_file=/tmp/audiowrt/provisioning.done
 
 audio_status="$(/usr/sbin/audiowrt-audio status 2>/dev/null || true)"
 audio_ready="$(printf '%s\n' "$audio_status" | sed -n 's/^ready=//p' | head -n 1)"
@@ -25,10 +26,11 @@ fi
 printf '%s\n' "$wifi_status" | grep -q '"up":[[:space:]]*true' && wifi_up=1
 
 # Provisioning is a fact derived from live networking, not a stored boolean.
-# Once the verified Wi-Fi client is up, report Done while the setup AP is
-# still alive. The delayed stop gives the browser time to render the page.
+# Report Done only after the verified Wi-Fi client has been committed. Merely
+# seeing the interface come up is not enough: the worker may still be saving
+# the configuration. The completion marker lives only in tmpfs.
 provisioning=0
-if [ "$setup_active" -eq 1 ] && [ "$wifi_up" -eq 0 ]; then
+if [ "$setup_active" -eq 1 ] && [ ! -f "$done_file" ]; then
 	provisioning=1
 fi
 
@@ -43,7 +45,7 @@ printf '{"device_name":"%s","provisioning":%s,"audio_ready":%s,"audio_device":"%
 	"$(json_escape "$name")" "$([ "$provisioning" -eq 1 ] && echo true || echo false)" "$([ "$audio_ready" = '1' ] && echo true || echo false)" \
 	"$(json_escape "$audio_device")" "$(json_escape "$output_type")" "$(json_escape "$wifi_ssid")" "$(json_escape "$ip_address")" "$(json_escape "$last_error")"
 
-if [ "$setup_active" -eq 1 ] && [ "$wifi_up" -eq 1 ]; then
+if [ "$setup_active" -eq 1 ] && [ "$wifi_up" -eq 1 ] && [ -f "$done_file" ]; then
 	(
 		sleep 5
 		/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
