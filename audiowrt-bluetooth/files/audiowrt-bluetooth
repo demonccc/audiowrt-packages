@@ -298,7 +298,7 @@ save_device() {
 }
 
 restore_saved() {
-	mkdir -p /var/lib/bluetooth
+	mkdir -p /tmp/lib/bluetooth
 	for section in $(uci -q show "$BT_CONFIG" 2>/dev/null | sed -n "s/^$BT_CONFIG\.\([^.=]*\)=device$/\1/p"); do
 		mac="$(uci -q get "$BT_CONFIG.$section.mac" 2>/dev/null || true)"
 		adapter="$(uci -q get "$BT_CONFIG.$section.adapter" 2>/dev/null || true)"
