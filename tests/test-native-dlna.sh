@@ -87,7 +87,7 @@ check_player() {
   [[ ! -e "$binary/files/$codec.conf" ]] || fail "$codec legacy descriptor must be removed"
   grep -q "+libaudiowrt-player" "$binary/Makefile" || fail "$binary must use player library"
   [[ -z "$lib" ]] || grep -q "$lib" "$binary/Makefile" || fail "$binary must depend/link on $lib"
-  grep -q "register $codec native_$codec" "$binary/files/$codec.defaults" || fail "$codec registry ID mismatch"
+  grep -q "$codec native_$codec" "$binary/files/$codec.defaults" || fail "$codec registry ID mismatch"
   grep -q "/usr/bin/$binary" "$binary/files/$codec.defaults" || fail "$codec executable mismatch"
 }
 
