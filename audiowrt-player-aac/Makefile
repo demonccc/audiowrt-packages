@@ -44,14 +44,14 @@ endef
 
 define Package/audiowrt-player-aac/postinst
 #!/bin/sh
-[ -n "${IPKG_INSTROOT}" ] && exit 0
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
 /usr/libexec/audiowrt-player-registry register aac native_aac 'AudioWRT AAC Player' /usr/bin/audiowrt-player-aac 'audio/aac audio/aacp' 'aac' >/dev/null 2>&1 || true
 exit 0
 endef
 
 define Package/audiowrt-player-aac/prerm
 #!/bin/sh
-[ -n "${IPKG_INSTROOT}" ] && exit 0
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
 /usr/libexec/audiowrt-player-registry unregister native_aac >/dev/null 2>&1 || true
 exit 0
 endef
