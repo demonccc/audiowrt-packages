@@ -63,6 +63,22 @@ for file in "$provision" "$audiowrtctl" "$status_cgi"; do
     grep -q 'provisioning.error' "$file" || fail "volatile provisioning error file missing from $file"
 done
 
+# Provisioning mode is derived from connectivity/runtime setup, never stored in
+# the persistent AudioWRT UCI schema. Legacy keys may appear only in the
+# first-install migration that deletes them.
+if grep -Eq 'option (provisioning|provisioning_initialized)' "$core_config"; then
+    fail 'core UCI schema still stores provisioning state'
+fi
+for file in "$provision" "$provision_cgi" "$audiowrtctl" "$status_cgi"; do
+    if grep -q 'audiowrt\.main\.provisioning' "$file"; then
+        fail "active provisioning path still uses persistent provisioning state: $file"
+    fi
+done
+grep -q 'provisioning.done' "$provision" ||
+    fail 'verified provisioning completion is not tracked in tmpfs'
+grep -q 'provisioning.done' "$status_cgi" ||
+    fail 'status does not wait for verified tmpfs completion before showing Done'
+
 # External-overlay operation must not silently mirror every configuration change
 # back to the internal flash. sync-core remains an explicit storage command only.
 if grep -Rqs --exclude='audiowrt-storage' --exclude='*.md' --exclude='*.sh' \
@@ -76,16 +92,30 @@ fi
 grep -q 'sync-core' "$repo_root/audiowrt-storage/files/audiowrt-storage" ||
     fail 'explicit storage sync-core command was accidentally removed'
 
-# Runtime Wi-Fi stop/disconnect operations are idempotent: already-disabled
-# interfaces must not cause another UCI commit or Wi-Fi reload.
+# The setup AP is runtime-only. setup-start/setup-stop may stage UCI changes
+# in tmpfs and reload netifd, but must never commit those setup sections.
+setup_runtime="$(sed -n '/^setup_start()/,/^mdns_sync()/p' "$wifi")"
+if printf '%s\n' "$setup_runtime" | grep -Eq 'uci -q commit (network|wireless)'; then
+    fail 'setup-start/setup-stop persists runtime provisioning state'
+fi
+grep -Fq 'stage_setup_config "$radio" "$ssid" "$setup_ip"' "$wifi" ||
+    fail 'setup-start does not stage runtime setup state'
+grep -Fq 'AUDIOWRT_WIFI_PERSIST' "$wifi" ||
+    fail 'Wi-Fi client cannot be tested without persistence'
+grep -q '^commit_wifi_client()' "$wifi" ||
+    fail 'verified Wi-Fi client has no isolated persistence path'
+grep -Fq 'uci -q delete network.audiowrt_setup' "$wifi" ||
+    fail 'client commit does not exclude runtime setup network'
+grep -Fq 'uci -q delete wireless.audiowrt_setup' "$wifi" ||
+    fail 'client commit does not exclude runtime setup AP'
+grep -Fq 'stage_setup_config "$setup_radio"' "$wifi" ||
+    fail 'setup AP is not re-staged after the verified client commit'
+
+# Explicit disconnect remains persistent but repeated calls are idempotent.
 grep -Fq "uci -q get wireless.audiowrt_client >/dev/null 2>&1 || return 0" "$wifi" ||
     fail 'Wi-Fi disconnect does not short-circuit when the client section is absent'
-grep -Fq "[ \"\$(uci -q get wireless.audiowrt_client.disabled 2>/dev/null || echo 0)\" = '1' ] && return 0" "$wifi" ||
+grep -Fq "[ "\$(uci -q get wireless.audiowrt_client.disabled 2>/dev/null || echo 0)" = '1' ] && return 0" "$wifi" ||
     fail 'Wi-Fi disconnect does not short-circuit when already disabled'
-grep -Fq 'changed=0' "$wifi" ||
-    fail 'Wi-Fi runtime stop paths do not track actual changes'
-grep -Fq 'if [ "$changed" -eq 1 ]; then' "$wifi" ||
-    fail 'Wi-Fi setup-stop does not guard reload/write behavior with an actual change'
 
 # Legacy umdns compatibility may persist the required network list once, but
 # repeated mdns-sync calls must be no-op for flash when nothing changed.
