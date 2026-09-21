@@ -24,6 +24,7 @@ core_config="$repo_root/audiowrt-core/files/audiowrt.config"
 wifi="$repo_root/audiowrt-wifi-client/files/audiowrt-wifi-client"
 registry="$repo_root/libaudiowrt-player/files/audiowrt-player-registry"
 status_luci="$repo_root/luci-app-audiowrt/htdocs/luci-static/resources/view/status/include/90_audiowrt.js"
+upmpd_config="$repo_root/audiowrt-minimal-upmpdcli/files/upmpdcli.conf"
 
 # High-frequency audio paths must only touch volatile storage.
 for file in "$audio" "$usb" "$usb_hotplug"; do
@@ -147,5 +148,10 @@ grep -Fq "fs.exec('/usr/sbin/audiowrt-audio', [ 'status' ])" "$status_luci" ||
 if grep -Eq "uci\.get\('audiowrt-audio'.*(ready|device|output_type|last_error)" "$status_luci"; then
     fail 'LuCI status still reads runtime audio fields from UCI'
 fi
+
+# Legacy upmpdcli profile must never rely on a possibly persistent /var
+# cache. Keep renderer queue/cache data explicitly on tmpfs.
+grep -Fq 'cachedir = /tmp/upmpdcli' "$upmpd_config" ||
+    fail 'upmpdcli cache is not explicitly rooted in tmpfs'
 
 echo 'Runtime flash-write policy passed.'
