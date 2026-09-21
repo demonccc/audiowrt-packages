@@ -306,16 +306,28 @@ mdns_sync() {
 	fi
 
 	# Backward compatibility for older/non-renderer installations that still
-	# provide umdns. Never make Wi-Fi provisioning depend on mDNS availability.
+	# provide umdns. Keep it idempotent: repeated syncs must not rewrite flash.
 	if [ -x /etc/init.d/umdns ]; then
-		uci -q get umdns.@umdns[0] >/dev/null 2>&1 || uci -q add umdns umdns >/dev/null 2>&1 || true
+		changed=0
+		if ! uci -q get umdns.@umdns[0] >/dev/null 2>&1; then
+			uci -q add umdns umdns >/dev/null 2>&1 || true
+			changed=1
+		fi
 		if uci -q get umdns.@umdns[0] >/dev/null 2>&1; then
+			current_networks="$(uci -q get umdns.@umdns[0].network 2>/dev/null || true)"
 			for network in lan audiowrt_wifi audiowrt_setup; do
-				uci -q del_list umdns.@umdns[0].network="$network" 2>/dev/null || true
-				uci -q add_list umdns.@umdns[0].network="$network" 2>/dev/null || true
+				found=0
+				for current in $current_networks; do
+					[ "$current" = "$network" ] && { found=1; break; }
+				done
+				if [ "$found" -eq 0 ]; then
+					uci -q add_list umdns.@umdns[0].network="$network"
+					current_networks="$current_networks $network"
+					changed=1
+				fi
 			done
-			uci -q commit umdns 2>/dev/null || true
-			/etc/init.d/umdns enable >/dev/null 2>&1 || true
+			[ "$changed" -eq 0 ] || uci -q commit umdns 2>/dev/null || true
+			/etc/init.d/umdns enabled >/dev/null 2>&1 || /etc/init.d/umdns enable >/dev/null 2>&1 || true
 			/etc/init.d/umdns restart >/dev/null 2>&1 || true
 		fi
 	fi
