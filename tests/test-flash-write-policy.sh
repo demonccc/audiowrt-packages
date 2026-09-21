@@ -70,6 +70,17 @@ fi
 grep -q 'sync-core' "$repo_root/audiowrt-storage/files/audiowrt-storage" ||
     fail 'explicit storage sync-core command was accidentally removed'
 
+# Runtime Wi-Fi stop/disconnect operations are idempotent: already-disabled
+# interfaces must not cause another UCI commit or Wi-Fi reload.
+grep -Fq "uci -q get wireless.audiowrt_client >/dev/null 2>&1 || return 0" "$wifi" ||
+    fail 'Wi-Fi disconnect does not short-circuit when the client section is absent'
+grep -Fq "[ \"\$(uci -q get wireless.audiowrt_client.disabled 2>/dev/null || echo 0)\" = '1' ] && return 0" "$wifi" ||
+    fail 'Wi-Fi disconnect does not short-circuit when already disabled'
+grep -Fq 'changed=0' "$wifi" ||
+    fail 'Wi-Fi runtime stop paths do not track actual changes'
+grep -Fq 'if [ "$changed" -eq 1 ]; then' "$wifi" ||
+    fail 'Wi-Fi setup-stop does not guard reload/write behavior with an actual change'
+
 # Legacy umdns compatibility may persist the required network list once, but
 # repeated mdns-sync calls must be no-op for flash when nothing changed.
 grep -Fq '[ "$changed" -eq 0 ] || uci -q commit umdns' "$wifi" ||
