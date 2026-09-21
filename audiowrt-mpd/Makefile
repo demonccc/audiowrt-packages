@@ -1,7 +1,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-mpd
-PKG_RELEASE:=6
+PKG_VERSION:=1.0.0
+PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 

@@ -63,7 +63,13 @@ jobs:
 
       - name: Validate native renderer, discovery and players
         shell: bash
-        run: bash tests/test-native-dlna.sh
+        run: |
+          bash tests/test-native-dlna.sh
+          bash tests/test-renderer-xml-unescape.sh
+
+      - name: Validate AudioWRT package versioning
+        shell: bash
+        run: bash tests/test-package-versioning.sh
 
       - name: Validate appliance packages
         shell: bash
