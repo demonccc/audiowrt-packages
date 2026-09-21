@@ -10,21 +10,15 @@ redirect() {
 	exit 0
 }
 
-provisioning="$(uci -q get audiowrt.main.provisioning || echo 1)"
 setup_ip="$(uci -q get audiowrt.main.setup_ip || echo 192.168.77.1)"
 host="${HTTP_HOST:-}"
 host="${host%%:*}"
 
-if [ "$provisioning" = '1' ]; then
-	case "$host" in
-		audiowrt.local|audiowrt.local.)
-			redirect "http://$setup_ip/"
-			;;
-	esac
-
-	if [ "$host" = "$setup_ip" ] || [ "${SERVER_ADDR:-}" = "$setup_ip" ]; then
-		redirect '/audiowrt.html'
-	fi
+# The destination address is the provisioning state. The same hostname may
+# resolve to a normal LAN address or to the temporary setup address, so never
+# use a separate persistent boolean to decide which UI to serve.
+if [ "${SERVER_ADDR:-}" = "$setup_ip" ] || [ "$host" = "$setup_ip" ]; then
+	redirect '/audiowrt.html'
 fi
 
 redirect '/cgi-bin/luci/'
