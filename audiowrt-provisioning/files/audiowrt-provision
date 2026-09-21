@@ -18,8 +18,8 @@ set_error() {
 
 set_provisioning() {
 	value="$1"
-	current="$(uci -q get audiowrt.main.provisioning || echo 1)"
-	[ "$current" = "$value" ] && return 0
+	current="$(uci -q get audiowrt.main.provisioning 2>/dev/null || true)"
+	[ -n "$current" ] && [ "$current" = "$value" ] && return 0
 	uci -q set audiowrt.main.provisioning="$value"
 	uci -q commit audiowrt
 }
