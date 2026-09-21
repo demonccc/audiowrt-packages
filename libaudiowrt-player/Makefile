@@ -11,7 +11,7 @@ define Package/libaudiowrt-player
   SECTION:=libs
   CATEGORY:=Libraries
   TITLE:=AudioWRT native player transport and PCM library
-  DEPENDS:=+libuclient +libubox +alsa-lib
+  DEPENDS:=+libuclient +libubox +alsa-lib +uci
 endef
 
 define Package/libaudiowrt-player/description
