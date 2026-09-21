@@ -61,8 +61,8 @@ if ! { printf '%s\n' "$admin_password"; sleep 1; printf '%s\n' "$admin_password"
 	reply '500 Internal Server Error' 'Could not set the administrator password.'
 fi
 
-uci -q set audiowrt.main.last_error=''
-uci -q commit audiowrt
+mkdir -p /tmp/audiowrt
+rm -f /tmp/audiowrt/provisioning.error
 /usr/sbin/audiowrt-wifi-client mdns-sync >/dev/null 2>&1 || true
 
 umask 077
