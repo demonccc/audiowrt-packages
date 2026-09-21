@@ -3,10 +3,12 @@
 #include <glib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #define BLUEZ_BUS "org.bluez"
 #define ROOT_PATH "/"
 #define AGENT_PATH "/org/audiowrt/agent"
+#define BLUEZ_STORAGE "/var/lib/bluetooth"
 
 static GDBusConnection *bus;
 static GMainLoop *pair_loop;
@@ -295,12 +297,111 @@ static int print_name(const char *mac) {
 	g_variant_unref(objects); return rc;
 }
 
+
+static gchar *storage_device_dir(const char *mac, gchar **adapter_out) {
+	GDir *root = g_dir_open(BLUEZ_STORAGE, 0, NULL);
+	const gchar *entry;
+	if (!root) return NULL;
+	while ((entry = g_dir_read_name(root))) {
+		gchar *candidate = g_build_filename(BLUEZ_STORAGE, entry, mac, NULL);
+		if (g_file_test(candidate, G_FILE_TEST_IS_DIR)) {
+			if (adapter_out) *adapter_out = g_strdup(entry);
+			g_dir_close(root);
+			return candidate;
+		}
+		g_free(candidate);
+	}
+	g_dir_close(root);
+	return NULL;
+}
+
+static int storage_export(const char *mac) {
+	gchar *adapter = NULL;
+	gchar *device_dir = storage_device_dir(mac, &adapter);
+	gchar *info_path;
+	gchar *contents = NULL;
+	gsize len = 0;
+	gchar *encoded;
+
+	if (!device_dir || !adapter) {
+		g_printerr("ERROR: no BlueZ pairing state found for %s.\n", mac);
+		g_free(device_dir);
+		g_free(adapter);
+		return 2;
+	}
+
+	info_path = g_build_filename(device_dir, "info", NULL);
+	if (!g_file_get_contents(info_path, &contents, &len, NULL)) {
+		g_printerr("ERROR: could not read BlueZ pairing state for %s.\n", mac);
+		g_free(info_path);
+		g_free(device_dir);
+		g_free(adapter);
+		return 3;
+	}
+
+	encoded = g_base64_encode((const guchar *)contents, len);
+	g_print("%s|%s\n", adapter, encoded);
+
+	g_free(encoded);
+	g_free(contents);
+	g_free(info_path);
+	g_free(device_dir);
+	g_free(adapter);
+	return 0;
+}
+
+static int storage_import(const char *adapter, const char *mac, const char *encoded) {
+	gchar *device_dir;
+	gchar *info_path;
+	guchar *decoded;
+	gsize len = 0;
+	GError *error = NULL;
+
+	if (!adapter || !*adapter || !mac || !*mac || !encoded || !*encoded)
+		return 2;
+
+	decoded = g_base64_decode(encoded, &len);
+	if (!decoded || !len) {
+		g_printerr("ERROR: invalid saved BlueZ pairing state for %s.\n", mac);
+		g_free(decoded);
+		return 3;
+	}
+
+	device_dir = g_build_filename(BLUEZ_STORAGE, adapter, mac, NULL);
+	if (g_mkdir_with_parents(device_dir, 0700) < 0) {
+		g_printerr("ERROR: could not create %s.\n", device_dir);
+		g_free(decoded);
+		g_free(device_dir);
+		return 4;
+	}
+
+	info_path = g_build_filename(device_dir, "info", NULL);
+	if (!g_file_set_contents(info_path, (const gchar *)decoded, (gssize)len, &error)) {
+		g_printerr("ERROR: %s\n", error ? error->message : "could not restore BlueZ pairing state");
+		g_clear_error(&error);
+		g_free(decoded);
+		g_free(info_path);
+		g_free(device_dir);
+		return 5;
+	}
+	chmod(info_path, 0600);
+
+	g_free(decoded);
+	g_free(info_path);
+	g_free(device_dir);
+	return 0;
+}
+
 static void usage(const char *prog) {
 	g_printerr("Usage: %s {power|devices|scan [seconds]|pair <MAC>|connect <MAC>|disconnect <MAC>|name <MAC>}\n", prog);
 }
 
 int main(int argc, char **argv) {
 	if (argc < 2) { usage(argv[0]); return 2; }
+	if (strcmp(argv[1], "storage-export") == 0 && argc > 2)
+		return storage_export(argv[2]);
+	if (strcmp(argv[1], "storage-import") == 0 && argc > 4)
+		return storage_import(argv[2], argv[3], argv[4]);
 	GError *error = NULL;
 	bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
 	if (!bus) { g_printerr("ERROR: %s\n", error->message); g_clear_error(&error); return 2; }
