@@ -5,7 +5,7 @@ AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/utils/bluez/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -28,6 +28,7 @@ define Package/audiowrt-bluez/conffiles
 endef
 
 CONFIGURE_ARGS += \
+	--localstatedir=/tmp \
 	--disable-android \
 	--disable-asha \
 	--disable-bap \
