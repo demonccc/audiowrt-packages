@@ -36,6 +36,12 @@ grep -Fq 'RUNTIME_DIR=/tmp/audiowrt' "$usb" || fail 'USB runtime is not rooted i
 grep -Fq 'RUNTIME_DIR=/tmp/audiowrt' "$bluetooth" || fail 'Bluetooth runtime is not rooted in /tmp'
 grep -Fq '#define DEFAULT_RUNTIME_DIR "/var/run/audiowrt-dlna"' "$renderer_src/renderer-part-00.inc" ||
     fail 'renderer status is not rooted in /var/run'
+if grep -q 'option runtime_dir' "$repo_root/audiowrt-dlna/files/audiowrt-dlna.config"; then
+    fail 'renderer runtime directory must not be configurable to persistent storage'
+fi
+if grep -q 'strcmp(key, "runtime_dir")' "$renderer_src/renderer-part-01.inc"; then
+    fail 'renderer still accepts a configurable runtime directory'
+fi
 
 # The Bluetooth watcher may persist only an explicit user Save.
 commit_count="$(grep -c 'uci -q commit' "$bluetooth" || true)"
