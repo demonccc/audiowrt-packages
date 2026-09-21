@@ -27,6 +27,7 @@ wifi="$repo_root/audiowrt-wifi-client/files/audiowrt-wifi-client"
 registry="$repo_root/libaudiowrt-player/files/audiowrt-player-registry"
 status_luci="$repo_root/luci-app-audiowrt/htdocs/luci-static/resources/view/status/include/90_audiowrt.js"
 upmpd_config="$repo_root/audiowrt-minimal-upmpdcli/files/upmpdcli.conf"
+librespot_init="$repo_root/librespot/files/librespot.init"
 
 # High-frequency audio paths must only touch volatile storage.
 for file in "$audio" "$usb" "$usb_hotplug"; do
@@ -162,5 +163,11 @@ fi
 # cache. Keep renderer queue/cache data explicitly on tmpfs.
 grep -Fq 'cachedir = /tmp/upmpdcli' "$upmpd_config" ||
     fail 'upmpdcli cache is not explicitly rooted in tmpfs'
+
+# Spotify playback must never create an audio or credential cache on flash.
+grep -Fq -- '--disable-audio-cache' "$librespot_init" ||
+    fail 'librespot audio cache is not explicitly disabled'
+grep -Fq -- '--disable-credential-cache' "$librespot_init" ||
+    fail 'librespot credential cache is not explicitly disabled'
 
 echo 'Runtime flash-write policy passed.'
