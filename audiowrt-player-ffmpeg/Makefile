@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-ffmpeg
 PKG_VERSION:=1.0.0
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
 
@@ -47,16 +47,16 @@ endef
 define Package/audiowrt-player-ffmpeg/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-player-registry register alac ffmpeg_audio 'AudioWRT FFmpeg Audio Player' /usr/bin/audiowrt-player-ffmpeg 'audio/alac audio/x-alac' 'alac' >/dev/null 2>&1 || true
-/usr/libexec/audiowrt-player-registry register wma ffmpeg_audio 'AudioWRT FFmpeg Audio Player' /usr/bin/audiowrt-player-ffmpeg 'audio/x-ms-wma audio/wma' 'wma' >/dev/null 2>&1 || true
-/usr/libexec/audiowrt-player-registry register m4a ffmpeg_audio 'AudioWRT FFmpeg Audio Player' /usr/bin/audiowrt-player-ffmpeg 'audio/mp4 audio/x-m4a audio/m4a' 'm4a mp4' >/dev/null 2>&1 || true
+/usr/libexec/audiowrt-playback-registry register alac ffmpeg_audio 'AudioWRT FFmpeg Audio Player' /usr/bin/audiowrt-player-ffmpeg 'audio/alac audio/x-alac' 'alac' >/dev/null 2>&1 || true
+/usr/libexec/audiowrt-playback-registry register wma ffmpeg_audio 'AudioWRT FFmpeg Audio Player' /usr/bin/audiowrt-player-ffmpeg 'audio/x-ms-wma audio/wma' 'wma' >/dev/null 2>&1 || true
+/usr/libexec/audiowrt-playback-registry register m4a ffmpeg_audio 'AudioWRT FFmpeg Audio Player' /usr/bin/audiowrt-player-ffmpeg 'audio/mp4 audio/x-m4a audio/m4a' 'm4a mp4' >/dev/null 2>&1 || true
 exit 0
 endef
 
 define Package/audiowrt-player-ffmpeg/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-player-registry unregister ffmpeg_audio >/dev/null 2>&1 || true
+/usr/libexec/audiowrt-playback-registry unregister ffmpeg_audio >/dev/null 2>&1 || true
 exit 0
 endef
 
