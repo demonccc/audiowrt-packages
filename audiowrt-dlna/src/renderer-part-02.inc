@@ -16,19 +16,35 @@
 
 static void xml_unescape(char *s)
 {
-    struct repl { const char *from; const char *to; } repls[] = {
-        {"&amp;", "&"}, {"&lt;", "<"}, {"&gt;", ">"},
-        {"&quot;", "\""}, {"&apos;", "'"}, {NULL, NULL}
-    };
-    int i;
-    for (i = 0; repls[i].from; i++) {
-        char *p;
-        while ((p = strstr(s, repls[i].from))) {
-            size_t a = strlen(repls[i].from), b = strlen(repls[i].to);
-            memcpy(p, repls[i].to, b);
-            memmove(p + b, p + a, strlen(p + a) + 1);
+    char *src = s;
+    char *dst = s;
+
+    /*
+     * Decode exactly one XML entity layer. UPnP metadata such as DIDL-Lite is
+     * itself XML embedded inside SOAP, so an input like "&amp;amp;" must become
+     * "&amp;", not "&". Recursively decoding entities corrupts the embedded XML.
+     */
+    while (*src) {
+        if (!strncmp(src, "&amp;", 5)) {
+            *dst++ = '&';
+            src += 5;
+        } else if (!strncmp(src, "&lt;", 4)) {
+            *dst++ = '<';
+            src += 4;
+        } else if (!strncmp(src, "&gt;", 4)) {
+            *dst++ = '>';
+            src += 4;
+        } else if (!strncmp(src, "&quot;", 6)) {
+            *dst++ = '"';
+            src += 6;
+        } else if (!strncmp(src, "&apos;", 6)) {
+            *dst++ = '\'';
+            src += 6;
+        } else {
+            *dst++ = *src++;
         }
     }
+    *dst = 0;
 }
 
 static int xml_value(const char *body, const char *tag, char *out, size_t len)
