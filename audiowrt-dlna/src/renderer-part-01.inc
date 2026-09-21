@@ -453,6 +453,7 @@ static int start_current(void)
     copystr(mime, sizeof(mime), codec->mime);
     first_mime = strtok(mime, " ,\t");
     setenv("AUDIOWRT_MIME", first_mime ? first_mime : "", 1);
+    setenv("AUDIOWRT_METADATA", g.metadata, 1);
     setenv("AUDIOWRT_ALSA_DEVICE", g.alsa_device, 1);
     setenv("AUDIOWRT_VOLUME_FILE", volume_path, 1);
 
