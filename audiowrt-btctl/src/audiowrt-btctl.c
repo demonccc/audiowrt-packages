@@ -8,7 +8,7 @@
 #define BLUEZ_BUS "org.bluez"
 #define ROOT_PATH "/"
 #define AGENT_PATH "/org/audiowrt/agent"
-#define BLUEZ_STORAGE "/var/lib/bluetooth"
+#define BLUEZ_STORAGE "/tmp/lib/bluetooth"
 
 static GDBusConnection *bus;
 static GMainLoop *pair_loop;
