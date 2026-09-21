@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=libaudiowrt-player
-PKG_VERSION:=1.0.1
+PKG_VERSION:=1.1.0
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -17,7 +17,8 @@ endef
 
 define Package/libaudiowrt-player/description
  Shared native AudioWRT player library. Streams HTTP/HTTPS with libuclient and
- writes PCM directly through ALSA without invoking wget, uclient-fetch or curl.\n It also owns the idempotent UCI codec/player registry helper used by player packages.
+ writes PCM directly through ALSA without invoking wget, uclient-fetch or curl.\n It also owns the idempotent playback registry used by player packages. Codec
+ capabilities and player implementations are stored in separate UCI packages.
 endef
 
 define Build/Prepare
@@ -44,11 +45,22 @@ define Build/InstallDev
 	$(CP) $(PKG_BUILD_DIR)/libaudiowrt-player.so* $(1)/usr/lib/
 endef
 
+define Package/libaudiowrt-player/conffiles
+/etc/config/audiowrt-codecs
+/etc/config/audiowrt-players
+endef
+
 define Package/libaudiowrt-player/install
 	$(INSTALL_DIR) $(1)/usr/lib
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/libaudiowrt-player.so.0 $(1)/usr/lib/libaudiowrt-player.so.0
 	$(INSTALL_DIR) $(1)/usr/libexec
+	$(INSTALL_BIN) ./files/audiowrt-playback-registry $(1)/usr/libexec/audiowrt-playback-registry
 	$(INSTALL_BIN) ./files/audiowrt-player-registry $(1)/usr/libexec/audiowrt-player-registry
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/audiowrt-codecs.config $(1)/etc/config/audiowrt-codecs
+	$(INSTALL_CONF) ./files/audiowrt-players.config $(1)/etc/config/audiowrt-players
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/audiowrt-playback-registry-migrate $(1)/etc/uci-defaults/60-audiowrt-playback-registry-migrate
 endef
 
 $(eval $(call BuildPackage,libaudiowrt-player))
