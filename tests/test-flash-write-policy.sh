@@ -114,7 +114,9 @@ grep -Fq 'stage_setup_config "$setup_radio"' "$wifi" ||
 # Explicit disconnect remains persistent but repeated calls are idempotent.
 grep -Fq "uci -q get wireless.audiowrt_client >/dev/null 2>&1 || return 0" "$wifi" ||
     fail 'Wi-Fi disconnect does not short-circuit when the client section is absent'
-grep -Fq "[ "\$(uci -q get wireless.audiowrt_client.disabled 2>/dev/null || echo 0)" = '1' ] && return 0" "$wifi" ||
+grep -Fq 'wireless.audiowrt_client.disabled 2>/dev/null || echo 0' "$wifi" ||
+    fail 'Wi-Fi disconnect does not inspect the persisted disabled state'
+grep -Fq " = '1' ] && return 0" "$wifi" ||
     fail 'Wi-Fi disconnect does not short-circuit when already disabled'
 
 # Legacy umdns compatibility may persist the required network list once, but
