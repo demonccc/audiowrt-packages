@@ -173,7 +173,9 @@ connect_wifi() {
 }
 
 disconnect_wifi() {
-	uci -q set wireless.audiowrt_client.disabled='1' 2>/dev/null || true
+	uci -q get wireless.audiowrt_client >/dev/null 2>&1 || return 0
+	[ "$(uci -q get wireless.audiowrt_client.disabled 2>/dev/null || echo 0)" = '1' ] && return 0
+	uci -q set wireless.audiowrt_client.disabled='1'
 	uci -q commit wireless
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
 }
@@ -289,11 +291,18 @@ setup_start() {
 }
 
 setup_stop() {
-	uci -q set wireless.audiowrt_setup.disabled='1' 2>/dev/null || true
-	uci -q commit wireless
+	changed=0
+	if uci -q get wireless.audiowrt_setup >/dev/null 2>&1 &&
+	   [ "$(uci -q get wireless.audiowrt_setup.disabled 2>/dev/null || echo 0)" != '1' ]; then
+		uci -q set wireless.audiowrt_setup.disabled='1'
+		uci -q commit wireless
+		changed=1
+	fi
 	setup_dhcp_disable
-	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
-	mdns_sync
+	if [ "$changed" -eq 1 ]; then
+		wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
+		mdns_sync
+	fi
 }
 
 mdns_sync() {
