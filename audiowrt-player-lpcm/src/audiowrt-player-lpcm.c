@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <audiowrt/player.h>
 
+#include <ctype.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -29,7 +30,9 @@ static unsigned int metadata_uint(const char *metadata, const char *key,
 
     key_len = strlen(key);
     for (p = metadata; *p; p++) {
-        if (strncasecmp(p, key, key_len) == 0 && p[key_len] == '=') {
+        unsigned char previous = p == metadata ? 0 : (unsigned char)p[-1];
+        if ((p == metadata || (!isalnum(previous) && previous != '_' && previous != '-')) &&
+            strncasecmp(p, key, key_len) == 0 && p[key_len] == '=') {
             char *end = NULL;
             unsigned long value = strtoul(p + key_len + 1, &end, 10);
             if (end != p + key_len + 1 && value <= 384000)
