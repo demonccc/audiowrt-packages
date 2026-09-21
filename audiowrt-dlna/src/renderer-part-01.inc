@@ -45,8 +45,29 @@ static int config_next_token(char **cursor, char *out, size_t len)
 }
 
 
-static void apply_renderer_option(const char *key, const char *value)
+static void clear_codec_defaults(void)
 {
+    size_t i;
+
+    for (i = 0; i < g.codec_count; i++)
+        g.codecs[i].default_player[0] = 0;
+}
+
+static void apply_renderer_option(const char *key, const char *value,
+                                  bool apply_runtime_options)
+{
+    static const char default_prefix[] = "default_player_";
+
+    if (!strncmp(key, default_prefix, sizeof(default_prefix) - 1)) {
+        struct codec *codec = find_codec_id(key + sizeof(default_prefix) - 1);
+        if (codec)
+            copystr(codec->default_player, sizeof(codec->default_player), value);
+        return;
+    }
+
+    if (!apply_runtime_options)
+        return;
+
     if (!strcmp(key, "friendly_name"))
         copystr(g.friendly_name, sizeof(g.friendly_name), value);
     else if (!strcmp(key, "uuid"))
@@ -59,7 +80,7 @@ static void apply_renderer_option(const char *key, const char *value)
         g.volume = atoi(value);
 }
 
-static int load_renderer_options(const char *path)
+static int load_renderer_options(const char *path, bool apply_runtime_options)
 {
     FILE *f = fopen(path, "r");
     char line[2048];
@@ -68,6 +89,8 @@ static int load_renderer_options(const char *path)
 
     if (!f)
         return -1;
+
+    clear_codec_defaults();
 
     while (fgets(line, sizeof(line), f)) {
         char *cursor = line;
@@ -91,7 +114,7 @@ static int load_renderer_options(const char *path)
             if (!config_next_token(&cursor, key, sizeof(key)) ||
                 !config_next_token(&cursor, value, sizeof(value)))
                 continue;
-            apply_renderer_option(key, value);
+            apply_renderer_option(key, value, apply_runtime_options);
         }
     }
 
@@ -132,17 +155,11 @@ static struct player *registry_player(const char *id)
     return player;
 }
 
-static int load_registry(const char *path)
+static int load_codec_registry(const char *path)
 {
     FILE *f = fopen(path, "r");
     char line[2048];
     struct codec *codec = NULL;
-    struct player *player = NULL;
-
-    g.codec_count = 0;
-    g.player_count = 0;
-    memset(g.codecs, 0, sizeof(g.codecs));
-    memset(g.players, 0, sizeof(g.players));
 
     if (!f)
         return -1;
@@ -158,45 +175,87 @@ static int load_registry(const char *path)
             type[0] = name[0] = 0;
             config_next_token(&cursor, type, sizeof(type));
             config_next_token(&cursor, name, sizeof(name));
-            codec = NULL;
-            player = NULL;
-            if (!strcmp(type, "codec"))
-                codec = registry_codec(name);
-            else if (!strcmp(type, "player"))
-                player = registry_player(name);
+            codec = !strcmp(type, "codec") ? registry_codec(name) : NULL;
             continue;
         }
 
-        if (strcmp(directive, "option") && strcmp(directive, "list"))
+        if (!codec || strcmp(directive, "list"))
             continue;
         if (!config_next_token(&cursor, key, sizeof(key)) ||
             !config_next_token(&cursor, value, sizeof(value)))
             continue;
 
-        if (codec) {
-            if (!strcmp(directive, "list") && !strcmp(key, "mime"))
-                append_token(codec->mime, sizeof(codec->mime), value);
-            else if (!strcmp(directive, "list") && !strcmp(key, "extension"))
-                append_token(codec->extensions, sizeof(codec->extensions), value);
-            else if (!strcmp(directive, "option") && !strcmp(key, "default_player"))
-                copystr(codec->default_player, sizeof(codec->default_player), value);
-        } else if (player) {
-            if (!strcmp(directive, "option") && !strcmp(key, "name"))
-                copystr(player->name, sizeof(player->name), value);
-            else if (!strcmp(directive, "option") && !strcmp(key, "executable"))
-                copystr(player->executable, sizeof(player->executable), value);
-            else if (!strcmp(directive, "list") && !strcmp(key, "codec"))
-                append_token(player->codecs, sizeof(player->codecs), value);
-        }
+        if (!strcmp(key, "mime"))
+            append_token(codec->mime, sizeof(codec->mime), value);
+        else if (!strcmp(key, "extension"))
+            append_token(codec->extensions, sizeof(codec->extensions), value);
     }
 
     fclose(f);
     return 0;
 }
 
+static int load_player_registry(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    char line[2048];
+    struct player *player = NULL;
+
+    if (!f)
+        return -1;
+
+    while (fgets(line, sizeof(line), f)) {
+        char *cursor = line;
+        char directive[32], type[64], name[128], key[128], value[1536];
+
+        if (!config_next_token(&cursor, directive, sizeof(directive)))
+            continue;
+
+        if (!strcmp(directive, "config")) {
+            type[0] = name[0] = 0;
+            config_next_token(&cursor, type, sizeof(type));
+            config_next_token(&cursor, name, sizeof(name));
+            player = !strcmp(type, "player") ? registry_player(name) : NULL;
+            continue;
+        }
+
+        if (!player || (strcmp(directive, "option") && strcmp(directive, "list")))
+            continue;
+        if (!config_next_token(&cursor, key, sizeof(key)) ||
+            !config_next_token(&cursor, value, sizeof(value)))
+            continue;
+
+        if (!strcmp(directive, "option") && !strcmp(key, "name"))
+            copystr(player->name, sizeof(player->name), value);
+        else if (!strcmp(directive, "option") && !strcmp(key, "executable"))
+            copystr(player->executable, sizeof(player->executable), value);
+        else if (!strcmp(directive, "list") && !strcmp(key, "codec"))
+            append_token(player->codecs, sizeof(player->codecs), value);
+    }
+
+    fclose(f);
+    return 0;
+}
+
+static int load_registry_catalogs(void)
+{
+    int codec_rc, player_rc;
+
+    g.codec_count = 0;
+    g.player_count = 0;
+    memset(g.codecs, 0, sizeof(g.codecs));
+    memset(g.players, 0, sizeof(g.players));
+
+    codec_rc = load_codec_registry("/etc/config/audiowrt-codecs");
+    player_rc = load_player_registry("/etc/config/audiowrt-players");
+    return codec_rc < 0 || player_rc < 0 ? -1 : 0;
+}
+
 static int reload_registry(void)
 {
-    return load_registry("/etc/config/audiowrt");
+    if (load_registry_catalogs() < 0)
+        return -1;
+    return load_renderer_options("/etc/config/audiowrt-dlna", false);
 }
 
 static int load_config(void)
@@ -211,15 +270,15 @@ static int load_config(void)
     g.volume = 100;
     g.state = STATE_NO_MEDIA;
 
-    if (load_renderer_options(renderer_path) < 0)
+    if (load_registry_catalogs() < 0)
+        return -1;
+    if (load_renderer_options(renderer_path, true) < 0)
         return -1;
 
     if (g.port < 1024 || g.port > 65535)
         g.port = DEFAULT_PORT;
     if (g.volume < 0) g.volume = 0;
     if (g.volume > 100) g.volume = 100;
-
-    reload_registry();
 
     if (!g.uuid[0])
         copystr(g.uuid, sizeof(g.uuid), "00000000-0000-0000-0000-000000000000");
