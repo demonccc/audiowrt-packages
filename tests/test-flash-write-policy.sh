@@ -52,8 +52,9 @@ renderer_commits="$(grep -c 'uci -q commit' "$renderer_init" || true)"
 [[ "$renderer_commits" -eq 1 ]] || fail "renderer init contains unexpected persistent commits"
 
 # Transient provisioning errors belong to tmpfs, never the persistent AudioWRT UCI config.
-if grep -Rqs 'audiowrt\.main\.last_error'     "$repo_root/audiowrt-core" "$repo_root/audiowrt-provisioning"; then
-    fail 'provisioning last_error is still stored in persistent UCI'
+if grep -Rqs 'audiowrt\.main\.last_error' \
+    "$repo_root"/audiowrt-* "$repo_root"/luci-app-* "$repo_root"/libaudiowrt-player 2>/dev/null; then
+    fail 'transient provisioning last_error is still stored/read through persistent UCI'
 fi
 if grep -q 'option last_error' "$core_config"; then
     fail 'core UCI schema still declares transient last_error'
@@ -64,6 +65,11 @@ done
 
 # External-overlay operation must not silently mirror every configuration change
 # back to the internal flash. sync-core remains an explicit storage command only.
+if grep -Rqs --exclude='audiowrt-storage' --exclude='*.md' --exclude='*.sh' \
+    'audiowrt-storage sync-core' \
+    "$repo_root"/audiowrt-* "$repo_root"/luci-app-* "$repo_root"/libaudiowrt-player 2>/dev/null; then
+    fail 'another package automatically invokes internal-flash sync-core'
+fi
 if grep -q 'audiowrt-storage sync-core' "$provision" "$audiowrtctl"; then
     fail 'provisioning still auto-syncs configuration into the internal overlay'
 fi
