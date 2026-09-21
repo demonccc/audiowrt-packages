@@ -239,6 +239,8 @@ setup_start() {
 	radio="${1:-}"; ssid="${2:-AudioWRT-Setup}"; setup_ip="${3:-192.168.77.1}"
 	[ -n "$radio" ] && uci -q get wireless."$radio" >/dev/null 2>&1 || { echo 'ERROR: valid radio is required.' >&2; exit 2; }
 
+	# The setup network is runtime state. UCI stages these changes in /tmp and
+	# wifi reload consumes the staged values, so never commit them to flash.
 	uci -q set wireless."$radio".disabled='0'
 	uci -q delete network.audiowrt_setup 2>/dev/null || true
 	uci -q set network.audiowrt_setup='interface'
@@ -255,9 +257,6 @@ setup_start() {
 	uci -q set wireless.audiowrt_setup.encryption='none'
 	uci -q set wireless.audiowrt_setup.isolate='1'
 	uci -q set wireless.audiowrt_setup.disabled='0'
-
-	uci -q commit network
-	uci -q commit wireless
 
 	if ! wifi reload >/dev/null 2>&1 && ! wifi >/dev/null 2>&1; then
 		echo 'ERROR: failed to reload Wi-Fi for provisioning AP.' >&2
@@ -289,13 +288,14 @@ setup_start() {
 
 	mdns_sync
 }
-
 setup_stop() {
 	changed=0
-	if uci -q get wireless.audiowrt_setup >/dev/null 2>&1 &&
-	   [ "$(uci -q get wireless.audiowrt_setup.disabled 2>/dev/null || echo 0)" != '1' ]; then
-		uci -q set wireless.audiowrt_setup.disabled='1'
-		uci -q commit wireless
+	if uci -q get network.audiowrt_setup >/dev/null 2>&1; then
+		uci -q delete network.audiowrt_setup
+		changed=1
+	fi
+	if uci -q get wireless.audiowrt_setup >/dev/null 2>&1; then
+		uci -q delete wireless.audiowrt_setup
 		changed=1
 	fi
 	setup_dhcp_disable
@@ -304,7 +304,6 @@ setup_stop() {
 		mdns_sync
 	fi
 }
-
 mdns_sync() {
 	# Native AudioWRT renderer owns mDNS/DNS-SD in current images. It derives
 	# interface addresses dynamically, so a reload is only needed to refresh
