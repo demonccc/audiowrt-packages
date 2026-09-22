@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-bluetooth
-PKG_VERSION:=1.0.1
+PKG_VERSION:=1.0.2
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -13,7 +13,7 @@ define Package/audiowrt-bluetooth
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT Bluetooth output integration
-  DEPENDS:=+audiowrt-audio +audiowrt-bluez +audiowrt-btctl +bluez-alsa
+  DEPENDS:=+audiowrt-config +audiowrt-audio +audiowrt-bluez +audiowrt-btctl +bluez-alsa
   EXTRA_DEPENDS:=kmod-bluetooth (>=0), kmod-btusb (>=0)
 endef
 
@@ -45,14 +45,14 @@ define Package/audiowrt-bluetooth/install
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/audiowrt-bluetooth.init $(1)/etc/init.d/audiowrt-bluetooth
 
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/audiowrt-bluetooth.defaults $(1)/etc/uci-defaults/85-audiowrt-bluetooth
+	$(INSTALL_DIR) $(1)/etc/rc.d
+	ln -s ../init.d/audiowrt-bluetooth $(1)/etc/rc.d/S59audiowrt-bluetooth
 endef
 
 define Package/audiowrt-bluetooth/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/etc/init.d/audiowrt-bluetooth enable >/dev/null 2>&1 || true
+/etc/init.d/audiowrt-bluetooth enabled || /etc/init.d/audiowrt-bluetooth enable
 /etc/init.d/audiowrt-bluetooth restart >/dev/null 2>&1 || true
 exit 0
 endef

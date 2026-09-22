@@ -1,0 +1,23 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+register_player \
+	alac ffmpeg_audio \
+	'AudioWRT FFmpeg Audio Player' \
+	/usr/bin/audiowrt-player-ffmpeg \
+	'audio/alac audio/x-alac' \
+	'alac'
+
+register_player \
+	wma ffmpeg_audio \
+	'AudioWRT FFmpeg Audio Player' \
+	/usr/bin/audiowrt-player-ffmpeg \
+	'audio/x-ms-wma audio/wma' \
+	'wma'
+
+register_player \
+	m4a ffmpeg_audio \
+	'AudioWRT FFmpeg Audio Player' \
+	/usr/bin/audiowrt-player-ffmpeg \
+	'audio/mp4 audio/x-m4a audio/m4a' \
+	'm4a mp4'

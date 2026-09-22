@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-flac
-PKG_VERSION:=1.0.2
+PKG_VERSION:=1.0.3
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -34,22 +34,20 @@ endef
 define Package/audiowrt-player-flac/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-player-flac $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/flac.defaults $(1)/etc/uci-defaults/70-audiowrt-player-flac
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt/players
+	$(INSTALL_DATA) ./files/flac.manifest $(1)/usr/share/audiowrt/players/flac.manifest
 endef
 
 define Package/audiowrt-player-flac/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry register flac native_flac 'AudioWRT FLAC Player' /usr/bin/audiowrt-player-flac 'audio/flac audio/x-flac' 'flac' >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry rebuild
 endef
 
 define Package/audiowrt-player-flac/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry unregister native_flac >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry exclude flac
 endef
 
 $(eval $(call BuildPackage,audiowrt-player-flac))

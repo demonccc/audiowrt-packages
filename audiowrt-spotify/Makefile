@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-spotify
-PKG_VERSION:=1.0.0
+PKG_VERSION:=1.0.1
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
@@ -29,8 +29,12 @@ define Build/Compile
 endef
 
 define Package/audiowrt-spotify/install
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/audiowrt-spotify.defaults $(1)/etc/uci-defaults/80-audiowrt-spotify
+endef
+
+define Package/audiowrt-spotify/postinst
+#!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
+/usr/libexec/audiowrt/extensions/spotify configure
 endef
 
 $(eval $(call BuildPackage,audiowrt-spotify))

@@ -9,12 +9,14 @@ while IFS= read -r makefile; do
     [[ -n "$name" || -n "$derived" ]] || continue
 
     release="$(sed -n 's/^PKG_RELEASE:=//p' "$makefile" | head -n 1)"
-    [[ -z "$release" || "$release" == 1 ]] ||
-        fail "${name:-$derived} must use PKG_RELEASE=1; bump PKG_VERSION instead (found '$release')"
 
     # Source-derived packages inherit PKG_VERSION from the selected OpenWrt
     # recipe. Kernel packages are versioned by the OpenWrt kernel ABI.
-    [[ -n "$derived" ]] && continue
+    if [[ -n "$derived" ]]; then
+        [[ -z "$release" || "$release" =~ ^[1-9][0-9]*$ ]] || fail "$derived has invalid packaging revision"
+        ! grep -q '^PKG_VERSION:=' "$makefile" || fail "$derived must inherit upstream source version"
+        continue
+    fi
 
     # Kernel packages are versioned by the OpenWrt kernel ABI/release machinery.
     grep -q 'KernelPackage/' "$makefile" && continue

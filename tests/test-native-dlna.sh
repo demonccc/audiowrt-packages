@@ -7,13 +7,13 @@ fail() { echo "native renderer contract failed: $*" >&2; exit 1; }
 [[ -f libaudiowrt-player/src/audiowrt-player.c ]] || fail "player library source missing"
 [[ -f libaudiowrt-player/files/audiowrt-playback-registry ]] || fail "UCI playback registry helper missing"
 [[ -f libaudiowrt-player/files/audiowrt-player-registry ]] || fail "compatibility player registry alias missing"
-[[ -f libaudiowrt-player/files/audiowrt-codecs.config ]] || fail "codec catalog config missing"
-[[ -f libaudiowrt-player/files/audiowrt-players.config ]] || fail "player catalog config missing"
+grep -q 'registry/audiowrt-codecs' libaudiowrt-player/Makefile || fail "codec catalog config missing"
+grep -q 'registry/audiowrt-players' libaudiowrt-player/Makefile || fail "player catalog config missing"
 
 grep -q '^PKG_NAME:=libaudiowrt-player$' libaudiowrt-player/Makefile || fail "player library package name mismatch"
 grep -q 'audiowrt-playback-registry' libaudiowrt-player/Makefile || fail "player library must install playback registry helper"
-grep -q '/etc/config/audiowrt-codecs' libaudiowrt-player/Makefile || fail "player library must install codec catalog"
-grep -q '/etc/config/audiowrt-players' libaudiowrt-player/Makefile || fail "player library must install player catalog"
+grep -q '/etc/config/audiowrt-runtime-codecs' libaudiowrt-player/Makefile || fail "player library must install codec catalog"
+grep -q '/etc/config/audiowrt-runtime-players' libaudiowrt-player/Makefile || fail "player library must install player catalog"
 [[ ! -e audiowrt-player-core/Makefile ]] || fail "legacy player-core package must not exist"
 
 grep -q '^PKG_NAME:=audiowrt-renderer$' audiowrt-dlna/Makefile || fail "renderer package name mismatch"
@@ -27,8 +27,8 @@ if grep -Rqs '#include <uci.h>' audiowrt-dlna/src; then
 fi
 
 grep -q 'config_next_token' audiowrt-dlna/src/renderer-part-01.inc || fail "minimal UCI text parser missing"
-grep -q 'load_codec_registry("/etc/config/audiowrt-codecs")' audiowrt-dlna/src/renderer-part-01.inc || fail "renderer must load codec registry"
-grep -q 'load_player_registry("/etc/config/audiowrt-players")' audiowrt-dlna/src/renderer-part-01.inc || fail "renderer must load player registry"
+grep -q 'load_codec_registry("/tmp/audiowrt/registry/audiowrt-codecs")' audiowrt-dlna/src/renderer-part-01.inc || fail "renderer must load codec registry"
+grep -q 'load_player_registry("/tmp/audiowrt/registry/audiowrt-players")' audiowrt-dlna/src/renderer-part-01.inc || fail "renderer must load player registry"
 grep -q 'default_player_' audiowrt-dlna/src/renderer-part-01.inc || fail "DLNA module default player selection missing"
 grep -q 'launch_next_player' audiowrt-dlna/src/renderer-part-01.inc || fail "player fallback selection missing"
 grep -q 'setpgid' audiowrt-dlna/src/renderer-part-01.inc || fail "players must run in their own process group"
@@ -37,7 +37,7 @@ grep -q 'AUDIOWRT_CODEC' audiowrt-dlna/src/renderer-part-01.inc || fail "player 
 grep -q 'AUDIOWRT_MIME' audiowrt-dlna/src/renderer-part-01.inc || fail "player MIME environment missing"
 grep -q 'signal(SIGHUP, signal_handler)' audiowrt-dlna/src/renderer-part-04.inc || fail "SIGHUP registry reload missing"
 grep -q 'notify_service("ConnectionManager")' audiowrt-dlna/src/renderer-part-04.inc || fail "codec reload must notify ConnectionManager"
-grep -q 'procd_add_reload_trigger audiowrt-dlna audiowrt-codecs audiowrt-players' audiowrt-dlna/files/audiowrt-dlna.init || fail "renderer must reload on module and registry UCI changes"
+grep -q 'procd_add_reload_trigger audiowrt-dlna' audiowrt-dlna/files/audiowrt-dlna.init || fail "renderer must reload on preference changes; registry builder signals consumers"
 
 grep -q 'avtransport_action_changes_state' audiowrt-dlna/src/renderer-part-03d.inc || fail "AVTransport state-change event filter missing"
 grep -q 'rendering_action_changes_state' audiowrt-dlna/src/renderer-part-03d.inc || fail "RenderingControl state-change event filter missing"
@@ -69,8 +69,8 @@ done
 grep -q '/usr/libexec/audiowrt-renderer' audiowrt-dlna/files/audiowrt-dlna.init || fail "procd must launch unified renderer"
 
 registry=libaudiowrt-player/files/audiowrt-playback-registry
-grep -q 'CODECS_CONFIG=audiowrt-codecs' "$registry" || fail "registry must own separate codec catalog"
-grep -q 'PLAYERS_CONFIG=audiowrt-players' "$registry" || fail "registry must own separate player catalog"
+grep -q 'CODECS_CONFIG=awcodecs_' "$registry" || fail "registry must own separate codec catalog"
+grep -q 'PLAYERS_CONFIG=awplayers_' "$registry" || fail "registry must own separate player catalog"
 grep -Fq 'add_list_value "$CODECS_CONFIG" "$codec" mime "$item"' "$registry" || fail "registry must merge MIME values"
 grep -Fq 'add_list_value "$CODECS_CONFIG" "$codec" extension "$item"' "$registry" || fail "registry must merge extensions"
 grep -Fq 'add_list_value "$PLAYERS_CONFIG" "$player" codec "$codec"' "$registry" || fail "registry must attach codecs to players"
@@ -94,12 +94,12 @@ check_player() {
   local codec="$1" lib="$2" binary="audiowrt-player-$1"
   [[ -f "$binary/Makefile" ]] || fail "$binary Makefile missing"
   [[ -f "$binary/src/$binary.c" ]] || fail "$binary source missing"
-  [[ -f "$binary/files/$codec.defaults" ]] || fail "$codec UCI registration script missing"
+  [[ -f "$binary/files/$codec.manifest" ]] || fail "$codec UCI registration script missing"
   [[ ! -e "$binary/files/$codec.conf" ]] || fail "$codec legacy descriptor must be removed"
   grep -q "+libaudiowrt-player" "$binary/Makefile" || fail "$binary must use player library"
   [[ -z "$lib" ]] || grep -q "$lib" "$binary/Makefile" || fail "$binary must depend/link on $lib"
-  grep -q "$codec native_$codec" "$binary/files/$codec.defaults" || fail "$codec registry ID mismatch"
-  grep -q "/usr/bin/$binary" "$binary/files/$codec.defaults" || fail "$codec executable mismatch"
+  grep -q "$codec native_$codec" "$binary/files/$codec.manifest" || fail "$codec registry ID mismatch"
+  grep -q "/usr/bin/$binary" "$binary/files/$codec.manifest" || fail "$codec executable mismatch"
 }
 
 check_player flac libflac
@@ -128,17 +128,16 @@ done
 grep -q '^PKG_NAME:=luci-app-audiowrt-renderer$' luci-app-audiowrt-dlna/Makefile || fail "LuCI package name mismatch"
 [[ -f luci-app-audiowrt-dlna/root/usr/share/luci/menu.d/luci-app-audiowrt-dlna.json ]] || fail "LuCI menu missing"
 [[ -f luci-app-audiowrt-dlna/root/usr/share/rpcd/acl.d/luci-app-audiowrt-dlna.json ]] || fail "LuCI ACL missing"
-grep -q "uci.load('audiowrt-codecs')" luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must load codec catalog"
-grep -q "uci.load('audiowrt-players')" luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must load player catalog"
+grep -q "uci.load('audiowrt-runtime-codecs')" luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must load codec catalog"
+grep -q "uci.load('audiowrt-runtime-players')" luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must load player catalog"
 grep -q 'default_player_' luci-app-audiowrt-dlna/htdocs/luci-static/resources/view/audiowrt/dlna.js || fail "LuCI must expose DLNA codec defaults"
-grep -q '"audiowrt-codecs"' luci-app-audiowrt-dlna/root/usr/share/rpcd/acl.d/luci-app-audiowrt-dlna.json || fail "LuCI ACL must read codec catalog"
-grep -q '"audiowrt-players"' luci-app-audiowrt-dlna/root/usr/share/rpcd/acl.d/luci-app-audiowrt-dlna.json || fail "LuCI ACL must read player catalog"
+grep -q '"audiowrt-runtime-codecs"' luci-app-audiowrt-dlna/root/usr/share/rpcd/acl.d/luci-app-audiowrt-dlna.json || fail "LuCI ACL must read codec catalog"
+grep -q '"audiowrt-runtime-players"' luci-app-audiowrt-dlna/root/usr/share/rpcd/acl.d/luci-app-audiowrt-dlna.json || fail "LuCI ACL must read player catalog"
 
 sh -n audiowrt-dlna/files/audiowrt-dlna.init
 sh -n libaudiowrt-player/files/audiowrt-playback-registry
 sh -n libaudiowrt-player/files/audiowrt-player-registry
-sh -n libaudiowrt-player/files/audiowrt-playback-registry-migrate
-for defaults in audiowrt-player-{flac,mp3,aac,wav,vorbis}/files/*.defaults; do
+for defaults in audiowrt-player-{flac,mp3,aac,wav,vorbis}/files/*.manifest; do
   sh -n "$defaults"
 done
 

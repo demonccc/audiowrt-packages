@@ -5,25 +5,15 @@ set -eu
 
 case "${1:-}" in
 	configure)
-		mkdir -p /mnt/music /tmp/mpd/playlists
+		mkdir -p /tmp/mpd/playlists /tmp/mpd/music
 		chown -R mpd:mpd /tmp/mpd 2>/dev/null || true
-		cat > /etc/mpd.conf <<'EOF'
-music_directory "/mnt/music"
-playlist_directory "/tmp/mpd/playlists"
-state_file "/tmp/mpd/state"
-
-bind_to_address "127.0.0.1"
-port "6600"
-restore_paused "yes"
-
-audio_output {
-	type "alsa"
-	name "AudioWRT"
-	device "default"
-	mixer_type "software"
-}
-EOF
-		/etc/init.d/mpd enable >/dev/null 2>&1 || true
+		candidate=$(mktemp /tmp/mpd/config.XXXXXX)
+		trap 'rm -f "$candidate"' EXIT
+		cp /usr/share/audiowrt/extensions/mpd.conf "$candidate"
+		if ! cmp -s "$candidate" /etc/mpd.conf; then
+			cp "$candidate" /etc/mpd.conf
+		fi
+		/etc/init.d/mpd enabled || /etc/init.d/mpd enable >/dev/null 2>&1 || true
 		/etc/init.d/mpd restart >/dev/null 2>&1 || true
 		;;
 	disable)

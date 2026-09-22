@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-opus
-PKG_VERSION:=1.0.2
+PKG_VERSION:=1.0.3
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -39,22 +39,20 @@ endef
 define Package/audiowrt-player-opus/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-player-opus $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/opus.defaults $(1)/etc/uci-defaults/70-audiowrt-player-opus
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt/players
+	$(INSTALL_DATA) ./files/opus.manifest $(1)/usr/share/audiowrt/players/opus.manifest
 endef
 
 define Package/audiowrt-player-opus/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry register opus native_opus 'AudioWRT Opus Player' /usr/bin/audiowrt-player-opus 'audio/opus audio/ogg;codecs=opus audio/ogg application/ogg' 'opus ogg oga' >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry rebuild
 endef
 
 define Package/audiowrt-player-opus/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry unregister native_opus >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry exclude opus
 endef
 
 $(eval $(call BuildPackage,audiowrt-player-opus))

@@ -31,7 +31,7 @@
 #define SSDP_ADDR "239.255.255.250"
 #define SSDP_PORT 1900
 #define DEFAULT_PORT 49152
-#define DEFAULT_RUNTIME_DIR "/var/run/audiowrt-dlna"
+#define DEFAULT_RUNTIME_DIR "/tmp/audiowrt-dlna"
 
 struct codec {
     char id[32];

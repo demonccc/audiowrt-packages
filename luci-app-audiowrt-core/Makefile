@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-audiowrt-core
-PKG_VERSION:=1.0.0
+PKG_VERSION:=1.0.1
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
@@ -18,7 +18,7 @@ endef
 
 define Package/luci-app-audiowrt-core/description
  Lightweight AudioWRT LuCI integration for distribution-specific navigation.
- Optional storage management is provided by audiowrt-storage-luci.
+ Storage management uses the official OpenWrt packages.
 endef
 
 define Build/Prepare

@@ -14,7 +14,7 @@ Usage:
   audiowrt-wifi-client commit-client
   audiowrt-wifi-client rollback-client
   audiowrt-wifi-client disconnect
-  audiowrt-wifi-client setup-start <radio> <ssid> [setup-ip]
+  audiowrt-wifi-client setup-start <radio> <ssid>
   audiowrt-wifi-client setup-stop
   audiowrt-wifi-client mdns-sync
 
@@ -62,8 +62,9 @@ status() {
 	printf 'netmask=%s\n' "$(uci -q get network.audiowrt_wifi.netmask || true)"
 	printf 'gateway=%s\n' "$(uci -q get network.audiowrt_wifi.gateway || true)"
 	printf 'dns=%s\n' "$(uci -q get network.audiowrt_wifi.dns || true)"
-	printf 'setup_enabled=%s\n' "$([ "$(uci -q get wireless.audiowrt_setup.disabled || echo 1)" = '0' ] && echo 1 || echo 0)"
-	printf 'network_up=%s\n' "$(ubus call network.interface.audiowrt_wifi status 2>/dev/null | grep -q '\"up\":[[:space:]]*true' && echo 1 || echo 0)"
+	printf 'setup_enabled=%s\n' "$(audiowrt_setup_active && echo 1 || echo 0)"
+	printf 'network_up=%s\n' "$(audiowrt_client_up && echo 1 || echo 0)"
+	printf 'pending=%s\n' "$([ -d /tmp/audiowrt/client ] && echo 1 || echo 0)"
 }
 
 validate_encryption() {
@@ -103,7 +104,7 @@ configure_ip() {
 
 	case "$ip_mode" in
 		dhcp)
-			uci -q set network.audiowrt_wifi.proto='dhcp'
+			uci -q set network.audiowrt_wifi.proto='dhcp' || return 1
 			uci -q delete network.audiowrt_wifi.ipaddr 2>/dev/null || true
 			uci -q delete network.audiowrt_wifi.netmask 2>/dev/null || true
 			uci -q delete network.audiowrt_wifi.gateway 2>/dev/null || true
@@ -116,13 +117,13 @@ configure_ip() {
 			[ -z "$dns1" ] || validate_ipv4 "$dns1" || { echo 'ERROR: invalid primary DNS server.' >&2; exit 10; }
 			[ -z "$dns2" ] || validate_ipv4 "$dns2" || { echo 'ERROR: invalid secondary DNS server.' >&2; exit 11; }
 
-			uci -q set network.audiowrt_wifi.proto='static'
-			uci -q set network.audiowrt_wifi.ipaddr="$ipaddr"
-			uci -q set network.audiowrt_wifi.netmask="$netmask"
-			uci -q set network.audiowrt_wifi.gateway="$gateway"
+			uci -q set network.audiowrt_wifi.proto='static' || return 1
+			uci -q set network.audiowrt_wifi.ipaddr="$ipaddr" || return 1
+			uci -q set network.audiowrt_wifi.netmask="$netmask" || return 1
+			uci -q set network.audiowrt_wifi.gateway="$gateway" || return 1
 			uci -q delete network.audiowrt_wifi.dns 2>/dev/null || true
-			[ -z "$dns1" ] || uci -q add_list network.audiowrt_wifi.dns="$dns1"
-			[ -z "$dns2" ] || uci -q add_list network.audiowrt_wifi.dns="$dns2"
+			[ -z "$dns1" ] || uci -q add_list network.audiowrt_wifi.dns="$dns1" || return 1
+			[ -z "$dns2" ] || uci -q add_list network.audiowrt_wifi.dns="$dns2" || return 1
 			;;
 		*)
 			echo "ERROR: unsupported IP mode: $ip_mode" >&2
@@ -131,14 +132,15 @@ configure_ip() {
 	esac
 }
 
-connect_wifi() {
+apply_client() {
 	radio="${1:-}"; ssid="${2:-}"; encryption="${3:-sae-mixed}"; key="${4:-}"; bssid="${5:-}"
 	ip_mode="${6:-dhcp}"; ipaddr="${7:-}"; netmask="${8:-}"; gateway="${9:-}"
 	shift_count=9
 	if [ "$#" -ge "$shift_count" ]; then shift "$shift_count"; else set --; fi
 	dns1="${1:-}"; dns2="${2:-}"
 
-	[ -n "$radio" ] && uci -q get wireless."$radio" >/dev/null 2>&1 || { echo 'ERROR: valid radio is required.' >&2; exit 2; }
+	[ -n "$radio" ] && [ "$(uci -q get wireless."$radio" 2>/dev/null)" = wifi-device ] || { echo 'ERROR: valid radio is required.' >&2; exit 2; }
+	[ "${#ssid}" -le 32 ] || { echo 'SSID exceeds 32 bytes.' >&2; exit 3; }
 	[ -n "$ssid" ] || { echo 'ERROR: SSID is required.' >&2; exit 3; }
 	validate_encryption "$encryption"
 	validate_bssid "$bssid" || { echo 'ERROR: invalid BSSID.' >&2; exit 6; }
@@ -147,258 +149,116 @@ connect_wifi() {
 		exit 5
 	fi
 
-	uci -q set wireless."$radio".disabled='0'
+	uci -q set wireless."$radio".disabled='0' || return 1
 	uci -q delete network.audiowrt_wifi 2>/dev/null || true
-	uci -q set network.audiowrt_wifi='interface'
-	configure_ip "$ip_mode" "$ipaddr" "$netmask" "$gateway" "$dns1" "$dns2"
+	uci -q set network.audiowrt_wifi='interface' || return 1
+	configure_ip "$ip_mode" "$ipaddr" "$netmask" "$gateway" "$dns1" "$dns2" || return 1
 	uci -q delete wireless.audiowrt_client 2>/dev/null || true
-	uci -q set wireless.audiowrt_client='wifi-iface'
-	uci -q set wireless.audiowrt_client.device="$radio"
-	uci -q set wireless.audiowrt_client.mode='sta'
-	uci -q set wireless.audiowrt_client.network='audiowrt_wifi'
-	uci -q set wireless.audiowrt_client.ssid="$ssid"
-	uci -q set wireless.audiowrt_client.encryption="$encryption"
-	uci -q set wireless.audiowrt_client.disabled='0'
+	uci -q set wireless.audiowrt_client='wifi-iface' || return 1
+	uci -q set wireless.audiowrt_client.device="$radio" || return 1
+	uci -q set wireless.audiowrt_client.mode='sta' || return 1
+	uci -q set wireless.audiowrt_client.network='audiowrt_wifi' || return 1
+	uci -q set wireless.audiowrt_client.ssid="$ssid" || return 1
+	uci -q set wireless.audiowrt_client.encryption="$encryption" || return 1
+	uci -q set wireless.audiowrt_client.disabled='0' || return 1
 	if [ -n "$bssid" ]; then
-		uci -q set wireless.audiowrt_client.bssid="$bssid"
+		uci -q set wireless.audiowrt_client.bssid="$bssid" || return 1
 	else
 		uci -q delete wireless.audiowrt_client.bssid 2>/dev/null || true
 	fi
 	if [ "$encryption" = 'none' ]; then
 		uci -q delete wireless.audiowrt_client.key 2>/dev/null || true
 	else
-		uci -q set wireless.audiowrt_client.key="$key"
+		uci -q set wireless.audiowrt_client.key="$key" || return 1
 	fi
-	if [ "${AUDIOWRT_WIFI_PERSIST:-1}" = '1' ]; then
-		uci -q commit network
-		uci -q commit wireless
-	fi
-	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
-	mdns_sync
+
 }
 
 disconnect_wifi() {
+	rm -f /tmp/audiowrt/wifi.verified
+	radio="$(uci -q get wireless.audiowrt_client.device || true)"
 	uci -q get wireless.audiowrt_client >/dev/null 2>&1 || return 0
 	[ "$(uci -q get wireless.audiowrt_client.disabled 2>/dev/null || echo 0)" = '1' ] && return 0
-	uci -q set wireless.audiowrt_client.disabled='1'
-	uci -q commit wireless
-	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
+	uci -q set wireless.audiowrt_client.disabled='1' || return 1
+	wifi reload "$radio" >/dev/null 2>&1 || true
 }
 
-setup_interface_device() {
-	ubus call network.interface.audiowrt_setup status 2>/dev/null |
-		sed -n 's/^[[:space:]]*"device":[[:space:]]*"\([^"]*\)".*/\1/p' |
-		head -n 1
-}
-
-wait_setup_interface() {
-	tries=0
-	while [ "$tries" -lt 15 ]; do
-		status="$(ubus call network.interface.audiowrt_setup status 2>/dev/null || true)"
-		device="$(printf '%s\n' "$status" |
-			sed -n 's/^[[:space:]]*"device":[[:space:]]*"\([^"]*\)".*/\1/p' |
-			head -n 1)"
-		if [ -n "$device" ] &&
-		   printf '%s\n' "$status" | grep -q '"up":[[:space:]]*true' &&
-		   ip link show "$device" >/dev/null 2>&1; then
-			printf '%s\n' "$device"
-			return 0
-		fi
-		sleep 1
-		tries=$((tries + 1))
+# Test parameters are private RAM files, never shell code or a UCI package.
+connect_wifi() {
+	mkdir -p /tmp/audiowrt
+	umask 077
+	rm -f /tmp/audiowrt/wifi.verified
+	candidate=$(mktemp -d /tmp/audiowrt/client.XXXXXX)
+	index=0
+	for value in "$@"; do
+		printf '%s' "$value" > "$candidate/$index"
+		index=$((index + 1))
 	done
-	return 1
+	# Validate all fields before changing any live networking.
+	(apply_client_check "$@") || { rm -rf "$candidate"; return 2; }
+	apply_client "$@" || { rm -rf "$candidate"; return 2; }
+	rm -rf /tmp/audiowrt/client
+	mv "$candidate" /tmp/audiowrt/client
+	wifi reload "$(cat /tmp/audiowrt/client/0)"
+	mdns_sync
 }
 
-setup_dhcp_enable() {
-	setup_ip="$1"
-	interface="$2"
-	# Provisioning is the only DHCP server use case. Use the standalone BusyBox
-	# udhcpd binary instead of installing OpenWrt's long-running DHCP daemon.
-	[ -x /usr/sbin/udhcpd ] || return 0
-	[ -n "$interface" ] || {
-		echo 'ERROR: provisioning interface is not available for DHCP.' >&2
-		return 1
+apply_client_check() {
+	# Run the same validator/setter against isolated RAM copies.
+	. /usr/libexec/audiowrt/config-save
+	save_begin network wireless || return 1
+	uci() { save_uci "$@"; }
+	apply_client "$@"
+}
+
+candidate_args() {
+	set --
+	for index in 0 1 2 3 4 5 6 7 8 9 10; do
+		set -- "$@" "$(cat /tmp/audiowrt/client/$index 2>/dev/null || true)"
+	done
+	apply_client "$@"
+}
+
+commit_wifi_client() (
+	[ -d /tmp/audiowrt/client ] || { echo 'No tested client to save.' >&2; exit 1; }
+	# The worker marks a successful test before restoring the AP on a single
+	# PHY. Outside provisioning the currently associated client must have IP.
+	[ -f /tmp/audiowrt/wifi.verified ] || audiowrt_client_up || {
+		echo 'Connect successfully before saving.' >&2; exit 1;
 	}
-	cat > /tmp/audiowrt-udhcpd.conf <<-EOF
-	start ${setup_ip%.*}.100
-	end ${setup_ip%.*}.199
-	interface $interface
-	max_leases 100
-	lease_file /tmp/audiowrt-udhcpd.leases
-	pidfile /var/run/audiowrt-udhcpd.pid
-	option lease 600
-	option router $setup_ip
-	option dns $setup_ip
-	option subnet 255.255.255.0
-	EOF
-	: > /tmp/audiowrt-udhcpd.leases
-}
-
-setup_dhcp_disable() {
-	killall udhcpd 2>/dev/null || true
-	rm -f /tmp/audiowrt-udhcpd.conf /tmp/audiowrt-udhcpd.leases /var/run/audiowrt-udhcpd.pid
-}
-
-# Runtime-only UCI staging. OpenWrt's normal UCI savedir is tmpfs, but make it
-# explicit here and reject commits so setup AP code cannot write /etc/config.
-runtime_uci() {
-	[ "${1:-}" != 'commit' ] || {
-		echo 'ERROR: runtime UCI path cannot commit persistent configuration.' >&2
-		return 125
-	}
-	mkdir -p /tmp/.uci
-	uci -P /tmp/.uci -q "$@"
-}
-
-stage_setup_config() {
-	radio="$1"; ssid="$2"; setup_ip="$3"
-	runtime_uci set wireless."$radio".disabled='0'
-	runtime_uci delete network.audiowrt_setup 2>/dev/null || true
-	runtime_uci set network.audiowrt_setup='interface'
-	runtime_uci set network.audiowrt_setup.proto='static'
-	runtime_uci set network.audiowrt_setup.ipaddr="$setup_ip"
-	runtime_uci set network.audiowrt_setup.netmask='255.255.255.0'
-
-	runtime_uci delete wireless.audiowrt_setup 2>/dev/null || true
-	runtime_uci set wireless.audiowrt_setup='wifi-iface'
-	runtime_uci set wireless.audiowrt_setup.device="$radio"
-	runtime_uci set wireless.audiowrt_setup.mode='ap'
-	runtime_uci set wireless.audiowrt_setup.network='audiowrt_setup'
-	runtime_uci set wireless.audiowrt_setup.ssid="$ssid"
-	runtime_uci set wireless.audiowrt_setup.encryption='none'
-	runtime_uci set wireless.audiowrt_setup.isolate='1'
-	runtime_uci set wireless.audiowrt_setup.disabled='0'
-}
-
-commit_wifi_client() {
-	setup_radio="$(uci -q get wireless.audiowrt_setup.device 2>/dev/null || true)"
-	setup_ssid="$(uci -q get wireless.audiowrt_setup.ssid 2>/dev/null || true)"
-	setup_ip="$(uci -q get network.audiowrt_setup.ipaddr 2>/dev/null || true)"
-	setup_present=0
-	[ -n "$setup_radio" ] && [ -n "$setup_ip" ] && setup_present=1
-
-	# Package-level UCI commits include every staged delta. Temporarily remove
-	# the runtime-only setup sections so only the verified client is persisted.
-	if [ "$setup_present" -eq 1 ]; then
-		uci -q delete network.audiowrt_setup 2>/dev/null || true
-		uci -q delete wireless.audiowrt_setup 2>/dev/null || true
-	fi
-	uci -q commit network
-	uci -q commit wireless
-
-	# The AP is still running in netifd. Re-stage its UCI view without reload so
-	# the browser can render the Done page before setup-stop removes it.
-	if [ "$setup_present" -eq 1 ]; then
-		stage_setup_config "$setup_radio" "${setup_ssid:-$AUDIOWRT_SETUP_SSID}" "$setup_ip"
-	fi
-}
+	. /usr/libexec/audiowrt/config-save
+	save_begin network wireless || return 1
+	uci() { save_uci "$@"; }
+	candidate_args
+	save_finish
+)
 
 rollback_wifi_client() {
 	radio="$(uci -q get wireless.audiowrt_client.device 2>/dev/null || true)"
 	uci -q revert network.audiowrt_wifi 2>/dev/null || true
 	uci -q revert wireless.audiowrt_client 2>/dev/null || true
 	[ -z "$radio" ] || uci -q revert wireless."$radio".disabled 2>/dev/null || true
-	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
-}
-setup_start() {
-	radio="${1:-}"; ssid="${2:-$AUDIOWRT_SETUP_SSID}"; setup_ip="${3:-$AUDIOWRT_SETUP_IP}"
-	[ -n "$radio" ] && uci -q get wireless."$radio" >/dev/null 2>&1 || { echo 'ERROR: valid radio is required.' >&2; exit 2; }
-
-	# The setup network is runtime state. UCI stages these changes in /tmp and
-	# wifi reload consumes the staged values, so never commit them to flash.
-	stage_setup_config "$radio" "$ssid" "$setup_ip"
-
-	# Keep the reload diagnostics visible. This is the provisioning path and its
-	# UCI changes are staged under /tmp; suppressing this output hid hostapd and
-	# netifd failures while debugging the multicall wpad package.
-	if ! wifi reload && ! wifi; then
-		echo 'ERROR: failed to reload Wi-Fi for provisioning AP.' >&2
-		return 13
-	fi
-
-	setup_if="$(wait_setup_interface || true)"
-	[ -n "$setup_if" ] || {
-		echo 'ERROR: provisioning AP did not become operational.' >&2
-		return 14
-	}
-
-	if [ -x /usr/sbin/udhcpd ]; then
-		setup_dhcp_enable "$setup_ip" "$setup_if" || return 15
-		[ -x /etc/init.d/audiowrt-udhcpd ] || {
-			echo 'ERROR: AudioWRT DHCP service is missing.' >&2
-			return 16
-		}
-		/etc/init.d/audiowrt-udhcpd restart >/dev/null 2>&1 || {
-			echo 'ERROR: failed to start provisioning DHCP.' >&2
-			return 17
-		}
-		sleep 1
-		ps w | grep -q '[u]dhcpd .*audiowrt-udhcpd.conf' || {
-			echo 'ERROR: provisioning DHCP did not stay running.' >&2
-			return 18
-		}
-	fi
-
-	mdns_sync runtime
-}
-setup_stop() {
-	changed=0
-	if runtime_uci get network.audiowrt_setup >/dev/null 2>&1; then
-		runtime_uci delete network.audiowrt_setup
-		changed=1
-	fi
-	if runtime_uci get wireless.audiowrt_setup >/dev/null 2>&1; then
-		runtime_uci delete wireless.audiowrt_setup
-		changed=1
-	fi
-	setup_dhcp_disable
-	if [ "$changed" -eq 1 ]; then
-		wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
-		mdns_sync runtime
-	fi
+	wifi reload "$radio" >/dev/null 2>&1 || true
 }
 mdns_sync() {
-	# Native AudioWRT renderer owns mDNS/DNS-SD in current images. It derives
-	# interface addresses dynamically, so a reload is only needed to refresh
-	# identity/friendly-name state after provisioning changes.
-	if [ -x /usr/libexec/audiowrt-renderer ] && [ -x /etc/init.d/audiowrt-renderer ]; then
-		/etc/init.d/audiowrt-renderer reload >/dev/null 2>&1 || true
-		return 0
-	fi
-
-	# Backward compatibility for older/non-renderer installations that still
-	# provide umdns. Keep it idempotent: repeated syncs must not rewrite flash.
-	if [ -x /etc/init.d/umdns ]; then
-		if [ "${1:-}" = 'runtime' ]; then
-			/etc/init.d/umdns restart >/dev/null 2>&1 || true
-			return 0
-		fi
-		changed=0
-		if ! uci -q get umdns.@umdns[0] >/dev/null 2>&1; then
-			uci -q add umdns umdns >/dev/null 2>&1 || true
-			changed=1
-		fi
-		if uci -q get umdns.@umdns[0] >/dev/null 2>&1; then
-			current_networks="$(uci -q get umdns.@umdns[0].network 2>/dev/null || true)"
-			for network in lan audiowrt_wifi audiowrt_setup; do
-				found=0
-				for current in $current_networks; do
-					[ "$current" = "$network" ] && { found=1; break; }
-				done
-				if [ "$found" -eq 0 ]; then
-					uci -q add_list umdns.@umdns[0].network="$network"
-					current_networks="$current_networks $network"
-					changed=1
-				fi
-			done
-			[ "$changed" -eq 0 ] || uci -q commit umdns 2>/dev/null || true
-			/etc/init.d/umdns enabled >/dev/null 2>&1 || /etc/init.d/umdns enable >/dev/null 2>&1 || true
-			/etc/init.d/umdns restart >/dev/null 2>&1 || true
-		fi
+	# Network addresses are discovered at runtime. Never start a disabled
+	# renderer or save an operational umdns interface list.
+	pids="$(pidof audiowrt-renderer 2>/dev/null || true)"
+	[ -z "$pids" ] || kill -HUP $pids 2>/dev/null || true
+	if [ -x /etc/init.d/umdns ] && /etc/init.d/umdns running; then
+		/etc/init.d/umdns reload >/dev/null 2>&1 || true
 	fi
 	return 0
 }
+
+case "${1:-}" in
+	connect|commit-client|apply-candidate|rollback-client|disconnect)
+		mkdir -p /tmp/audiowrt
+		mkdir /tmp/audiowrt/wifi.lock 2>/dev/null || { echo 'Wi-Fi change in progress.' >&2; exit 1; }
+		trap 'rmdir /tmp/audiowrt/wifi.lock' EXIT
+		trap 'exit 1' HUP INT TERM
+		;;
+esac
 
 case "${1:-}" in
 	radios) radios ;;
@@ -406,10 +266,11 @@ case "${1:-}" in
 	status) status ;;
 	connect) shift; connect_wifi "$@" ;;
 	commit-client) commit_wifi_client ;;
+	apply-candidate) candidate_args; wifi reload "$(cat /tmp/audiowrt/client/0)" ;;
 	rollback-client) rollback_wifi_client ;;
 	disconnect) disconnect_wifi ;;
-	setup-start) shift; setup_start "$@" ;;
-	setup-stop) setup_stop ;;
+	setup-start) shift; exec /usr/libexec/audiowrt/setup-ap start "$@" ;;
+	setup-stop) exec /usr/libexec/audiowrt/setup-ap stop ;;
 	mdns-sync) mdns_sync ;;
 	*) usage; exit 2 ;;
 esac

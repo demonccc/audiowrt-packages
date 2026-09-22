@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-lpcm
-PKG_VERSION:=1.0.2
+PKG_VERSION:=1.0.3
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -40,22 +40,20 @@ endef
 define Package/audiowrt-player-lpcm/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-player-lpcm $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/lpcm.defaults $(1)/etc/uci-defaults/70-audiowrt-player-lpcm
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt/players
+	$(INSTALL_DATA) ./files/lpcm.manifest $(1)/usr/share/audiowrt/players/lpcm.manifest
 endef
 
 define Package/audiowrt-player-lpcm/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry register lpcm native_lpcm 'AudioWRT DLNA LPCM Player' /usr/bin/audiowrt-player-lpcm 'audio/L16 audio/l16 audio/L16;rate=44100;channels=2 audio/L16;rate=48000;channels=2' 'l16 pcm' >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry rebuild
 endef
 
 define Package/audiowrt-player-lpcm/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry unregister native_lpcm >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry exclude lpcm
 endef
 
 $(eval $(call BuildPackage,audiowrt-player-lpcm))

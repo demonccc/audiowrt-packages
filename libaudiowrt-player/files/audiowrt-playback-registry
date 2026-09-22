@@ -1,23 +1,26 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
+# Installed manifests are immutable package data. Rebuild their derived UCI
+# view only in RAM, at boot and after package installation/removal.
 set -eu
-
-CODECS_CONFIG=audiowrt-codecs
-PLAYERS_CONFIG=audiowrt-players
-LEGACY_CONFIG=audiowrt
-DLNA_CONFIG=audiowrt-dlna
-
+mkdir -p /tmp/audiowrt
+mkdir /tmp/audiowrt/registry.lock 2>/dev/null || exit 1
+work=$(mktemp -d /tmp/audiowrt/registry.XXXXXX)
+trap 'rm -rf "$work"; rmdir /tmp/audiowrt/registry.lock' EXIT
+trap 'exit 1' INT TERM HUP
+mkdir "$work/delta"
+CODECS_CONFIG=awcodecs_$$
+PLAYERS_CONFIG=awplayers_$$
 codecs_changed=0
 players_changed=0
-legacy_changed=0
-dlna_changed=0
+: > "$work/$CODECS_CONFIG"
+: > "$work/$PLAYERS_CONFIG"
+uci() { command uci -c "$work" -t "$work/delta" "$@"; }
 
 mark_changed() {
 	case "$1" in
 		"$CODECS_CONFIG") codecs_changed=1 ;;
 		"$PLAYERS_CONFIG") players_changed=1 ;;
-		"$LEGACY_CONFIG") legacy_changed=1 ;;
-		"$DLNA_CONFIG") dlna_changed=1 ;;
 	esac
 }
 
@@ -71,20 +74,9 @@ set_value() {
 	mark_changed "$config"
 }
 
-codec_referenced() {
-	local codec="$1" id
-	for id in $(uci -q show "$PLAYERS_CONFIG" 2>/dev/null |
-		sed -n "s/^$PLAYERS_CONFIG\.\([^.=]*\)=player$/\1/p"); do
-		list_has "$PLAYERS_CONFIG.$id.codec" "$codec" && return 0
-	done
-	return 1
-}
-
 commit_changes() {
 	[ "$codecs_changed" -eq 0 ] || uci commit "$CODECS_CONFIG"
 	[ "$players_changed" -eq 0 ] || uci commit "$PLAYERS_CONFIG"
-	[ "$legacy_changed" -eq 0 ] || uci commit "$LEGACY_CONFIG"
-	[ "$dlna_changed" -eq 0 ] || uci commit "$DLNA_CONFIG"
 }
 
 register_player() {
@@ -109,97 +101,18 @@ register_player() {
 
 	if [ "$codecs_changed" -eq 1 ] || [ "$players_changed" -eq 1 ]; then
 		commit_changes
-		reload_consumers
 	fi
 }
 
-unregister_player() {
-	local player="$1" codec codecs
-	codecs_changed=0
-	players_changed=0
 
-	[ "$(section_type "$PLAYERS_CONFIG" "$player")" = "player" ] || return 0
-	codecs="$(uci -q get "$PLAYERS_CONFIG.$player.codec" 2>/dev/null || true)"
-	uci -q delete "$PLAYERS_CONFIG.$player" || true
-	players_changed=1
-
-	for codec in $codecs; do
-		if ! codec_referenced "$codec"; then
-			uci -q delete "$CODECS_CONFIG.$codec" || true
-			codecs_changed=1
-		fi
-	done
-
-	commit_changes
-	reload_consumers
-}
-
-migrate_legacy() {
-	local id item name executable default
-
-	codecs_changed=0
-	players_changed=0
-	legacy_changed=0
-	dlna_changed=0
-
-	for id in $(uci -q show "$LEGACY_CONFIG" 2>/dev/null |
-		sed -n "s/^$LEGACY_CONFIG\.\([^.=]*\)=codec$/\1/p"); do
-		ensure_section "$CODECS_CONFIG" "$id" codec
-		for item in $(uci -q get "$LEGACY_CONFIG.$id.mime" 2>/dev/null || true); do
-			add_list_value "$CODECS_CONFIG" "$id" mime "$item"
-		done
-		for item in $(uci -q get "$LEGACY_CONFIG.$id.extension" 2>/dev/null || true); do
-			add_list_value "$CODECS_CONFIG" "$id" extension "$item"
-		done
-
-		default="$(uci -q get "$LEGACY_CONFIG.$id.default_player" 2>/dev/null || true)"
-		if [ -n "$default" ] && [ "$(section_type "$DLNA_CONFIG" main)" = "renderer" ]; then
-			set_value "$DLNA_CONFIG" main "default_player_$id" "$default"
-		fi
-
-		uci -q delete "$LEGACY_CONFIG.$id" || true
-		legacy_changed=1
-	done
-
-	for id in $(uci -q show "$LEGACY_CONFIG" 2>/dev/null |
-		sed -n "s/^$LEGACY_CONFIG\.\([^.=]*\)=player$/\1/p"); do
-		ensure_section "$PLAYERS_CONFIG" "$id" player
-		name="$(uci -q get "$LEGACY_CONFIG.$id.name" 2>/dev/null || true)"
-		executable="$(uci -q get "$LEGACY_CONFIG.$id.executable" 2>/dev/null || true)"
-		[ -z "$name" ] || set_value "$PLAYERS_CONFIG" "$id" name "$name"
-		[ -z "$executable" ] || set_value "$PLAYERS_CONFIG" "$id" executable "$executable"
-		for item in $(uci -q get "$LEGACY_CONFIG.$id.codec" 2>/dev/null || true); do
-			add_list_value "$PLAYERS_CONFIG" "$id" codec "$item"
-		done
-		uci -q delete "$LEGACY_CONFIG.$id" || true
-		legacy_changed=1
-	done
-
-	commit_changes
-	[ "$codecs_changed" -eq 0 ] && [ "$players_changed" -eq 0 ] &&
-		[ "$legacy_changed" -eq 0 ] && [ "$dlna_changed" -eq 0 ] || reload_consumers
-}
-
-case "${1:-}" in
-	register)
-		[ "$#" -eq 7 ] || {
-			echo "usage: $0 register <codec> <player-id> <name> <executable> <mime-list> <extension-list>" >&2
-			exit 2
-		}
-		register_player "$2" "$3" "$4" "$5" "$6" "$7"
-		;;
-	unregister)
-		[ "$#" -eq 2 ] || { echo "usage: $0 unregister <player-id>" >&2; exit 2; }
-		unregister_player "$2"
-		;;
-	migrate)
-		migrate_legacy
-		;;
-	reload)
-		reload_consumers
-		;;
-	*)
-		echo "usage: $0 {register|unregister|migrate|reload} ..." >&2
-		exit 2
-		;;
-esac
+for manifest in /usr/share/audiowrt/players/*.manifest; do
+	[ -r "$manifest" ] || continue
+	[ "${1:-}" != exclude ] || [ "${manifest##*/}" != "$2.manifest" ] || continue
+	. "$manifest"
+done
+mkdir -p /tmp/audiowrt/registry
+for entry in "$CODECS_CONFIG:audiowrt-codecs" "$PLAYERS_CONFIG:audiowrt-players"; do
+	src=${entry%%:*}; dest=${entry#*:}
+	cmp -s "$work/$src" "/tmp/audiowrt/registry/$dest" || mv "$work/$src" "/tmp/audiowrt/registry/$dest"
+done
+reload_consumers

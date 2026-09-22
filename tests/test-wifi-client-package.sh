@@ -35,22 +35,11 @@ grep -q 'ubus call iwinfo scan' "$script"
 grep -q "network.audiowrt_wifi='interface'" "$script"
 grep -q "wireless.audiowrt_client='wifi-iface'" "$script"
 grep -q 'audiowrt_setup' "$script"
-grep -q 'standalone BusyBox' "$script"
-grep -q '\[ -x /usr/sbin/udhcpd \] || return 0' "$script"
-grep -q '/etc/init.d/audiowrt-udhcpd restart' "$script"
-grep -q '^wait_setup_interface()' "$script"
-grep -q 'network.interface.audiowrt_setup status' "$script"
-grep -q 'interface $interface' "$script"
-grep -q 'max_leases 100' "$script"
-grep -q 'lease_file /tmp/audiowrt-udhcpd.leases' "$script"
-grep -q 'pidfile /var/run/audiowrt-udhcpd.pid' "$script"
-grep -q 'option lease 600' "$script"
-grep -q 'option router' "$script"
-grep -q 'option dns' "$script"
-if grep -q 'br-audiowrt_setup' "$script"; then
-    echo 'ERROR: provisioning DHCP must bind the netifd-created AP interface, not a guessed bridge.' >&2
-    exit 1
-fi
+ap="$repo_root/audiowrt-provisioning/files/setup-ap"
+grep -q 'udhcpd -f' "$ap"
+grep -q 'max_leases 100' "$ap"
+grep -q 'lease_file $AUDIOWRT_SETUP_DIR/leases' "$ap"
+grep -q 'option lease 600' "$ap"
 if grep -Eq 'uci -q commit dhcp|dhcp\.audiowrt_setup' "$script"; then
     echo 'ERROR: standalone provisioning DHCP must not depend on /etc/config/dhcp.' >&2
     exit 1
@@ -95,8 +84,8 @@ grep -q '\${#key}.*-gt 63' "$script"
 # Current AudioWRT images use the native renderer for mDNS/DNS-SD. umdns is
 # only a guarded backward-compatibility fallback and must never be required for
 # provisioning to succeed.
-grep -q '/usr/libexec/audiowrt-renderer' "$script"
-grep -q '/etc/init.d/audiowrt-renderer reload' "$script"
+grep -q 'pidof audiowrt-renderer' "$script"
+grep -q 'kill -HUP' "$script"
 grep -q '\[ -x /etc/init.d/umdns \]' "$script"
 grep -q 'return 0' "$script"
 if grep -q 'delete umdns.@umdns\[0\].network' "$script"; then

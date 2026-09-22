@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-ffmpeg
-PKG_VERSION:=1.0.2
+PKG_VERSION:=1.0.3
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -40,24 +40,20 @@ endef
 define Package/audiowrt-player-ffmpeg/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-player-ffmpeg $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/ffmpeg.defaults $(1)/etc/uci-defaults/75-audiowrt-player-ffmpeg
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt/players
+	$(INSTALL_DATA) ./files/ffmpeg.manifest $(1)/usr/share/audiowrt/players/ffmpeg.manifest
 endef
 
 define Package/audiowrt-player-ffmpeg/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry register alac ffmpeg_audio 'AudioWRT FFmpeg Audio Player' /usr/bin/audiowrt-player-ffmpeg 'audio/alac audio/x-alac' 'alac' >/dev/null 2>&1 || true
-/usr/libexec/audiowrt-playback-registry register wma ffmpeg_audio 'AudioWRT FFmpeg Audio Player' /usr/bin/audiowrt-player-ffmpeg 'audio/x-ms-wma audio/wma' 'wma' >/dev/null 2>&1 || true
-/usr/libexec/audiowrt-playback-registry register m4a ffmpeg_audio 'AudioWRT FFmpeg Audio Player' /usr/bin/audiowrt-player-ffmpeg 'audio/mp4 audio/x-m4a audio/m4a' 'm4a mp4' >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry rebuild
 endef
 
 define Package/audiowrt-player-ffmpeg/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry unregister ffmpeg_audio >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry exclude ffmpeg
 endef
 
 $(eval $(call BuildPackage,audiowrt-player-ffmpeg))

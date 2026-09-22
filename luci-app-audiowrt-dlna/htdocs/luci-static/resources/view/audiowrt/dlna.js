@@ -27,7 +27,7 @@ function statusRow(label, id, value) {
 
 function renderCodecs(codecs) {
 	if (!codecs.length)
-		return E('p', {}, _('No codecs are currently registered in /etc/config/audiowrt-codecs.'));
+		return E('p', {}, _('No codecs are currently registered in /etc/config/audiowrt-runtime-codecs.'));
 
 	return E('div', { 'class': 'table' }, [
 		E('div', { 'class': 'tr table-titles' }, [
@@ -53,11 +53,28 @@ function renderCodecs(codecs) {
 }
 
 return view.extend({
+	handleSave: function() {
+		var args = [];
+		this.rendererSection.children.forEach(function(option) {
+			if (!option.isValid('main')) throw new Error(_('Correct invalid settings before saving.'));
+			var value = option.formvalue('main');
+			value = value == null ? '' : String(value);
+			if (value !== String(uci.get('audiowrt-dlna', 'main', option.option) || ''))
+				args.push(option.option, value);
+		});
+		return fs.exec('/usr/libexec/audiowrt-save-renderer', args).then(function(result) {
+			if (result.code) throw new Error(result.stderr || _('Could not save renderer settings.'));
+			window.location.reload();
+		});
+	},
+	handleSaveApply: function() { return this.handleSave(); },
+	handleReset: function() { window.location.reload(); },
+
 	load: function() {
 		return Promise.all([
 			uci.load('audiowrt-dlna'),
-			uci.load('audiowrt-codecs'),
-			uci.load('audiowrt-players'),
+			uci.load('audiowrt-runtime-codecs'),
+			uci.load('audiowrt-runtime-players'),
 			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'status' ]), { stdout: '{}' }),
 			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'players' ]), { stdout: '[]' })
 		]);
@@ -66,8 +83,8 @@ return view.extend({
 	render: function(data) {
 		var status = parseJSON(data[3].stdout, {});
 		var codecs = parseJSON(data[4].stdout, []);
-		var codecSections = uci.sections('audiowrt-codecs', 'codec') || [];
-		var playerSections = uci.sections('audiowrt-players', 'player') || [];
+		var codecSections = uci.sections('audiowrt-runtime-codecs', 'codec') || [];
+		var playerSections = uci.sections('audiowrt-runtime-players', 'player') || [];
 		var playerById = {};
 		var rendererMap, s, o;
 
@@ -76,9 +93,10 @@ return view.extend({
 		});
 
 		rendererMap = new form.Map('audiowrt-dlna', _('DLNA Renderer'),
-			_('DLNA reads codec capabilities from /etc/config/audiowrt-codecs and installed players from /etc/config/audiowrt-players. Player preferences configured here belong only to the DLNA module.'));
+			_('DLNA reads codec capabilities from /etc/config/audiowrt-runtime-codecs and installed players from /etc/config/audiowrt-runtime-players. Player preferences configured here belong only to the DLNA module.'));
 
 		s = rendererMap.section(form.TypedSection, 'renderer', _('Renderer'));
+		this.rendererSection = s;
 		s.anonymous = true;
 		s.addremove = false;
 
@@ -86,8 +104,8 @@ return view.extend({
 		o.default = o.enabled;
 
 		o = s.option(form.Value, 'friendly_name', _('Friendly name'));
-		o.default = 'AudioWRT';
-		o.rmempty = false;
+		o.placeholder = _('Use the device hostname');
+		o.rmempty = true;
 
 		o = s.option(form.Value, 'port', _('UPnP HTTP control port'));
 		o.datatype = 'port';

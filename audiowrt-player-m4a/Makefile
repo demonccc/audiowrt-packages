@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-m4a
-PKG_VERSION:=1.0.2
+PKG_VERSION:=1.0.3
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -40,22 +40,20 @@ endef
 define Package/audiowrt-player-m4a/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-player-m4a $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/m4a.defaults $(1)/etc/uci-defaults/70-audiowrt-player-m4a
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt/players
+	$(INSTALL_DATA) ./files/m4a.manifest $(1)/usr/share/audiowrt/players/m4a.manifest
 endef
 
 define Package/audiowrt-player-m4a/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry register m4a native_m4a 'AudioWRT M4A/AAC Player' /usr/bin/audiowrt-player-m4a 'audio/mp4 audio/x-m4a audio/m4a' 'm4a mp4' >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry rebuild
 endef
 
 define Package/audiowrt-player-m4a/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry unregister native_m4a >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry exclude m4a
 endef
 
 $(eval $(call BuildPackage,audiowrt-player-m4a))

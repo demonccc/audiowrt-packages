@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=libaudiowrt-player
-PKG_VERSION:=1.1.0
+PKG_VERSION:=1.1.1
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -45,10 +45,6 @@ define Build/InstallDev
 	$(CP) $(PKG_BUILD_DIR)/libaudiowrt-player.so* $(1)/usr/lib/
 endef
 
-define Package/libaudiowrt-player/conffiles
-/etc/config/audiowrt-codecs
-/etc/config/audiowrt-players
-endef
 
 define Package/libaudiowrt-player/install
 	$(INSTALL_DIR) $(1)/usr/lib
@@ -57,15 +53,16 @@ define Package/libaudiowrt-player/install
 	$(INSTALL_BIN) ./files/audiowrt-playback-registry $(1)/usr/libexec/audiowrt-playback-registry
 	$(INSTALL_BIN) ./files/audiowrt-player-registry $(1)/usr/libexec/audiowrt-player-registry
 	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/audiowrt-codecs.config $(1)/etc/config/audiowrt-codecs
-	$(INSTALL_CONF) ./files/audiowrt-players.config $(1)/etc/config/audiowrt-players
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/audiowrt-playback-registry-migrate $(1)/etc/uci-defaults/60-audiowrt-playback-registry-migrate
+	ln -s /tmp/audiowrt/registry/audiowrt-codecs $(1)/etc/config/audiowrt-runtime-codecs
+	ln -s /tmp/audiowrt/registry/audiowrt-players $(1)/etc/config/audiowrt-runtime-players
+	$(INSTALL_DIR) $(1)/etc/init.d $(1)/etc/rc.d
+	$(INSTALL_BIN) ./files/playback-registry.init $(1)/etc/init.d/audiowrt-playback-registry
+	ln -s ../init.d/audiowrt-playback-registry $(1)/etc/rc.d/S12audiowrt-playback-registry
 endef
 define Package/libaudiowrt-player/postinst
 #!/bin/sh
-[ -n "${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry migrate >/dev/null 2>&1 || true
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
+/usr/libexec/audiowrt-playback-registry rebuild
 exit 0
 endef
 

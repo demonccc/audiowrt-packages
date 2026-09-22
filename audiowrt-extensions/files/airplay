@@ -5,16 +5,8 @@ set -eu
 
 case "${1:-}" in
 	configure)
-		name="$(/usr/sbin/audiowrt-audio name)"
-		uci -q set shairport-sync.shairport_sync.enabled='1'
-		uci -q set shairport-sync.shairport_sync.respawn='1'
-		uci -q set shairport-sync.shairport_sync.name="$name"
-		uci -q set shairport-sync.shairport_sync.output_backend='alsa'
-		uci -q set shairport-sync.shairport_sync.mdns_backend='tinysvcmdns'
-		uci -q set shairport-sync.shairport_sync.alsa_output_device='default'
-		uci -q set shairport-sync.shairport_sync.ignore_volume_control='no'
-		uci -q commit shairport-sync
-		/etc/init.d/shairport-sync enable >/dev/null 2>&1 || true
+		/usr/libexec/audiowrt/extensions/configure-settings shairport-sync shairport_sync /usr/share/audiowrt/extensions/airplay.settings
+		/etc/init.d/shairport-sync enabled || /etc/init.d/shairport-sync enable
 		/etc/init.d/shairport-sync restart >/dev/null 2>&1 || true
 		;;
 	disable)

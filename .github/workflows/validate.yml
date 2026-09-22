@@ -2,6 +2,8 @@ name: Validate AudioWRT packages
 
 on:
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       openwrt_ref:
@@ -16,7 +18,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 15
 
     steps:
       - name: Checkout AudioWRT packages
@@ -27,8 +29,11 @@ jobs:
         run: |
           set -euo pipefail
           while IFS= read -r -d '' script; do
-            sh -n "$script"
-          done < <(find . -path './.git' -prune -o -type f -perm /111 -print0)
+            case "$(head -n 1 "$script")" in
+              '#!'*bash*) bash -n "$script" ;;
+              '#!'*/sh*) sh -n "$script" ;;
+            esac
+          done < <(find . -path './.git' -prune -o -type f -print0)
 
       - name: Validate OpenWrt-derived package contract
         shell: bash
@@ -56,6 +61,20 @@ jobs:
 
       - name: Validate minimal runtime libraries
         run: bash tests/test-runtime-libraries-minimal.sh
+
+      - name: Exercise runtime behavior with real UCI
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          git -C "$work" init -q
+          git -C "$work" fetch -q --depth=1 https://github.com/openwrt/uci.git 74f6277aabffc943d026f406df57c22595134c42
+          git -C "$work" checkout -q FETCH_HEAD
+          printf '#define UCI_DEBUG 1\n' > "$work/uci_config.h"
+          cc -O2 -o "$work/uci" "$work"/{cli,libuci,file,util,delta,parse}.c
+          UCI_BIN="$work/uci" python3 tests/test-runtime-behavior.py
+          bash tests/test-device-identity.sh
 
       - name: Validate audio runtime flash contract
         shell: bash
@@ -89,8 +108,9 @@ jobs:
           for package in \
             audiowrt-audio \
             audiowrt-core \
+            audiowrt-config \
+            audiowrt-identity \
             audiowrt-provisioning \
-            audiowrt-storage \
             audiowrt-usb-audio \
             audiowrt-extensions \
             audiowrt-mpd \
@@ -102,7 +122,6 @@ jobs:
             luci-app-audiowrt \
             luci-app-audiowrt-wifi-client \
             luci-app-audiowrt-core \
-            luci-app-audiowrt-storage \
             luci-app-audiowrt-dlna; do
             makefile="$package/Makefile"
             for phase in Prepare Configure Compile; do
@@ -114,6 +133,7 @@ jobs:
           done
 
       - name: Validate OpenWrt package metadata
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
@@ -151,8 +171,9 @@ jobs:
             audiowrt-wpad \
             audiowrt-audio \
             audiowrt-core \
+            audiowrt-config \
+            audiowrt-identity \
             audiowrt-provisioning \
-            audiowrt-storage \
             audiowrt-usb-audio \
             audiowrt-extensions \
             audiowrt-mpd \
@@ -181,7 +202,6 @@ jobs:
             luci-app-audiowrt \
             luci-app-audiowrt-wifi-client \
             luci-app-audiowrt-core \
-            audiowrt-storage-luci \
             kmod-audiowrt-bluetooth \
             kmod-audiowrt-sound-core \
             kmod-audiowrt-usb-audio; do

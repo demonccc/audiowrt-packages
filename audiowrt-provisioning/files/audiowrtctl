@@ -5,46 +5,16 @@ set -eu
 
 . /usr/libexec/audiowrt/wifi-runtime
 
-setup_ip() { printf '%s\n' "$AUDIOWRT_SETUP_IP"; }
-setup_ssid() { /usr/libexec/audiowrt/setup-ssid 2>/dev/null || printf '%s\n' "$AUDIOWRT_SETUP_SSID"; }
 error_file=/tmp/audiowrt/provisioning.error
 done_file=/tmp/audiowrt/provisioning.done
-
-clear_error() { mkdir -p /tmp/audiowrt; rm -f "$error_file"; }
-
-has_persistent_wifi_client() {
-	uci -q get wireless.audiowrt_client >/dev/null 2>&1 || return 1
-	[ "$(uci -q get wireless.audiowrt_client.mode 2>/dev/null || true)" = 'sta' ] || return 1
-	[ -n "$(uci -q get wireless.audiowrt_client.device 2>/dev/null || true)" ] || return 1
-	[ -n "$(uci -q get wireless.audiowrt_client.ssid 2>/dev/null || true)" ] || return 1
-	return 0
-}
-
-has_lan_dhcp() {
-	status="$(ubus call network.interface.lan status 2>/dev/null || true)"
-	printf '%s\n' "$status" | grep -q '"proto":[[:space:]]*"dhcp"' || return 1
-	printf '%s\n' "$status" |
-		sed -n '/"ipv4-address"/,/]/ s/.*"address":[[:space:]]*"\([^"]*\)".*/\1/p' |
-		grep -q '[0-9]'
-}
-
-setup_active() {
-	status="$(ubus call network.interface.audiowrt_setup status 2>/dev/null || true)"
-	printf '%s\n' "$status" | grep -q '"up":[[:space:]]*true' || return 1
-	printf '%s\n' "$status" | grep -q "\"address\":[[:space:]]*\"$(setup_ip)\"" || return 1
-	return 0
-}
-
-wifi_up() {
-	ubus call network.interface.audiowrt_wifi status 2>/dev/null | grep -q '"up":[[:space:]]*true'
-}
 
 start_setup() {
 	reason="$1"
 	radio="$(audiowrt_first_radio)"
 	[ -n "$radio" ] || { echo 'ERROR: no Wi-Fi radio is available.' >&2; return 3; }
-	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$(setup_ssid)" "$(setup_ip)"
-	clear_error
+	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$(/usr/libexec/audiowrt/setup-ssid)"
+	mkdir -p /tmp/audiowrt
+	rm -f "$error_file"
 	rm -f "$done_file"
 	logger -t audiowrt "Provisioning mode enabled ($reason)"
 }
@@ -57,19 +27,13 @@ provisioning_start() {
 }
 
 provisioning_auto() {
-	if has_persistent_wifi_client; then
-		/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
-		logger -t audiowrt 'Setup AP not required: persistent Wi-Fi client configuration exists'
-		return 0
-	fi
-
-	if has_lan_dhcp; then
-		/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
-		logger -t audiowrt 'Setup AP not required: LAN DHCP lease detected'
-		return 0
-	fi
-
-	start_setup 'no saved Wi-Fi client and no LAN DHCP lease'
+	elapsed=0
+	while [ "$elapsed" -lt "$AUDIOWRT_SETUP_TIMEOUT" ]; do
+		audiowrt_connected && return 0
+		sleep 2
+		elapsed=$((elapsed + 2))
+	done
+	start_setup 'no Ethernet or station link with an IP address'
 }
 
 provisioning_stop() {
@@ -78,13 +42,13 @@ provisioning_stop() {
 
 status() {
 	provisioning=0
-	if setup_active && [ ! -f "$done_file" ]; then
+	if audiowrt_setup_active && [ ! -f "$done_file" ]; then
 		provisioning=1
 	fi
 	printf 'device_name=%s\n' "$(uci -q get system.@system[0].hostname || echo AudioWRT)"
 	printf 'provisioning=%s\n' "$provisioning"
 	printf 'wifi_ssid=%s\n' "$(uci -q get wireless.audiowrt_client.ssid || true)"
-	printf 'lan_dhcp=%s\n' "$(has_lan_dhcp && echo 1 || echo 0)"
+	printf 'lan_dhcp=%s\n' "$(audiowrt_connected && echo 1 || echo 0)"
 	printf 'last_error=%s\n' "$(cat "$error_file" 2>/dev/null || true)"
 }
 

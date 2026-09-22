@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-udhcpd
-PKG_VERSION:=1.0.0
+PKG_VERSION:=1.0.1
 PKG_RELEASE:=1
 PKGARCH:=all
 
@@ -16,7 +16,7 @@ define Package/audiowrt-udhcpd
 endef
 
 define Package/audiowrt-udhcpd/description
- Configuration and service wrapper for the udhcpd applet provided by
+ Dependency marker for the udhcpd applet provided by
  audiowrt-busybox. It is used only for the AudioWRT provisioning AP.
 endef
 
@@ -30,8 +30,6 @@ define Build/Compile
 endef
 
 define Package/audiowrt-udhcpd/install
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/udhcpd.init $(1)/etc/init.d/audiowrt-udhcpd
 endef
 
 $(eval $(call BuildPackage,audiowrt-udhcpd))

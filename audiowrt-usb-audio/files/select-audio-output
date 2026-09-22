@@ -3,38 +3,15 @@
 
 set -eu
 
-RUNTIME_DIR=/tmp/audiowrt
-STATE_FILE="$RUNTIME_DIR/audio.state"
-ASOUND_FILE="$RUNTIME_DIR/asound.conf"
-
-state_value() {
-	key="$1"
-	[ -r "$STATE_FILE" ] || return 0
-	sed -n "s/^$key=//p" "$STATE_FILE" | head -n 1
-}
+. /usr/libexec/audiowrt/audio-runtime
+audio_lock
 
 write_state() {
-	ready="$1"
-	card="$2"
-	pcm="$3"
-	error="$4"
-	mkdir -p "$RUNTIME_DIR"
-	tmp="$STATE_FILE.$$"
-	{
-		printf 'output_type=usb\n'
-		printf 'ready=%s\n' "$ready"
-		printf 'device=default\n'
-		printf 'card=%s\n' "$card"
-		printf 'pcm=%s\n' "$pcm"
-		printf 'bluetooth_device=\n'
-		printf 'bluetooth_name=\n'
-		printf 'last_error=%s\n' "$error"
-	} > "$tmp"
-	mv -f "$tmp" "$STATE_FILE"
+	audio_state usb "$1" "$2" "$3" '' '' "$4"
 }
 
 current_output="$(state_value output_type || true)"
-[ "$current_output" = 'bluetooth' ] && exit 0
+[ "$current_output" = bluetooth ] && [ "${1:-}" != force ] && exit 0
 
 card=""
 if [ -r /proc/asound/cards ]; then
@@ -53,6 +30,7 @@ if [ -z "$card" ]; then
 	if [ -z "$current_output" ] || [ "$current_output" = 'usb' ]; then
 		write_state 0 "" "" "No USB audio playback device detected."
 		rm -f "$ASOUND_FILE"
+		restart_engines
 	fi
 	logger -t audiowrt-audio "No USB audio playback device detected"
 	exit 0
@@ -73,7 +51,7 @@ fi
 [ -n "$pcm" ] || pcm="0"
 
 mkdir -p "$RUNTIME_DIR"
-cat > "$ASOUND_FILE" <<EOF
+audio_asound <<EOF
 pcm.audiowrt_dmix {
 	type dmix
 	ipc_key 2468
@@ -98,7 +76,4 @@ EOF
 write_state 1 "$card" "$pcm" ""
 logger -t audiowrt-audio "Selected USB audio card ${card}, PCM ${pcm}"
 
-for service in mpd shairport-sync librespot; do
-	[ -x "/etc/init.d/$service" ] || continue
-	"/etc/init.d/$service" restart >/dev/null 2>&1 || true
-done
+restart_engines

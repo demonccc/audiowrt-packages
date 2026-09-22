@@ -19,9 +19,8 @@ if grep -Eq '/etc/config|uci-defaults|audiowrt\.config|audiowrt-core-firstboot' 
 fi
 
 grep -q '+audiowrt-wifi-client' "$provisioning/Makefile"
-grep -q 'provisioning auto' "$provisioning/files/audiowrt-provisioning.init"
-grep -q '^has_persistent_wifi_client()' "$provisioning/files/audiowrtctl"
-grep -q '^has_lan_dhcp()' "$provisioning/files/audiowrtctl"
+grep -q 'provisioning auto' "$provisioning/files/provision-supervisor"
+grep -q 'audiowrt_connected' "$provisioning/files/audiowrtctl"
 grep -q 'wifi-runtime' "$repo_root/audiowrt-wifi-client/Makefile"
 if grep -Eq 'uci-defaults|uci -q commit|rm -f.*/etc/' "$provisioning/files/audiowrt-provisioning.init"; then
     echo 'ERROR: provisioning init must not persist or migrate configuration.' >&2
@@ -52,11 +51,7 @@ fi
 grep -q 'Passwords match' "$provisioning/files/audiowrt.html"
 grep -q 'groupNetworks' "$provisioning/files/audiowrt.html"
 
-grep -q 'audiowrt-storage.main' "$storage"
-if grep -q 'audiowrt\.storage' "$storage"; then
-    echo 'ERROR: storage runtime still writes the legacy audiowrt.storage section.' >&2
-    exit 1
-fi
+[ ! -e "$storage" ]
 if grep -q 'admin/network/diagnostics' "$menu_filter"; then
     echo 'ERROR: Diagnostics must remain visible; it should not be overridden by the hidden-menu file.' >&2
     exit 1

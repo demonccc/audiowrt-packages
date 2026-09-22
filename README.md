@@ -37,8 +37,9 @@ revision and `r1` is the initial OpenWrt packaging record.
 
 Packages that compile or repackage upstream code keep the upstream
 `PKG_VERSION` inherited from, or declared for, that source. Their AudioWRT
-delta is represented by the package name and recipe/patch provenance; a new
-AudioWRT packaging revision starts at `PKG_RELEASE:=1` in this repository.
+delta is represented by the package name and recipe/patch provenance; the first
+AudioWRT packaging revision starts at `PKG_RELEASE:=1`; packaging fixes increment
+that release while preserving the upstream source version.
 For example, the trimmed ALSA, BlueZ and wpad packages must remain traceable
 to the selected OpenWrt source/kernel release instead of being relabeled as
 an invented `1.0.x` source version. `audiowrt-wpad` inherits the exact
@@ -92,17 +93,32 @@ AudioWRT-owned packages are named after the artifact they primarily install:
 
 A package is not renamed to `libaudiowrt-*` merely because it contains a plugin `.so`; the prefix is reserved for packages whose primary runtime artifact is a reusable shared library.
 
+## Runtime device identity
+
+`audiowrt-identity` runs at boot (S11) and atomically creates
+`/tmp/audiowrt/uuid`. It uses a fixed AudioWRT UUIDv8 prefix and a permanent
+onboard MAC, preferring Ethernet and falling back to an onboard Wi-Fi PHY.
+Virtual/random interface addresses and USB adapters are excluded. The UUID
+is independent of hostname and boot time; it is never persisted. Devices
+with identical permanent MACs will have identical UUIDs.
+
+Consumers read this file instead of generating or saving individual UUIDs.
+The renderer depends on this package and fails to initialize if the file is
+missing or invalid. Legacy renderer UCI UUID values are ignored, without
+rewriting existing configuration. Installing on an already running device
+requires starting `audiowrt-identity` before starting the renderer.
+
 ## Playback registry
 
 AudioWRT keeps playback capabilities separate from module preferences:
 
-- `/etc/config/audiowrt-codecs` is the shared codec catalog. Player packages create missing codec sections and merge MIME types and file extensions when they are installed.
-- `/etc/config/audiowrt-players` is the shared player catalog. Player packages register their executable and the codecs they implement.
+- `/etc/config/audiowrt-runtime-codecs` is the shared codec catalog. Player packages create missing codec sections and merge MIME types and file extensions when they are installed.
+- `/etc/config/audiowrt-runtime-players` is the shared player catalog. Player packages register their executable and the codecs they implement.
 - Consumer modules such as the DLNA renderer read both catalogs but keep their preferred/default player choices in their own UCI package, for example `/etc/config/audiowrt-dlna`.
 - Installing or removing a player never chooses a default for DLNA or another consumer. If no module-specific preference is configured, the consumer falls back to any available compatible player.
-- The registry is changed only by package installation/removal or explicit administration. Playback itself never writes these UCI catalogs.
+- Legacy catalog files are ignored without flash migration. Both new catalog paths are immutable symlinks to `/tmp/audiowrt/registry`. Installed manifests under `/usr/share/audiowrt/players` are the single source of capabilities. The S12 initializer and package hooks rebuild only the RAM view. Playback never rewrites it.
 
-`/usr/libexec/audiowrt-playback-registry` implements idempotent registration. The old `audiowrt-player-registry` command remains as a compatibility alias.
+`/usr/libexec/audiowrt-playback-registry` rebuilds the derived RAM catalogs. The old `audiowrt-player-registry` command remains as a compatibility alias.
 
 ## Responsibility boundary
 
@@ -112,7 +128,7 @@ Audio capabilities include USB DAC output management, UPnP/DLNA rendering, MPD p
 
 The reusable `audiowrt-wifi-client` capability can scan and configure Wi-Fi station mode and a temporary setup AP, but it is inert after installation until an explicit command or LuCI action enables it. The AudioWRT distribution owns the policy that activates this capability during first-boot provisioning.
 
-Distribution behavior such as first-boot provisioning, client-only appliance defaults and guided USB extroot management is packaged here. Profile selection and firmware policy remain in the `audiowrt` repository.
+Distribution behavior such as first-boot provisioning, client-only appliance defaults is packaged here. Profile selection and firmware policy remain in the `audiowrt` repository.
 
 ## Packages
 
@@ -196,3 +212,49 @@ GitHub Actions are manual-only (`workflow_dispatch`). Pushes and pull requests d
 ## License
 
 AudioWRT-owned package code is GPL-2.0-only unless stated otherwise. LuCI components use Apache-2.0. Third-party sources retain their upstream licenses.
+
+## Runtime persistence policy
+
+Boot, network changes, discovery, playback and hotplug do not save operational
+state. Only explicit configuration actions persist user settings. There are no
+AudioWRT `uci-defaults` migrations or persistent first-run flags.
+
+Wi-Fi **Connect** stages a test in RAM; **Save** persists the tested station
+profile. On single-radio hardware provisioning restores the setup AP after a
+successful test so the user can reconnect and press Save. Reboot without Save
+returns to the previously saved configuration. Hostname and root password in the
+wizard are also saved only by Save.
+
+Provisioning waits at most 45 seconds for Ethernet or managed Wi-Fi link plus a
+global IP address, including static addresses. An AP or saved-but-disconnected
+Wi-Fi profile does not suppress setup. The controller owns a direct hostapd and
+udhcpd pair, their PIDs/configs/leases/logs under `/tmp/audiowrt/setup`, and the
+`awsetup` interface. It releases the selected PHY from netifd before creating
+that interface. A single procd supervisor performs final handoff and cleanup.
+Hardware association, ACS and recovery still require validation on target radios.
+
+`audiowrt-config` isolates explicit saves using private UCI package names and
+persistent snapshots. It neither includes nor deletes unrelated staged deltas.
+Equivalent settings cause no rewrite; a changed snapshot aborts the save. Saves
+of multiple UCI files are per-file atomic, not a filesystem-wide transaction.
+
+Audio outputs share `/tmp/audiowrt/audio.state` and generate the optional ALSA
+route only when needed. `/etc/asound.conf` is an immutable symlink to that RAM
+route; no empty file is created at boot. Output changes restart only running,
+enabled engines, and repeated selection is a no-op. Bluetooth device/status
+queries do not start services. Pairing is volatile until the explicit Save action.
+The renderer runtime directory is fixed under `/tmp`, and its default friendly
+name follows the hostname. AirPlay uses the hostname token; Spotify derives its
+name at startup unless the user supplied an override.
+
+Storage/extroot uses official OpenWrt packages; the AudioWRT storage CLI and LuCI
+module have been removed. Optional MPD/AirPlay/Spotify integrations configure on
+explicit live installation or `audiowrt-extensions configure <name>`, never on
+first boot. The AudioWRT builder bakes their shared defaults into images selecting those
+integrations, instead of using a first-boot migration.
+
+Quick checks: `bash tests/test-flash-write-policy.sh`,
+`bash tests/test-device-identity.sh`, and
+`UCI_BIN=/path/to/uci python3 tests/test-runtime-behavior.py`.
+The behavioral tests use real UCI with isolated config directories and simulated
+hardware; they do not perform DHCP waits or require access to a router.

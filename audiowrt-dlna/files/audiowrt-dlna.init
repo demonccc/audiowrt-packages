@@ -4,23 +4,11 @@ START=95
 STOP=10
 USE_PROCD=1
 
-ensure_uuid() {
-	local uuid
-	config_get uuid main uuid
-	[ -n "$uuid" ] && [ "$uuid" != "00000000-0000-0000-0000-000000000000" ] && return 0
-
-	uuid="$(cat /proc/sys/kernel/random/uuid 2>/dev/null)"
-	[ -n "$uuid" ] || uuid="00000000-0000-4000-8000-$(printf '%012x' $$)"
-	uci -q set audiowrt-dlna.main.uuid="$uuid"
-	uci -q commit audiowrt-dlna
-}
-
 start_service() {
 	local enabled
 	config_load audiowrt-dlna
 	config_get_bool enabled main enabled 1
 	[ "$enabled" -eq 1 ] || return 0
-	ensure_uuid
 
 	procd_open_instance
 	procd_set_param command /usr/libexec/audiowrt-renderer daemon
@@ -35,11 +23,9 @@ reload_service() {
 	pids="$(pidof audiowrt-renderer 2>/dev/null)"
 	if [ -n "$pids" ]; then
 		kill -HUP $pids
-	else
-		start
 	fi
 }
 
 service_triggers() {
-	procd_add_reload_trigger audiowrt-dlna audiowrt-codecs audiowrt-players
+	procd_add_reload_trigger audiowrt-dlna
 }

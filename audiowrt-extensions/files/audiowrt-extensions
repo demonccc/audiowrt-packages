@@ -78,9 +78,9 @@ install_extension() {
 			echo "ERROR: OpenWrt could not install $package. Check free storage and repository health." >&2
 			exit 3
 		}
+	else
+		run_hook "$id" configure
 	fi
-
-	run_hook "$id" configure
 	echo "AudioWRT extension '$id' is installed."
 }
 

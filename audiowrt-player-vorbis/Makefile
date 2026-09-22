@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-vorbis
-PKG_VERSION:=1.0.2
+PKG_VERSION:=1.0.3
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -40,22 +40,20 @@ endef
 define Package/audiowrt-player-vorbis/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-player-vorbis $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/vorbis.defaults $(1)/etc/uci-defaults/70-audiowrt-player-vorbis
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt/players
+	$(INSTALL_DATA) ./files/vorbis.manifest $(1)/usr/share/audiowrt/players/vorbis.manifest
 endef
 
 define Package/audiowrt-player-vorbis/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry register vorbis native_vorbis 'AudioWRT Ogg Vorbis Player' /usr/bin/audiowrt-player-vorbis 'audio/ogg audio/vorbis audio/vorbis+ogg application/ogg' 'ogg oga' >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry rebuild
 endef
 
 define Package/audiowrt-player-vorbis/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry unregister native_vorbis >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry exclude vorbis
 endef
 
 $(eval $(call BuildPackage,audiowrt-player-vorbis))

@@ -20,7 +20,8 @@ set_error() {
 
 request_dir="${1:-}"
 [ -n "$request_dir" ] && [ -d "$request_dir" ] || exit 2
-trap 'rm -rf "$request_dir"' EXIT INT TERM
+trap 'rmdir /tmp/audiowrt/provision.lock 2>/dev/null || true' EXIT
+trap 'exit 1' INT TERM
 radio="$(cat "$request_dir/radio" 2>/dev/null || true)"
 ssid="$(cat "$request_dir/ssid" 2>/dev/null || true)"
 bssid="$(cat "$request_dir/bssid" 2>/dev/null || true)"
@@ -29,11 +30,10 @@ key="$(cat "$request_dir/wifi_key" 2>/dev/null || true)"
 
 [ -n "$radio" ] || exit 2
 [ -n "$ssid" ] || exit 3
-setup_ip="$AUDIOWRT_SETUP_IP"
-[ "$(uci -q get network.audiowrt_setup.ipaddr 2>/dev/null || true)" = "$setup_ip" ] || exit 4
+audiowrt_setup_active || exit 4
 timeout="$AUDIOWRT_SETUP_TIMEOUT"
-setup_radio="$(uci -q get wireless.audiowrt_setup.device || echo "$radio")"
-setup_ssid="$(uci -q get wireless.audiowrt_setup.ssid || uci -q get system.@system[0].hostname || printf '%s\n' "$AUDIOWRT_SETUP_SSID")"
+setup_radio="$(cat "$AUDIOWRT_SETUP_DIR/radio")"
+setup_ssid="$(cat "$AUDIOWRT_SETUP_DIR/ssid")"
 active_setup_radio="$setup_radio"
 
 clear_error
@@ -45,8 +45,11 @@ rm -f "$DONE_FILE"
 if [ "$radio" = "$setup_radio" ]; then
 	alternate_radio="$(/usr/sbin/audiowrt-wifi-client radios 2>/dev/null | cut -d '|' -f 1 | grep -Fvx "$radio" | head -n 1 || true)"
 	if [ -n "$alternate_radio" ]; then
-		active_setup_radio="$alternate_radio"
-		/usr/sbin/audiowrt-wifi-client setup-start "$alternate_radio" "$setup_ssid" "$setup_ip" >/dev/null 2>&1 || true
+		if /usr/sbin/audiowrt-wifi-client setup-start "$alternate_radio" "$setup_ssid"; then
+			active_setup_radio="$alternate_radio"
+		else
+			active_setup_radio=''
+		fi
 		logger -t audiowrt "Moved setup AP from $setup_radio to $alternate_radio before STA handoff"
 	else
 		/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
@@ -55,9 +58,9 @@ if [ "$radio" = "$setup_radio" ]; then
 	fi
 fi
 
-if ! AUDIOWRT_WIFI_PERSIST=0 /usr/sbin/audiowrt-wifi-client connect "$radio" "$ssid" "$encryption" "$key" "$bssid"; then
+if ! /usr/sbin/audiowrt-wifi-client connect "$radio" "$ssid" "$encryption" "$key" "$bssid"; then
 	/usr/sbin/audiowrt-wifi-client rollback-client >/dev/null 2>&1 || true
-	[ -n "$active_setup_radio" ] || /usr/sbin/audiowrt-wifi-client setup-start "$setup_radio" "$setup_ssid" "$setup_ip" >/dev/null 2>&1 || true
+	[ -n "$active_setup_radio" ] || /usr/sbin/audiowrt-wifi-client setup-start "$setup_radio" "$setup_ssid" >/dev/null 2>&1 || true
 	set_error 'Could not apply the selected Wi-Fi configuration.'
 	exit 5
 fi
@@ -65,8 +68,7 @@ fi
 elapsed=0
 connected=0
 while [ "$elapsed" -lt "$timeout" ]; do
-	status="$(ubus call network.interface.audiowrt_wifi status 2>/dev/null || true)"
-	if printf '%s\n' "$status" | grep -q '"up":[[:space:]]*true'; then
+	if audiowrt_client_up; then
 		connected=1
 		break
 	fi
@@ -75,29 +77,21 @@ while [ "$elapsed" -lt "$timeout" ]; do
 done
 
 if [ "$connected" -eq 1 ]; then
-	# Persist only the verified client. commit-client temporarily removes the
-	# staged setup sections from the package-level commit, then re-stages them
-	# without reloading so the setup AP remains alive for the Done page.
-	if ! /usr/sbin/audiowrt-wifi-client commit-client; then
-		set_error 'Wi-Fi connected, but the configuration could not be saved.'
-		exit 6
-	fi
+	: > /tmp/audiowrt/wifi.verified
 	clear_error
-	: > "$DONE_FILE"
-	/usr/sbin/audiowrt-wifi-client mdns-sync >/dev/null 2>&1 || true
-	logger -t audiowrt "Wi-Fi provisioning completed for SSID $ssid"
-
-	# audiowrt-status.cgi normally removes a surviving setup AP shortly after
-	# it reports success to the browser. This is only a safety fallback if the
-	# browser disappears before requesting the final status.
-	if [ -n "$active_setup_radio" ]; then
-		sleep 30
-		/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
+	# With one PHY, restore the setup AP so the user can explicitly Save.
+	# The tested candidate remains private in RAM; no connection auto-saves.
+	if [ -z "$active_setup_radio" ]; then
+		/usr/sbin/audiowrt-wifi-client rollback-client
+		/usr/sbin/audiowrt-wifi-client setup-start "$setup_radio" "$setup_ssid"
+	elif ! audiowrt_setup_active; then
+		/usr/sbin/audiowrt-wifi-client setup-start "$active_setup_radio" "$setup_ssid"
 	fi
+	logger -t audiowrt 'Wi-Fi test succeeded; waiting for explicit Save'
 	exit 0
 fi
 
 /usr/sbin/audiowrt-wifi-client rollback-client >/dev/null 2>&1 || true
-/usr/sbin/audiowrt-wifi-client setup-start "$setup_radio" "$setup_ssid" "$setup_ip" >/dev/null 2>&1 || true
+/usr/sbin/audiowrt-wifi-client setup-start "$setup_radio" "$setup_ssid" >/dev/null 2>&1 || true
 set_error 'Could not connect to the selected Wi-Fi network. The setup network has been restored; check the network and password.'
 exit 7

@@ -1,0 +1,12 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-only
+START=92
+start() {
+	mkdir -p /tmp/mpd/playlists
+	if [ -d /mnt/music ] && [ ! -e /tmp/mpd/music ]; then
+		ln -s /mnt/music /tmp/mpd/music
+	else
+		mkdir -p /tmp/mpd/music
+	fi
+	chown mpd:mpd /tmp/mpd /tmp/mpd/playlists
+}

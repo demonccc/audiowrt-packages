@@ -10,3 +10,65 @@ AUDIOWRT_SETUP_TIMEOUT=45
 audiowrt_first_radio() {
 	/usr/sbin/audiowrt-wifi-client radios 2>/dev/null | sed -n '1s/|.*//p'
 }
+
+AUDIOWRT_SETUP_DIR=/tmp/audiowrt/setup
+AUDIOWRT_SETUP_IF=awsetup
+
+audiowrt_setup_active() {
+	[ -s "$AUDIOWRT_SETUP_DIR/hostapd.pid" ] || return 1
+	kill -0 "$(cat "$AUDIOWRT_SETUP_DIR/hostapd.pid")" 2>/dev/null &&
+		ip link show "$AUDIOWRT_SETUP_IF" >/dev/null 2>&1
+}
+
+audiowrt_link() {
+	local dev="$1" child
+	[ "$dev" != "$AUDIOWRT_SETUP_IF" ] && [ "$dev" != lo ] || return 1
+	if [ -d "/sys/class/net/$dev/phy80211" ]; then
+		iw dev "$dev" info | grep -q 'type managed' || return 1
+		iw dev "$dev" link | grep -q '^Connected to '
+	elif [ -d "/sys/class/net/$dev/brif" ]; then
+		for child in /sys/class/net/"$dev"/brif/*; do
+			[ -e "$child" ] || continue
+			audiowrt_link "${child##*/}" && return 0
+		done
+		return 1
+	else
+		for child in /sys/class/net/"$dev"/lower_*; do
+			[ -e "$child" ] || continue
+			audiowrt_link "${child##*lower_}" && return 0
+			return 1
+		done
+		[ -e "/sys/class/net/$dev/device" ] || return 1
+		# Ethernet/VLAN carrier. Exclude virtual tunnel and loopback links.
+		[ "$(cat "/sys/class/net/$dev/type" 2>/dev/null)" = 1 ] || return 1
+		[ "$(cat "/sys/class/net/$dev/carrier" 2>/dev/null)" = 1 ]
+	fi
+}
+
+audiowrt_interface_up() {
+	local state dev
+	state=$(ubus call "network.interface.$1" status 2>/dev/null) || return 1
+	[ "$(printf '%s' "$state" | jsonfilter -e '@.up')" = true ] || return 1
+	dev=$(printf '%s' "$state" | jsonfilter -e '@.l3_device')
+	[ -n "$dev" ] && audiowrt_link "$dev" || return 1
+	ip -o addr show dev "$dev" scope global | grep -qE ' inet6? '
+}
+
+audiowrt_client_up() {
+	local state dev actual
+	audiowrt_interface_up audiowrt_wifi || return 1
+	[ -d /tmp/audiowrt/client ] || return 0
+	state=$(ubus call network.interface.audiowrt_wifi status)
+	dev=$(printf '%s' "$state" | jsonfilter -e '@.l3_device')
+	actual=$(iw dev "$dev" link | sed -n 's/^[[:space:]]*SSID: //p')
+	[ "$actual" = "$(cat /tmp/audiowrt/client/1)" ]
+}
+
+audiowrt_connected() {
+	local iface
+	for iface in $(ubus list 'network.interface.*' | sed 's/^network.interface.//'); do
+		[ "$iface" != audiowrt_setup ] || continue
+		audiowrt_interface_up "$iface" && return 0
+	done
+	return 1
+}

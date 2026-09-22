@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-audio
-PKG_VERSION:=1.0.0
+PKG_VERSION:=1.0.1
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
@@ -39,24 +39,11 @@ define Package/audiowrt-audio/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/audiowrt-audio $(1)/usr/sbin/audiowrt-audio
 
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/audiowrt-audio.init $(1)/etc/init.d/audiowrt-audio
+	$(INSTALL_DIR) $(1)/usr/libexec/audiowrt
+	$(INSTALL_DATA) ./files/audio-runtime $(1)/usr/libexec/audiowrt/audio-runtime
 
 	$(INSTALL_DIR) $(1)/etc
 	ln -sf /tmp/audiowrt/asound.conf $(1)/etc/asound.conf
-endef
-
-define Package/audiowrt-audio/postinst
-#!/bin/sh
-[ -n "$${IPKG_INSTROOT}" ] && exit 0
-mkdir -p /tmp/audiowrt
-[ -e /tmp/audiowrt/asound.conf ] || : > /tmp/audiowrt/asound.conf
-if [ ! -L /etc/asound.conf ] || [ "$(readlink /etc/asound.conf 2>/dev/null || true)" != "/tmp/audiowrt/asound.conf" ]; then
-	rm -f /etc/asound.conf
-	ln -s /tmp/audiowrt/asound.conf /etc/asound.conf
-fi
-/etc/init.d/audiowrt-audio enable >/dev/null 2>&1 || true
-exit 0
 endef
 
 $(eval $(call BuildPackage,audiowrt-audio))

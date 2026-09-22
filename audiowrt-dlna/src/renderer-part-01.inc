@@ -70,8 +70,6 @@ static void apply_renderer_option(const char *key, const char *value,
 
     if (!strcmp(key, "friendly_name"))
         copystr(g.friendly_name, sizeof(g.friendly_name), value);
-    else if (!strcmp(key, "uuid"))
-        copystr(g.uuid, sizeof(g.uuid), value);
     else if (!strcmp(key, "alsa_device"))
         copystr(g.alsa_device, sizeof(g.alsa_device), value);
     else if (!strcmp(key, "port"))
@@ -246,8 +244,8 @@ static int load_registry_catalogs(void)
     memset(g.codecs, 0, sizeof(g.codecs));
     memset(g.players, 0, sizeof(g.players));
 
-    codec_rc = load_codec_registry("/etc/config/audiowrt-codecs");
-    player_rc = load_player_registry("/etc/config/audiowrt-players");
+    codec_rc = load_codec_registry("/tmp/audiowrt/registry/audiowrt-codecs");
+    player_rc = load_player_registry("/tmp/audiowrt/registry/audiowrt-players");
     return codec_rc < 0 || player_rc < 0 ? -1 : 0;
 }
 
@@ -258,12 +256,41 @@ static int reload_registry(void)
     return load_renderer_options("/etc/config/audiowrt-dlna", false);
 }
 
+static int load_device_uuid(void)
+{
+    FILE *f = fopen("/tmp/audiowrt/uuid", "r");
+    char uuid[80];
+    size_t i;
+    if (!f) {
+        fprintf(stderr, "audiowrt-renderer: device UUID missing; start audiowrt-identity first\n");
+        return -1;
+    }
+    if (!fgets(uuid, sizeof(uuid), f)) {
+        fclose(f);
+        return -1;
+    }
+    fclose(f);
+    uuid[strcspn(uuid, "\r\n")] = 0;
+    if (strlen(uuid) != 36)
+        return -1;
+    for (i = 0; i < 36; i++) {
+        if (i == 8 || i == 13 || i == 18 || i == 23) {
+            if (uuid[i] != '-') return -1;
+        } else if (!isxdigit((unsigned char)uuid[i])) {
+            return -1;
+        }
+    }
+    if (uuid[14] != '8' || uuid[19] != '8')
+        return -1;
+    copystr(g.uuid, sizeof(g.uuid), uuid);
+    return 0;
+}
+
 static int load_config(void)
 {
     const char *renderer_path = "/etc/config/audiowrt-dlna";
 
     memset(&g, 0, sizeof(g));
-    copystr(g.friendly_name, sizeof(g.friendly_name), "AudioWRT");
     copystr(g.runtime_dir, sizeof(g.runtime_dir), DEFAULT_RUNTIME_DIR);
     copystr(g.alsa_device, sizeof(g.alsa_device), "default");
     g.port = DEFAULT_PORT;
@@ -275,13 +302,18 @@ static int load_config(void)
     if (load_renderer_options(renderer_path, true) < 0)
         return -1;
 
+    if (!g.friendly_name[0]) {
+        if (gethostname(g.friendly_name, sizeof(g.friendly_name) - 1) < 0)
+            copystr(g.friendly_name, sizeof(g.friendly_name), "AudioWRT");
+        g.friendly_name[sizeof(g.friendly_name) - 1] = '\0';
+    }
     if (g.port < 1024 || g.port > 65535)
         g.port = DEFAULT_PORT;
     if (g.volume < 0) g.volume = 0;
     if (g.volume > 100) g.volume = 100;
 
-    if (!g.uuid[0])
-        copystr(g.uuid, sizeof(g.uuid), "00000000-0000-0000-0000-000000000000");
+    if (load_device_uuid() < 0)
+        return -1;
     mkdir_runtime();
     return 0;
 }

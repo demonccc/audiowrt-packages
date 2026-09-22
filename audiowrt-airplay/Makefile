@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-airplay
-PKG_VERSION:=1.0.0
+PKG_VERSION:=1.0.1
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
@@ -29,8 +29,12 @@ define Build/Compile
 endef
 
 define Package/audiowrt-airplay/install
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/audiowrt-airplay.defaults $(1)/etc/uci-defaults/70-audiowrt-airplay
+endef
+
+define Package/audiowrt-airplay/postinst
+#!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
+/usr/libexec/audiowrt/extensions/airplay configure
 endef
 
 $(eval $(call BuildPackage,audiowrt-airplay))

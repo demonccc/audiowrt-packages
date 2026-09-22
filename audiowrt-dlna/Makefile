@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-renderer
-PKG_VERSION:=1.1.0
+PKG_VERSION:=1.1.1
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -12,7 +12,7 @@ define Package/audiowrt-renderer
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT native network renderer and discovery service
-  DEPENDS:=+libaudiowrt-player
+  DEPENDS:=+audiowrt-config +libaudiowrt-player +audiowrt-identity
   PROVIDES:=audiowrt-dlna
   CONFLICTS:=umdns audiowrt-umdns
 endef
@@ -51,6 +51,7 @@ define Package/audiowrt-renderer/install
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./files/audiowrt-dlna.config $(1)/etc/config/audiowrt-dlna
 	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/save-renderer $(1)/usr/libexec/audiowrt-save-renderer
 	$(INSTALL_BIN) ./files/audiowrt-dlna.init $(1)/etc/init.d/audiowrt-renderer
 endef
 

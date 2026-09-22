@@ -8,9 +8,9 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 for package in \
     audiowrt-core \
     audiowrt-provisioning \
-    audiowrt-storage \
     luci-app-audiowrt-core \
-    luci-app-audiowrt-storage; do
+    audiowrt-config \
+    audiowrt-identity; do
     makefile="$repo_root/$package/Makefile"
     for phase in Prepare Configure Compile; do
         grep -q "^define Build/$phase$" "$makefile" || {

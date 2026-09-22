@@ -1,0 +1,61 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-only
+
+START=11
+IDENTITY_NET_DIR=/sys/class/net
+IDENTITY_PHY_DIR=/sys/class/ieee80211
+IDENTITY_DIR=/tmp/audiowrt
+
+identity_mac() {
+	local dev path mac
+	# Prefer onboard Ethernet; never use an AP virtual address or USB dongle.
+	for dev in "$IDENTITY_NET_DIR/eth0" "$IDENTITY_NET_DIR/lan" "$IDENTITY_NET_DIR/wan" "$IDENTITY_NET_DIR"/*; do
+		[ -r "$dev/address" ] || continue
+		[ "${dev##*/}" != lo ] || continue
+		[ ! -d "$dev/wireless" ] || continue
+		[ "$(cat "$dev/addr_assign_type" 2>/dev/null)" = 0 ] || continue
+		path="$(readlink -f "$dev")"
+		case "$path" in */virtual/*|*/usb[0-9]*/*) continue ;; esac
+		mac="$(tr 'A-F' 'a-f' < "$dev/address")"
+		valid_identity_mac "$mac" || continue
+		printf '%s\n' "$mac"
+		return 0
+	done
+	# Wi-Fi-only boards expose the hardware address on the PHY itself.
+	for dev in "$IDENTITY_PHY_DIR"/*; do
+		[ -r "$dev/macaddress" ] || continue
+		path="$(readlink -f "$dev")"
+		case "$path" in */usb[0-9]*/*) continue ;; esac
+		mac="$(tr 'A-F' 'a-f' < "$dev/macaddress")"
+		valid_identity_mac "$mac" || continue
+		printf '%s\n' "$mac"
+		return 0
+	done
+	return 1
+}
+
+valid_identity_mac() {
+	# Reject malformed, multicast and zero addresses. Locally administered
+	# permanent addresses remain valid (for example virtual machines).
+	printf '%s\n' "$1" | grep -Eq '^[0-9a-f][02468ace](:[0-9a-f]{2}){5}$' || return 1
+	[ "$1" != 00:00:00:00:00:00 ]
+}
+
+start() {
+	local mac uuid current tmp
+	mac="$(identity_mac)" || {
+		logger -t audiowrt-identity 'No permanent onboard MAC available; UUID not generated'
+		return 1
+	}
+	# UUIDv8 custom layout: fixed AudioWRT prefix + the 48-bit hardware MAC.
+	# Same hardware => same UUID, independent of hostname and boot time.
+	uuid="a0d10a57-0000-8000-8000-$(printf '%s' "$mac" | tr -d ':')"
+	current="$(cat "$IDENTITY_DIR/uuid" 2>/dev/null || true)"
+	[ "$current" != "$uuid" ] || return 0
+	mkdir -p "$IDENTITY_DIR" || return 1
+	tmp="$(mktemp "$IDENTITY_DIR/uuid.XXXXXX")" || return 1
+	if ! { printf '%s\n' "$uuid" > "$tmp" && chmod 644 "$tmp" && mv -f "$tmp" "$IDENTITY_DIR/uuid"; }; then
+		rm -f "$tmp"
+		return 1
+	fi
+}

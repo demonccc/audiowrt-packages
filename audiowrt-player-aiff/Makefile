@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-aiff
-PKG_VERSION:=1.0.2
+PKG_VERSION:=1.0.3
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -39,22 +39,20 @@ endef
 define Package/audiowrt-player-aiff/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-player-aiff $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/aiff.defaults $(1)/etc/uci-defaults/70-audiowrt-player-aiff
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt/players
+	$(INSTALL_DATA) ./files/aiff.manifest $(1)/usr/share/audiowrt/players/aiff.manifest
 endef
 
 define Package/audiowrt-player-aiff/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry register aiff native_aiff 'AudioWRT AIFF Player' /usr/bin/audiowrt-player-aiff 'audio/aiff audio/x-aiff' 'aif aiff' >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry rebuild
 endef
 
 define Package/audiowrt-player-aiff/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry unregister native_aiff >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry exclude aiff
 endef
 
 $(eval $(call BuildPackage,audiowrt-player-aiff))

@@ -3,18 +3,12 @@
 
 set -eu
 
-STATE_FILE=/tmp/audiowrt/audio.state
+. /usr/libexec/audiowrt/audio-runtime
 
 name() {
 	hostname="$(uci -q get system.@system[0].hostname || true)"
 	[ -n "$hostname" ] || hostname='AudioWRT'
 	printf '%s\n' "$hostname"
-}
-
-state_value() {
-	key="$1"
-	[ -r "$STATE_FILE" ] || return 0
-	sed -n "s/^$key=//p" "$STATE_FILE" | head -n 1
 }
 
 status() {
@@ -31,19 +25,12 @@ status() {
 
 set_usb() {
 	if [ -x /usr/libexec/audiowrt/select-audio-output ]; then
-		/usr/libexec/audiowrt/select-audio-output
+		/usr/libexec/audiowrt/select-audio-output force
 	else
 		mkdir -p /tmp/audiowrt
-		cat > "$STATE_FILE" <<EOF
-output_type=usb
-ready=0
-device=
-card=
-pcm=
-bluetooth_device=
-bluetooth_name=
-last_error=AudioWRT USB audio support is not installed.
-EOF
+		audio_state usb 0 '' '' '' '' 'AudioWRT USB audio support is not installed.'
+		rm -f "$ASOUND_FILE"
+		restart_engines
 		echo 'ERROR: audiowrt-usb-audio is not installed.' >&2
 		exit 3
 	fi

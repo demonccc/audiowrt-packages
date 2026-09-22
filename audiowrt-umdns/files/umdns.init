@@ -6,6 +6,9 @@ PROG=/usr/sbin/umdns
 
 load_ifaces() {
 	local network="$(uci -q get umdns.@umdns[-1].network)"
+	local setup_device
+	setup_device="$(cat /tmp/audiowrt/setup/interface 2>/dev/null)"
+	[ -z "$setup_device" ] || printf '%s ' "$setup_device"
 	for n in $network; do
 		local device
 		json_load "$(ifstatus $n)"

@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-aac
-PKG_VERSION:=1.0.2
+PKG_VERSION:=1.0.3
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -39,22 +39,20 @@ endef
 define Package/audiowrt-player-aac/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-player-aac $(1)/usr/bin/
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/aac.defaults $(1)/etc/uci-defaults/70-audiowrt-player-aac
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt/players
+	$(INSTALL_DATA) ./files/aac.manifest $(1)/usr/share/audiowrt/players/aac.manifest
 endef
 
 define Package/audiowrt-player-aac/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry register aac native_aac 'AudioWRT AAC Player' /usr/bin/audiowrt-player-aac 'audio/aac audio/aacp' 'aac' >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry rebuild
 endef
 
 define Package/audiowrt-player-aac/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt-playback-registry unregister native_aac >/dev/null 2>&1 || true
-exit 0
+/usr/libexec/audiowrt-playback-registry exclude aac
 endef
 
 $(eval $(call BuildPackage,audiowrt-player-aac))

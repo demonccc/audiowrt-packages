@@ -1,5 +1,6 @@
 'use strict';
 'require view';
+'require poll';
 'require fs';
 'require ui';
 'require dom';
@@ -164,6 +165,8 @@ return view.extend({
 	render: function(data) {
 		var status = parseStatus(data.stdout), self = this;
 		this.status = status;
+		this.saveButton = E('button', { 'class': 'btn cbi-button-positive', 'disabled': status.network_up !== '1' || status.pending !== '1', 'click': function() { fs.exec('/usr/sbin/audiowrt-wifi-client', [ 'commit-client' ]).then(function(r) { if (r.code) throw new Error(r.stderr); ui.addNotification(null, E('p', {}, _('Wi-Fi settings saved.'))); }).catch(function(e) { ui.addNotification(null, E('p', {}, e.message), 'error'); }); } }, _('Save'));
+		poll.add(function() { return fs.exec('/usr/sbin/audiowrt-wifi-client', [ 'status' ]).then(function(r) { var current = parseStatus(r.stdout); self.saveButton.disabled = current.network_up !== '1' || current.pending !== '1'; }); }, 3);
 		this.result = E('div', { 'class': 'cbi-section' }, [ E('em', {}, _('Press Scan to discover nearby Wi-Fi networks.')) ]);
 		return E('div', { 'class': 'cbi-map' }, [
 			E('h2', {}, _('Wi-Fi Client')),
@@ -173,7 +176,9 @@ return view.extend({
 				E('p', {}, [ E('strong', {}, _('Status: ')), status.network_up === '1' ? _('Connected') : _('Disconnected') ]),
 				E('p', {}, [ E('strong', {}, _('IP configuration: ')), ipStatusLabel(status) ]),
 				E('button', { 'class': 'btn cbi-button-action', 'click': function() { self.scan(); } }, _('Scan')), ' ',
-				E('button', { 'class': 'btn', 'click': function() { self.manualDialog(); } }, _('Hidden / manual network'))
+				E('button', { 'class': 'btn', 'click': function() { self.manualDialog(); } }, _('Hidden / manual network')), ' ',
+				this.saveButton,
+				E('p', {}, _('Connect tests the network in memory. Press Save after a successful connection to keep it across reboots.'))
 			]), this.result
 		]);
 	},
