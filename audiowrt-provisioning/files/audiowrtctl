@@ -3,9 +3,10 @@
 
 set -eu
 
-setup_ip() { uci -q get audiowrt.main.setup_ip || echo '192.168.77.1'; }
-setup_ssid() { /usr/libexec/audiowrt/setup-ssid 2>/dev/null || echo 'AudioWRT-Setup'; }
-first_radio() { /usr/sbin/audiowrt-wifi-client radios 2>/dev/null | sed -n '1s/|.*//p'; }
+. /usr/libexec/audiowrt/wifi-runtime
+
+setup_ip() { printf '%s\n' "$AUDIOWRT_SETUP_IP"; }
+setup_ssid() { /usr/libexec/audiowrt/setup-ssid 2>/dev/null || printf '%s\n' "$AUDIOWRT_SETUP_SSID"; }
 error_file=/tmp/audiowrt/provisioning.error
 done_file=/tmp/audiowrt/provisioning.done
 
@@ -19,98 +20,12 @@ has_persistent_wifi_client() {
 	return 0
 }
 
-carrier_up() {
-	device="$1"
-	[ -r "/sys/class/net/$device/carrier" ] || return 1
-	[ "$(cat "/sys/class/net/$device/carrier" 2>/dev/null || echo 0)" = '1' ]
-}
-
-lan_devices() {
-	lan_device="$(uci -q get network.lan.device 2>/dev/null || uci -q get network.lan.ifname 2>/dev/null || true)"
-	case "$lan_device" in
-		br-*)
-			if [ -d "/sys/class/net/$lan_device/brif" ]; then
-				for member in /sys/class/net/"$lan_device"/brif/*; do
-					[ -e "$member" ] || continue
-					basename "$member"
-				done
-			fi
-			;;
-		*)
-			for member in $lan_device; do
-				[ -n "$member" ] && printf '%s\n' "$member"
-			done
-			;;
-	esac
-}
-
-legacy_lan_vlan() {
-	for device in $(lan_devices); do
-		case "$device" in
-			*.*)
-				vlan="${device##*.}"
-				case "$vlan" in ''|*[!0-9]*) continue ;; esac
-				printf '%s\n' "$vlan"
-				return 0
-				;;
-		esac
-	done
-	return 1
-}
-
-swconfig_lan_link() {
-	command -v swconfig >/dev/null 2>&1 || return 1
-	vlan="$(legacy_lan_vlan 2>/dev/null || true)"
-	[ -n "$vlan" ] || return 1
-
-	for switch in $(swconfig list 2>/dev/null | sed -n 's/^Found: \([^ ]*\).*/\1/p'); do
-		state="$(swconfig dev "$switch" show 2>/dev/null || true)"
-		[ -n "$state" ] || continue
-		ports="$(printf '%s\n' "$state" | awk -v wanted="$vlan" '
-			$1 == "VLAN" && $2 == (wanted ":") { in_vlan=1; next }
-			in_vlan && $1 == "ports:" { for (i=2; i<=NF; i++) print $i; exit }
-			in_vlan && $1 == "VLAN" { exit }
-		')"
-		for token in $ports; do
-			case "$token" in
-				*t) continue ;;
-				*u) port="${token%u}" ;;
-				*) port="$token" ;;
-			esac
-			case "$port" in ''|*[!0-9]*) continue ;; esac
-			printf '%s\n' "$state" | grep -Eq "link: port:${port} link:up([[:space:]]|$)" && return 0
-		done
-	done
-	return 1
-}
-
-has_ethernet_link() {
-	physical_seen=0
-	for device in $(lan_devices); do
-		case "$device" in
-			lo|br-*|wlan*|phy*) continue ;;
-		esac
-		[ -d "/sys/class/net/$device/wireless" ] && continue
-		case "$device" in
-			*.*)
-				# Legacy swconfig LANs expose a VLAN netdev (for example eth0.1).
-				# Its carrier can reflect the CPU link, not a plugged RJ45 port.
-				if ! command -v swconfig >/dev/null 2>&1; then
-					base="${device%%.*}"
-					carrier_up "$base" && return 0
-				fi
-				continue
-				;;
-		esac
-		physical_seen=1
-		carrier_up "$device" && return 0
-	done
-
-	# If DSA/direct physical LAN devices were visible, their carrier values are
-	# authoritative. Otherwise fall back to the switch port status used by
-	# older targets such as ath79/swconfig devices.
-	[ "$physical_seen" -eq 0 ] || return 1
-	swconfig_lan_link
+has_lan_dhcp() {
+	status="$(ubus call network.interface.lan status 2>/dev/null || true)"
+	printf '%s\n' "$status" | grep -q '"proto":[[:space:]]*"dhcp"' || return 1
+	printf '%s\n' "$status" |
+		sed -n '/"ipv4-address"/,/]/ s/.*"address":[[:space:]]*"\([^"]*\)".*/\1/p' |
+		grep -q '[0-9]'
 }
 
 setup_active() {
@@ -126,7 +41,7 @@ wifi_up() {
 
 start_setup() {
 	reason="$1"
-	radio="$(first_radio)"
+	radio="$(audiowrt_first_radio)"
 	[ -n "$radio" ] || { echo 'ERROR: no Wi-Fi radio is available.' >&2; return 3; }
 	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$(setup_ssid)" "$(setup_ip)"
 	clear_error
@@ -148,13 +63,13 @@ provisioning_auto() {
 		return 0
 	fi
 
-	if has_ethernet_link; then
+	if has_lan_dhcp; then
 		/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
-		logger -t audiowrt 'Setup AP not required: Ethernet carrier detected'
+		logger -t audiowrt 'Setup AP not required: LAN DHCP lease detected'
 		return 0
 	fi
 
-	start_setup 'no saved Wi-Fi client and no Ethernet carrier'
+	start_setup 'no saved Wi-Fi client and no LAN DHCP lease'
 }
 
 provisioning_stop() {
@@ -169,7 +84,7 @@ status() {
 	printf 'device_name=%s\n' "$(uci -q get system.@system[0].hostname || echo AudioWRT)"
 	printf 'provisioning=%s\n' "$provisioning"
 	printf 'wifi_ssid=%s\n' "$(uci -q get wireless.audiowrt_client.ssid || true)"
-	printf 'ethernet_link=%s\n' "$(has_ethernet_link && echo 1 || echo 0)"
+	printf 'lan_dhcp=%s\n' "$(has_lan_dhcp && echo 1 || echo 0)"
 	printf 'last_error=%s\n' "$(cat "$error_file" 2>/dev/null || true)"
 }
 

@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-wifi-client
-PKG_VERSION:=1.1.0
+PKG_VERSION:=1.0.2
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
@@ -31,8 +31,9 @@ define Build/Compile
 endef
 
 define Package/audiowrt-wifi-client/install
-	$(INSTALL_DIR) $(1)/usr/sbin
+	$(INSTALL_DIR) $(1)/usr/sbin $(1)/usr/libexec/audiowrt
 	$(INSTALL_BIN) ./files/audiowrt-wifi-client $(1)/usr/sbin/audiowrt-wifi-client
+	$(INSTALL_DATA) ./files/audiowrt-wifi-runtime $(1)/usr/libexec/audiowrt/wifi-runtime
 endef
 
 $(eval $(call BuildPackage,audiowrt-wifi-client))

@@ -1,11 +1,12 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
+. /usr/libexec/audiowrt/wifi-runtime
 
 json_escape() { printf '%s' "$1" | tr '\r\n' '  ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 name="$(uci -q get system.@system[0].hostname || echo AudioWRT)"
 wifi_ssid="$(uci -q get wireless.audiowrt_client.ssid || true)"
 last_error="$(cat /tmp/audiowrt/provisioning.error 2>/dev/null || true)"
-setup_ip="$(uci -q get audiowrt.main.setup_ip || echo 192.168.77.1)"
+setup_ip="$AUDIOWRT_SETUP_IP"
 done_file=/tmp/audiowrt/provisioning.done
 
 audio_status="$(/usr/sbin/audiowrt-audio status 2>/dev/null || true)"

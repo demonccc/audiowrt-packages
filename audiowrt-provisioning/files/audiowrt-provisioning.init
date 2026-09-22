@@ -4,19 +4,8 @@
 START=99
 
 start() {
-	if [ -x /etc/uci-defaults/10-audiowrt-provisioning ]; then
-		logger -t audiowrt "Running provisioning first-install migration"
-		if /etc/uci-defaults/10-audiowrt-provisioning; then
-			rm -f /etc/uci-defaults/10-audiowrt-provisioning
-			ubus call network reload >/dev/null 2>&1 || true
-		else
-			logger -t audiowrt "Provisioning first-install migration failed"
-			return 1
-		fi
-	fi
-
-	# Boot-time decision only: a saved Wi-Fi client or real Ethernet carrier is
-	# enough to manage AudioWRT normally. Otherwise create the setup AP in RAM.
+	# Boot-time decision only. The provisioning check must not migrate, commit,
+	# or delete persistent configuration. Runtime setup state lives in tmpfs.
 	if /usr/sbin/audiowrtctl provisioning auto; then
 		logger -t audiowrt "Provisioning boot check completed"
 	else

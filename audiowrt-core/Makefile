@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-core
-PKG_VERSION:=1.1.0
+PKG_VERSION:=1.0.2
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
@@ -11,16 +11,14 @@ include $(INCLUDE_DIR)/package.mk
 define Package/audiowrt-core
   SECTION:=sound
   CATEGORY:=Sound
-  TITLE:=AudioWRT distribution core
+  TITLE:=AudioWRT distribution package marker
   DEPENDS:=+uci +audiowrt-audio
 endef
 
 define Package/audiowrt-core/description
- AudioWRT distribution identity and appliance state. This package is intended for AudioWRT firmware images, not as an add-on for existing OpenWrt routers.
-endef
-
-define Package/audiowrt-core/conffiles
-/etc/config/audiowrt
+ AudioWRT package marker for distribution dependencies. Runtime provisioning
+ state and constants are owned by the provisioning and Wi-Fi packages and are
+ not stored in a persistent audiowrt UCI section.
 endef
 
 define Build/Prepare
@@ -33,14 +31,6 @@ define Build/Compile
 endef
 
 define Package/audiowrt-core/install
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./files/audiowrt.config $(1)/etc/config/audiowrt
-
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./files/audiowrt.init $(1)/etc/init.d/audiowrt
-
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/audiowrt-core-firstboot $(1)/etc/uci-defaults/05-audiowrt-core
 endef
 
 $(eval $(call BuildPackage,audiowrt-core))

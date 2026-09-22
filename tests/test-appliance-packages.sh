@@ -4,21 +4,29 @@
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-core_config="$repo_root/audiowrt-core/files/audiowrt.config"
 provisioning="$repo_root/audiowrt-provisioning"
 storage="$repo_root/audiowrt-storage/files/audiowrt-storage"
 menu_filter="$repo_root/luci-app-audiowrt-core/root/usr/share/luci/menu.d/zz-audiowrt-network-filter.json"
 
-if grep -Eq 'device_name|wifi_ssid|^config storage' "$core_config"; then
-    echo 'ERROR: AudioWRT core config duplicates hostname, Wi-Fi, or storage state.' >&2
+if [ -e "$repo_root/audiowrt-core/files/audiowrt.config" ] ||
+   [ -e "$repo_root/audiowrt-core/files/audiowrt-core-firstboot" ]; then
+    echo 'ERROR: AudioWRT core still carries persistent provisioning state.' >&2
     exit 1
 fi
-grep -q 'system.@system\[0\].hostname' "$repo_root/audiowrt-core/files/audiowrt-core-firstboot"
+if grep -Eq '/etc/config|uci-defaults|audiowrt\.config|audiowrt-core-firstboot' "$repo_root/audiowrt-core/Makefile"; then
+    echo 'ERROR: AudioWRT core package still installs persistent provisioning state.' >&2
+    exit 1
+fi
 
 grep -q '+audiowrt-wifi-client' "$provisioning/Makefile"
 grep -q 'provisioning auto' "$provisioning/files/audiowrt-provisioning.init"
 grep -q '^has_persistent_wifi_client()' "$provisioning/files/audiowrtctl"
-grep -q '^has_ethernet_link()' "$provisioning/files/audiowrtctl"
+grep -q '^has_lan_dhcp()' "$provisioning/files/audiowrtctl"
+grep -q 'wifi-runtime' "$repo_root/audiowrt-wifi-client/Makefile"
+if grep -Eq 'uci-defaults|uci -q commit|rm -f.*/etc/' "$provisioning/files/audiowrt-provisioning.init"; then
+    echo 'ERROR: provisioning init must not persist or migrate configuration.' >&2
+    exit 1
+fi
 grep -q '/usr/sbin/audiowrt-wifi-client connect' "$provisioning/files/audiowrt-provision"
 grep -q '/bin/busybox passwd root' "$provisioning/files/audiowrt-provision.cgi"
 grep -q 'audiowrt-scan.cgi' "$provisioning/Makefile"

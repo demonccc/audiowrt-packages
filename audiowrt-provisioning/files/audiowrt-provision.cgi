@@ -1,5 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
+. /usr/libexec/audiowrt/wifi-runtime
 
 json_escape() { printf '%s' "$1" | tr '\r\n' '  ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 reply() {
@@ -10,7 +11,7 @@ reply() {
 }
 
 [ "${REQUEST_METHOD:-}" = 'POST' ] || reply '405 Method Not Allowed' 'POST is required.'
-setup_ip="$(uci -q get audiowrt.main.setup_ip || echo 192.168.77.1)"
+setup_ip="$AUDIOWRT_SETUP_IP"
 host="${HTTP_HOST:-}"; host="${host%%:*}"
 if [ "${SERVER_ADDR:-}" != "$setup_ip" ] && [ "$host" != "$setup_ip" ]; then
 	reply '409 Conflict' 'Provisioning is available only on the temporary setup network.'

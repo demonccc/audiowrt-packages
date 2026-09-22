@@ -20,7 +20,9 @@ for package in "${!canonical[@]}"; do
   grep -Fq "AUDIOWRT_CANONICAL_RECIPE:=${canonical[$package]}" "$makefile"
   grep -Fq 'include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk' "$makefile"
 
-  if grep -Eq '^PKG_(VERSION|SOURCE|HASH|MIRROR_HASH|SOURCE_VERSION|SOURCE_DATE)[[:space:]]*[:?+]?=' "$makefile"; then
+  # AudioWRT may own the package's semantic version while still inheriting
+  # the upstream source identity and checksum from the canonical recipe.
+  if grep -Eq '^PKG_(SOURCE|HASH|MIRROR_HASH|SOURCE_VERSION|SOURCE_DATE)[[:space:]]*[:?+]?=' "$makefile"; then
     echo "ERROR: $package pins upstream source metadata instead of inheriting OpenWrt." >&2
     exit 1
   fi

@@ -5,7 +5,7 @@ AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/utils/bluez/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
-PKG_RELEASE:=3
+PKG_RELEASE:=1
 
 include $(INCLUDE_DIR)/package.mk
 

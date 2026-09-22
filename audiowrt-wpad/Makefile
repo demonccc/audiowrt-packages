@@ -5,6 +5,7 @@ AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/hostapd/Makefil
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
+PKG_VERSION:=1.0.0
 PKG_RELEASE:=1
 PKG_BUILD_PARALLEL:=1
 PKG_BUILD_FLAGS:=gc-sections lto
@@ -30,7 +31,8 @@ define Package/audiowrt-wpad/description
  client-only and keeps WPA2-PSK, WPA3-SAE, PMF, nl80211 and OpenWrt UBus/UCode
  integration. The hostapd entry point exists only for the temporary open
  provisioning AP and omits enterprise authentication, RADIUS, VLAN, WPS,
- ACS, VHT/HE/EHT and EAP/TLS server methods.
+ VHT/HE/EHT and EAP/TLS server methods. Automatic channel selection remains
+ enabled because OpenWrt radios may request channel 0.
 endef
 
 TARGET_CPPFLAGS := \
@@ -45,6 +47,16 @@ TARGET_LDFLAGS += \
 	-lubox -lubus -lblobmsg_json -lucode -lm -lnl-tiny -ludebug \
 	-lmbedcrypto -lmbedx509 -lmbedtls
 
+# Keep the build-time driver switches aligned with OpenWrt's wpad variants.
+# They are passed to both halves of the multicall build; the side-specific
+# .config files still control which AP/STA features are linked.
+DRIVER_MAKEOPTS := \
+	CONFIG_ACS=y \
+	CONFIG_DRIVER_NL80211=y \
+	CONFIG_UCODE=y \
+	CONFIG_APUP=y \
+	CONFIG_SAE=y
+
 define Build/Configure
 	$(CP) ./files/hostapd-audiowrt.config $(PKG_BUILD_DIR)/hostapd/.config
 	$(CP) ./files/wpa_supplicant-audiowrt.config $(PKG_BUILD_DIR)/wpa_supplicant/.config
@@ -54,10 +66,9 @@ define Build/RunMake
 	CFLAGS="$(TARGET_CPPFLAGS) $(TARGET_CFLAGS)" \
 	$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR)/$(1) \
 		$(TARGET_CONFIGURE_OPTS) \
-		CONFIG_DRIVER_NL80211=y \
-		CONFIG_UCODE=y \
-		CONFIG_APUP=y \
+		$(DRIVER_MAKEOPTS) \
 		LIBS="$(TARGET_LDFLAGS)" \
+		LIBS_c="$(TARGET_LDFLAGS)" \
 		AR="$(TARGET_CROSS)gcc-ar" \
 		BCHECK= \
 		$(2)

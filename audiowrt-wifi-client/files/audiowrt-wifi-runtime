@@ -1,0 +1,12 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Provisioning runtime constants. This file is part of the immutable package;
+# it is not UCI state and is never written to /etc/config.
+AUDIOWRT_SETUP_IP='192.168.77.1'
+AUDIOWRT_SETUP_SSID='AudioWRT-Setup'
+AUDIOWRT_SETUP_TIMEOUT=45
+
+audiowrt_first_radio() {
+	/usr/sbin/audiowrt-wifi-client radios 2>/dev/null | sed -n '1s/|.*//p'
+}

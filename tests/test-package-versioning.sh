@@ -5,26 +5,26 @@ fail() { echo "package versioning contract failed: $*" >&2; exit 1; }
 
 while IFS= read -r makefile; do
     name="$(sed -n 's/^PKG_NAME:=//p' "$makefile" | head -n 1)"
-    [[ -n "$name" ]] || continue
+    derived="$(sed -n 's/^AUDIOWRT_DERIVED_NAME:=//p' "$makefile" | head -n 1)"
+    [[ -n "$name" || -n "$derived" ]] || continue
 
-    case "$name" in
-        audiowrt-*|libaudiowrt-*|luci-app-audiowrt-*) ;;
-        *) continue ;;
-    esac
+    release="$(sed -n 's/^PKG_RELEASE:=//p' "$makefile" | head -n 1)"
+    [[ -z "$release" || "$release" == 1 ]] ||
+        fail "${name:-$derived} must use PKG_RELEASE=1; bump PKG_VERSION instead (found '$release')"
 
-    # OpenWrt-derived recipes inherit the selected release's upstream version.
-    grep -q '^AUDIOWRT_CANONICAL_RECIPE:=' "$makefile" && continue
+    # Source-derived packages inherit PKG_VERSION from the selected OpenWrt
+    # recipe. Kernel packages are versioned by the OpenWrt kernel ABI.
+    [[ -n "$derived" ]] && continue
 
     # Kernel packages are versioned by the OpenWrt kernel ABI/release machinery.
     grep -q 'KernelPackage/' "$makefile" && continue
 
     version="$(sed -n 's/^PKG_VERSION:=//p' "$makefile" | head -n 1)"
-    release="$(sed -n 's/^PKG_RELEASE:=//p' "$makefile" | head -n 1)"
 
     [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
         fail "$name must declare semantic PKG_VERSION (found '${version:-missing}')"
-    [[ "$release" =~ ^[0-9]+$ ]] ||
-        fail "$name must declare numeric PKG_RELEASE (found '${release:-missing}')"
+    [[ "$release" == 1 ]] ||
+        fail "$name must declare PKG_RELEASE:=1 (found '${release:-missing}')"
 done < <(find . -mindepth 2 -maxdepth 3 -name Makefile -type f | sort)
 
 echo "AudioWRT package versioning contract OK"

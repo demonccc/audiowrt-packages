@@ -19,11 +19,10 @@ renderer_init="$repo_root/audiowrt-dlna/files/audiowrt-dlna.init"
 renderer_src="$repo_root/audiowrt-dlna/src"
 provision="$repo_root/audiowrt-provisioning/files/audiowrt-provision"
 provision_cgi="$repo_root/audiowrt-provisioning/files/audiowrt-provision.cgi"
-provision_firstboot="$repo_root/audiowrt-provisioning/files/audiowrt-provisioning-firstboot"
 audiowrtctl="$repo_root/audiowrt-provisioning/files/audiowrtctl"
 status_cgi="$repo_root/audiowrt-provisioning/files/audiowrt-status.cgi"
-core_config="$repo_root/audiowrt-core/files/audiowrt.config"
 wifi="$repo_root/audiowrt-wifi-client/files/audiowrt-wifi-client"
+wifi_runtime="$repo_root/audiowrt-wifi-client/files/audiowrt-wifi-runtime"
 registry="$repo_root/libaudiowrt-player/files/audiowrt-playback-registry"
 status_luci="$repo_root/luci-app-audiowrt/htdocs/luci-static/resources/view/status/include/90_audiowrt.js"
 upmpd_config="$repo_root/audiowrt-minimal-upmpdcli/files/upmpdcli.conf"
@@ -73,19 +72,22 @@ if grep -Rqs 'audiowrt\.main\.last_error' \
     "$repo_root"/audiowrt-* "$repo_root"/luci-app-* "$repo_root"/libaudiowrt-player 2>/dev/null; then
     fail 'transient provisioning last_error is still stored/read through persistent UCI'
 fi
-if grep -q 'option last_error' "$core_config"; then
-    fail 'core UCI schema still declares transient last_error'
+if [ -e "$repo_root/audiowrt-core/files/audiowrt.config" ] ||
+   [ -e "$repo_root/audiowrt-core/files/audiowrt-core-firstboot" ]; then
+    fail 'core package still carries persistent provisioning UCI state'
 fi
 for file in "$provision" "$audiowrtctl" "$status_cgi"; do
     grep -q 'provisioning.error' "$file" || fail "volatile provisioning error file missing from $file"
 done
 
 # Provisioning mode is derived from connectivity/runtime setup, never stored in
-# the persistent AudioWRT UCI schema. Legacy keys may appear only in the
-# first-install migration that deletes them.
-if grep -Eq 'option (provisioning|provisioning_initialized)' "$core_config"; then
-    fail 'core UCI schema still stores provisioning state'
-fi
+# the persistent AudioWRT UCI schema.
+grep -Fq "AUDIOWRT_SETUP_IP='192.168.77.1'" "$wifi_runtime" ||
+    fail 'setup IP is not centralized in the runtime helper'
+grep -Fq "AUDIOWRT_SETUP_SSID='AudioWRT-Setup'" "$wifi_runtime" ||
+    fail 'setup SSID is not centralized in the runtime helper'
+grep -Fq 'AUDIOWRT_SETUP_TIMEOUT=45' "$wifi_runtime" ||
+    fail 'setup timeout is not centralized in the runtime helper'
 for file in "$provision" "$provision_cgi" "$audiowrtctl" "$status_cgi"; do
     if grep -q 'audiowrt\.main\.provisioning' "$file"; then
         fail "active provisioning path still uses persistent provisioning state: $file"
@@ -109,12 +111,16 @@ fi
 grep -q 'sync-core' "$repo_root/audiowrt-storage/files/audiowrt-storage" ||
     fail 'explicit storage sync-core command was accidentally removed'
 
-# The setup AP is runtime-only. setup-start/setup-stop may stage UCI changes
+# The setup AP and boot-time decision are runtime-only. setup-start/setup-stop may stage UCI changes
 # in tmpfs and reload netifd, but must never commit those setup sections.
 setup_runtime="$(sed -n '/^setup_start()/,/^mdns_sync()/p' "$wifi")"
 if printf '%s\n' "$setup_runtime" | grep -Eq 'uci -q commit (network|wireless)'; then
     fail 'setup-start/setup-stop persists runtime provisioning state'
 fi
+grep -Fq 'uci -P /tmp/.uci -q' "$wifi" ||
+    fail 'runtime provisioning does not explicitly stage UCI in tmpfs'
+grep -Fq "[ \"\${1:-}\" != 'commit' ]" "$wifi" ||
+    fail 'runtime UCI helper does not reject persistent commits'
 grep -Fq 'stage_setup_config "$radio" "$ssid" "$setup_ip"' "$wifi" ||
     fail 'setup-start does not stage runtime setup state'
 grep -Fq 'AUDIOWRT_WIFI_PERSIST' "$wifi" ||
@@ -127,6 +133,19 @@ grep -Fq 'uci -q delete wireless.audiowrt_setup' "$wifi" ||
     fail 'client commit does not exclude runtime setup AP'
 grep -Fq 'stage_setup_config "$setup_radio"' "$wifi" ||
     fail 'setup AP is not re-staged after the verified client commit'
+grep -Fq "[ \"\${1:-}\" = 'runtime' ]" "$wifi" ||
+    fail 'runtime mDNS sync can still mutate persistent UCI state'
+
+if grep -Eq 'uci-defaults|uci -q commit|rm -f.*/etc/' \
+    "$repo_root/audiowrt-provisioning/files/audiowrt-provisioning.init"; then
+    fail 'provisioning boot path writes or deletes persistent configuration'
+fi
+if [ -e "$repo_root/audiowrt-provisioning/files/audiowrt-provisioning-firstboot" ]; then
+    fail 'provisioning package still contains a persistent firstboot migration'
+fi
+if grep -q 'uci-defaults' "$repo_root/audiowrt-provisioning/Makefile"; then
+    fail 'provisioning package still installs a persistent firstboot migration'
+fi
 
 # Explicit disconnect remains persistent but repeated calls are idempotent.
 grep -Fq "uci -q get wireless.audiowrt_client >/dev/null 2>&1 || return 0" "$wifi" ||

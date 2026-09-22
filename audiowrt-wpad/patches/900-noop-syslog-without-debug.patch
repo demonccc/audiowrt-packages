@@ -12,7 +12,7 @@ in.
 
 --- a/src/utils/wpa_debug.h
 +++ b/src/utils/wpa_debug.h
-@@ -309,7 +309,8 @@ enum hostapd_logger_level {
+@@ -309,7 +309,13 @@ enum hostapd_logger_level {
  };
  
  
@@ -22,3 +22,8 @@ in.
  
  void wpa_debug_open_syslog(void);
  void wpa_debug_close_syslog(void);
++#else
++
++/* Keep OpenWrt's standard -s command-line ABI in the size-reduced build. */
++static inline void wpa_debug_open_syslog(void) {}
++static inline void wpa_debug_close_syslog(void) {}

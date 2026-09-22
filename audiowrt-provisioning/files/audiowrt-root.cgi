@@ -1,5 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-only
+. /usr/libexec/audiowrt/wifi-runtime
 
 redirect() {
 	printf 'Status: 302 Found\r\n'
@@ -10,7 +11,7 @@ redirect() {
 	exit 0
 }
 
-setup_ip="$(uci -q get audiowrt.main.setup_ip || echo 192.168.77.1)"
+setup_ip="$AUDIOWRT_SETUP_IP"
 host="${HTTP_HOST:-}"
 host="${host%%:*}"
 

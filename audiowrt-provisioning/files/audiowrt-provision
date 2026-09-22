@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 set -eu
+. /usr/libexec/audiowrt/wifi-runtime
 
 RUNTIME_DIR=/tmp/audiowrt
 ERROR_FILE="$RUNTIME_DIR/provisioning.error"
@@ -28,11 +29,11 @@ key="$(cat "$request_dir/wifi_key" 2>/dev/null || true)"
 
 [ -n "$radio" ] || exit 2
 [ -n "$ssid" ] || exit 3
-setup_ip="$(uci -q get audiowrt.main.setup_ip || echo 192.168.77.1)"
+setup_ip="$AUDIOWRT_SETUP_IP"
 [ "$(uci -q get network.audiowrt_setup.ipaddr 2>/dev/null || true)" = "$setup_ip" ] || exit 4
-timeout="$(uci -q get audiowrt.main.setup_timeout || echo 45)"
+timeout="$AUDIOWRT_SETUP_TIMEOUT"
 setup_radio="$(uci -q get wireless.audiowrt_setup.device || echo "$radio")"
-setup_ssid="$(uci -q get wireless.audiowrt_setup.ssid || uci -q get system.@system[0].hostname || echo AudioWRT)"
+setup_ssid="$(uci -q get wireless.audiowrt_setup.ssid || uci -q get system.@system[0].hostname || printf '%s\n' "$AUDIOWRT_SETUP_SSID")"
 active_setup_radio="$setup_radio"
 
 clear_error

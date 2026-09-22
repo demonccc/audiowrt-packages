@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 set -eu
+. /usr/libexec/audiowrt/wifi-runtime
 
 usage() {
 	cat <<'USAGE'
@@ -239,24 +240,35 @@ setup_dhcp_disable() {
 	rm -f /tmp/audiowrt-udhcpd.conf /tmp/audiowrt-udhcpd.leases /var/run/audiowrt-udhcpd.pid
 }
 
+# Runtime-only UCI staging. OpenWrt's normal UCI savedir is tmpfs, but make it
+# explicit here and reject commits so setup AP code cannot write /etc/config.
+runtime_uci() {
+	[ "${1:-}" != 'commit' ] || {
+		echo 'ERROR: runtime UCI path cannot commit persistent configuration.' >&2
+		return 125
+	}
+	mkdir -p /tmp/.uci
+	uci -P /tmp/.uci -q "$@"
+}
+
 stage_setup_config() {
 	radio="$1"; ssid="$2"; setup_ip="$3"
-	uci -q set wireless."$radio".disabled='0'
-	uci -q delete network.audiowrt_setup 2>/dev/null || true
-	uci -q set network.audiowrt_setup='interface'
-	uci -q set network.audiowrt_setup.proto='static'
-	uci -q set network.audiowrt_setup.ipaddr="$setup_ip"
-	uci -q set network.audiowrt_setup.netmask='255.255.255.0'
+	runtime_uci set wireless."$radio".disabled='0'
+	runtime_uci delete network.audiowrt_setup 2>/dev/null || true
+	runtime_uci set network.audiowrt_setup='interface'
+	runtime_uci set network.audiowrt_setup.proto='static'
+	runtime_uci set network.audiowrt_setup.ipaddr="$setup_ip"
+	runtime_uci set network.audiowrt_setup.netmask='255.255.255.0'
 
-	uci -q delete wireless.audiowrt_setup 2>/dev/null || true
-	uci -q set wireless.audiowrt_setup='wifi-iface'
-	uci -q set wireless.audiowrt_setup.device="$radio"
-	uci -q set wireless.audiowrt_setup.mode='ap'
-	uci -q set wireless.audiowrt_setup.network='audiowrt_setup'
-	uci -q set wireless.audiowrt_setup.ssid="$ssid"
-	uci -q set wireless.audiowrt_setup.encryption='none'
-	uci -q set wireless.audiowrt_setup.isolate='1'
-	uci -q set wireless.audiowrt_setup.disabled='0'
+	runtime_uci delete wireless.audiowrt_setup 2>/dev/null || true
+	runtime_uci set wireless.audiowrt_setup='wifi-iface'
+	runtime_uci set wireless.audiowrt_setup.device="$radio"
+	runtime_uci set wireless.audiowrt_setup.mode='ap'
+	runtime_uci set wireless.audiowrt_setup.network='audiowrt_setup'
+	runtime_uci set wireless.audiowrt_setup.ssid="$ssid"
+	runtime_uci set wireless.audiowrt_setup.encryption='none'
+	runtime_uci set wireless.audiowrt_setup.isolate='1'
+	runtime_uci set wireless.audiowrt_setup.disabled='0'
 }
 
 commit_wifi_client() {
@@ -278,7 +290,7 @@ commit_wifi_client() {
 	# The AP is still running in netifd. Re-stage its UCI view without reload so
 	# the browser can render the Done page before setup-stop removes it.
 	if [ "$setup_present" -eq 1 ]; then
-		stage_setup_config "$setup_radio" "${setup_ssid:-AudioWRT-Setup}" "$setup_ip"
+		stage_setup_config "$setup_radio" "${setup_ssid:-$AUDIOWRT_SETUP_SSID}" "$setup_ip"
 	fi
 }
 
@@ -290,14 +302,17 @@ rollback_wifi_client() {
 	wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
 }
 setup_start() {
-	radio="${1:-}"; ssid="${2:-AudioWRT-Setup}"; setup_ip="${3:-192.168.77.1}"
+	radio="${1:-}"; ssid="${2:-$AUDIOWRT_SETUP_SSID}"; setup_ip="${3:-$AUDIOWRT_SETUP_IP}"
 	[ -n "$radio" ] && uci -q get wireless."$radio" >/dev/null 2>&1 || { echo 'ERROR: valid radio is required.' >&2; exit 2; }
 
 	# The setup network is runtime state. UCI stages these changes in /tmp and
 	# wifi reload consumes the staged values, so never commit them to flash.
 	stage_setup_config "$radio" "$ssid" "$setup_ip"
 
-	if ! wifi reload >/dev/null 2>&1 && ! wifi >/dev/null 2>&1; then
+	# Keep the reload diagnostics visible. This is the provisioning path and its
+	# UCI changes are staged under /tmp; suppressing this output hid hostapd and
+	# netifd failures while debugging the multicall wpad package.
+	if ! wifi reload && ! wifi; then
 		echo 'ERROR: failed to reload Wi-Fi for provisioning AP.' >&2
 		return 13
 	fi
@@ -325,22 +340,22 @@ setup_start() {
 		}
 	fi
 
-	mdns_sync
+	mdns_sync runtime
 }
 setup_stop() {
 	changed=0
-	if uci -q get network.audiowrt_setup >/dev/null 2>&1; then
-		uci -q delete network.audiowrt_setup
+	if runtime_uci get network.audiowrt_setup >/dev/null 2>&1; then
+		runtime_uci delete network.audiowrt_setup
 		changed=1
 	fi
-	if uci -q get wireless.audiowrt_setup >/dev/null 2>&1; then
-		uci -q delete wireless.audiowrt_setup
+	if runtime_uci get wireless.audiowrt_setup >/dev/null 2>&1; then
+		runtime_uci delete wireless.audiowrt_setup
 		changed=1
 	fi
 	setup_dhcp_disable
 	if [ "$changed" -eq 1 ]; then
 		wifi reload >/dev/null 2>&1 || wifi >/dev/null 2>&1 || true
-		mdns_sync
+		mdns_sync runtime
 	fi
 }
 mdns_sync() {
@@ -355,6 +370,10 @@ mdns_sync() {
 	# Backward compatibility for older/non-renderer installations that still
 	# provide umdns. Keep it idempotent: repeated syncs must not rewrite flash.
 	if [ -x /etc/init.d/umdns ]; then
+		if [ "${1:-}" = 'runtime' ]; then
+			/etc/init.d/umdns restart >/dev/null 2>&1 || true
+			return 0
+		fi
 		changed=0
 		if ! uci -q get umdns.@umdns[0] >/dev/null 2>&1; then
 			uci -q add umdns umdns >/dev/null 2>&1 || true

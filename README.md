@@ -22,6 +22,29 @@ AudioWRT stores only the delta. Source patches owned by AudioWRT use the `9xx-*`
 
 The helper is implemented by `include/audiowrt-openwrt-derived.mk` and `scripts/prepare-openwrt-derived.py`. Existing declarations may use the logical `feeds/base/...` location for a core package, but the helper resolves it to the already-present SDK/source-tree `package/...` recipe and never runs `scripts/feeds update base` itself.
 
+## Package versioning policy
+
+AudioWRT-owned packages use our semantic version, with the OpenWrt package
+release fixed at `1` for the first packaging release:
+
+- bug fix: `1.0.1`, then `1.0.2`, `1.0.3`, ...;
+- backward-compatible feature: `1.1.0`, then `1.2.0`, ...;
+- incompatible redesign: `2.0.0`.
+
+The package release is not used as a second patch counter. This keeps an APK
+such as `audiowrt-provisioning-1.0.3-r1` unambiguous: `1.0.3` is our package
+revision and `r1` is the initial OpenWrt packaging record.
+
+Packages that compile or repackage upstream code keep the upstream
+`PKG_VERSION` inherited from, or declared for, that source. Their AudioWRT
+delta is represented by the package name and recipe/patch provenance; a new
+AudioWRT packaging revision starts at `PKG_RELEASE:=1` in this repository.
+For example, the trimmed ALSA and BlueZ packages must remain traceable to the
+selected OpenWrt source/kernel release instead of being relabeled as an
+invented `1.0.x` source version. `audiowrt-wpad` is the deliberate exception:
+it owns a distinct multicall build contract, so it uses AudioWRT's `1.0.0-r1`
+while still inheriting the exact hostapd source and OpenWrt patches.
+
 Release-family-specific AudioWRT compatibility deltas may live under `releases/<major.minor>/`, but those files may contain only AudioWRT overrides. They must not copy OpenWrt source metadata or OpenWrt-owned patches.
 
 Current source-derived userspace packages are:

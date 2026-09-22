@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-provisioning
-PKG_VERSION:=1.1.0
+PKG_VERSION:=1.0.3
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
@@ -11,12 +11,12 @@ include $(INCLUDE_DIR)/package.mk
 define Package/audiowrt-provisioning
   SECTION:=sound
   CATEGORY:=Sound
-  TITLE:=AudioWRT first-boot provisioning
+  TITLE:=AudioWRT runtime provisioning
   DEPENDS:=+audiowrt-core +audiowrt-audio +audiowrt-wifi-client +hostapd +audiowrt-udhcpd +ubus +uci +uhttpd +luci-base +jsonfilter
 endef
 
 define Package/audiowrt-provisioning/description
- AudioWRT-only first-boot provisioning for device name, Wi-Fi client setup and administrator password. Reusable Wi-Fi behavior is delegated to audiowrt-wifi-client.
+ AudioWRT runtime provisioning for device name, Wi-Fi client setup and administrator password. Reusable Wi-Fi behavior is delegated to audiowrt-wifi-client; boot-time setup state remains in tmpfs.
 endef
 
 define Build/Prepare
@@ -35,9 +35,6 @@ define Package/audiowrt-provisioning/install
 	$(INSTALL_DIR) $(1)/usr/libexec/audiowrt
 	$(INSTALL_BIN) ./files/audiowrt-provision $(1)/usr/libexec/audiowrt/provision-wifi
 	$(INSTALL_BIN) ./files/audiowrt-setup-ssid $(1)/usr/libexec/audiowrt/setup-ssid
-
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/audiowrt-provisioning-firstboot $(1)/etc/uci-defaults/10-audiowrt-provisioning
 
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/audiowrt-provisioning.init $(1)/etc/init.d/audiowrt-provisioning
