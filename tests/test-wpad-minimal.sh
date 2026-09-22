@@ -9,7 +9,9 @@ hostapd_config="$repo_root/audiowrt-wpad/files/hostapd-audiowrt.config"
 supplicant_config="$repo_root/audiowrt-wpad/files/wpa_supplicant-audiowrt.config"
 
 grep -q '^AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/hostapd/Makefile$' "$makefile"
-grep -q '^PKG_VERSION:=1.0.0$' "$makefile"
+# The package is derived from the selected hostapd/wpa_supplicant source;
+# PKG_VERSION must therefore come from the canonical OpenWrt recipe.
+! grep -q '^PKG_VERSION:=' "$makefile"
 grep -q '^PKG_RELEASE:=1$' "$makefile"
 grep -q '^  PROVIDES:=hostapd wpa-supplicant$' "$makefile"
 grep -q '+libmbedtls' "$makefile"

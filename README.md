@@ -39,11 +39,11 @@ Packages that compile or repackage upstream code keep the upstream
 `PKG_VERSION` inherited from, or declared for, that source. Their AudioWRT
 delta is represented by the package name and recipe/patch provenance; a new
 AudioWRT packaging revision starts at `PKG_RELEASE:=1` in this repository.
-For example, the trimmed ALSA and BlueZ packages must remain traceable to the
-selected OpenWrt source/kernel release instead of being relabeled as an
-invented `1.0.x` source version. `audiowrt-wpad` is the deliberate exception:
-it owns a distinct multicall build contract, so it uses AudioWRT's `1.0.0-r1`
-while still inheriting the exact hostapd source and OpenWrt patches.
+For example, the trimmed ALSA, BlueZ and wpad packages must remain traceable
+to the selected OpenWrt source/kernel release instead of being relabeled as
+an invented `1.0.x` source version. `audiowrt-wpad` inherits the exact
+hostapd/wpa_supplicant source version and OpenWrt patches, then applies the
+AudioWRT multicall and feature-selection delta.
 
 Release-family-specific AudioWRT compatibility deltas may live under `releases/<major.minor>/`, but those files may contain only AudioWRT overrides. They must not copy OpenWrt source metadata or OpenWrt-owned patches.
 
