@@ -1,0 +1,7 @@
+# AudioWRT minimal renderer protocol capabilities.
+# Keep this list aligned with audiowrt-minimal-mpd decoders.
+http-get:*:audio/mpeg:DLNA.ORG_PN=MP3,
+http-get:*:audio/flac:*,
+http-get:*:audio/x-flac:*,
+http-get:*:application/flac:*,
+http-get:*:application/x-flac:*

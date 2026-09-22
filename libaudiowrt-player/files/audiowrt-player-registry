@@ -1,0 +1,4 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Compatibility alias for packages that used the original helper name.
+exec /usr/libexec/audiowrt-playback-registry "$@"

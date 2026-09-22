@@ -1,0 +1,63 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Source only in explicit Save/install actions, preferably in a subshell.
+# Unique UCI package names matter: -t alone still loads /tmp/.uci deltas!
+save_begin() {
+	SAVE_ROOT=${SAVE_ROOT:-/etc/config}
+	mkdir -p /tmp/audiowrt
+	mkdir /tmp/audiowrt/config-save.lock 2>/dev/null || {
+		echo 'Another configuration save is in progress.' >&2; return 1;
+	}
+	SAVE_DIR=$(mktemp -d /tmp/audiowrt/save.XXXXXX) || {
+		rmdir /tmp/audiowrt/config-save.lock; return 1;
+	}
+	chmod 700 "$SAVE_DIR"
+	SAVE_PACKAGES="$*"
+	SAVE_PREFIX="awtx_$$_"
+	trap 'rm -rf "$SAVE_DIR"; rmdir /tmp/audiowrt/config-save.lock' EXIT
+	trap 'exit 1' HUP INT TERM
+	mkdir "$SAVE_DIR/delta"
+	for save_pkg in "$@"; do
+		case "$save_pkg" in ''|*[!a-zA-Z0-9_-]*) return 2 ;; esac
+		if [ -f "$SAVE_ROOT/$save_pkg" ]; then
+			cp "$SAVE_ROOT/$save_pkg" "$SAVE_DIR/$SAVE_PREFIX$save_pkg"
+			cp "$SAVE_ROOT/$save_pkg" "$SAVE_DIR/before_$save_pkg"
+		else
+			: > "$SAVE_DIR/$SAVE_PREFIX$save_pkg"
+			: > "$SAVE_DIR/absent_$save_pkg"
+		fi
+		save_uci export "$save_pkg" > "$SAVE_DIR/export_$save_pkg"
+	done
+}
+
+save_uci() {
+	[ "${1:-}" != '-q' ] || shift
+	local action="$1" key="$2" pkg
+	shift 2
+	pkg=${key%%[.=]*}
+	case " $SAVE_PACKAGES " in *" $pkg "*) ;; *) return 2 ;; esac
+	# No persistent package is ever loaded or committed through UCI here.
+	command uci -q -c "$SAVE_DIR" -t "$SAVE_DIR/delta" "$action" "$SAVE_PREFIX$key" "$@"
+}
+
+save_finish() {
+	local pkg
+	# Validate every snapshot before any persistent write (other UCI clients
+	# do not take our lock). A changed base requires retrying the Save action.
+	for pkg in $SAVE_PACKAGES; do
+		if [ -f "$SAVE_DIR/absent_$pkg" ]; then
+			[ ! -e "$SAVE_ROOT/$pkg" ] || return 1
+		else
+			cmp -s "$SAVE_ROOT/$pkg" "$SAVE_DIR/before_$pkg" || return 1
+		fi
+	done
+	for pkg in $SAVE_PACKAGES; do
+		save_uci export "$pkg" > "$SAVE_DIR/after_$pkg" || return 1
+		cmp -s "$SAVE_DIR/export_$pkg" "$SAVE_DIR/after_$pkg" && continue
+		save_uci commit "$pkg" || return 1
+		# Same-directory rename avoids leaving a truncated configuration file.
+		cp "$SAVE_DIR/$SAVE_PREFIX$pkg" "$SAVE_ROOT/.audiowrt-$pkg-$$" || return 1
+		chmod 600 "$SAVE_ROOT/.audiowrt-$pkg-$$"
+		mv -f "$SAVE_ROOT/.audiowrt-$pkg-$$" "$SAVE_ROOT/$pkg" || return 1
+	done
+}

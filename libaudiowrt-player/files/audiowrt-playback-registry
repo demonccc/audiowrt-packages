@@ -1,0 +1,118 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Installed manifests are immutable package data. Rebuild their derived UCI
+# view only in RAM, at boot and after package installation/removal.
+set -eu
+mkdir -p /tmp/audiowrt
+mkdir /tmp/audiowrt/registry.lock 2>/dev/null || exit 1
+work=$(mktemp -d /tmp/audiowrt/registry.XXXXXX)
+trap 'rm -rf "$work"; rmdir /tmp/audiowrt/registry.lock' EXIT
+trap 'exit 1' INT TERM HUP
+mkdir "$work/delta"
+CODECS_CONFIG=awcodecs_$$
+PLAYERS_CONFIG=awplayers_$$
+codecs_changed=0
+players_changed=0
+: > "$work/$CODECS_CONFIG"
+: > "$work/$PLAYERS_CONFIG"
+uci() { command uci -c "$work" -t "$work/delta" "$@"; }
+
+mark_changed() {
+	case "$1" in
+		"$CODECS_CONFIG") codecs_changed=1 ;;
+		"$PLAYERS_CONFIG") players_changed=1 ;;
+	esac
+}
+
+reload_consumers() {
+	local process pids
+	for process in audiowrt-renderer audiowrt-local-player; do
+		pids="$(pidof "$process" 2>/dev/null || true)"
+		[ -z "$pids" ] || kill -HUP $pids 2>/dev/null || true
+	done
+}
+
+section_type() {
+	local config="$1" id="$2"
+	uci -q get "$config.$id" 2>/dev/null || true
+}
+
+ensure_section() {
+	local config="$1" id="$2" type="$3" current
+	current="$(section_type "$config" "$id")"
+	if [ -z "$current" ]; then
+		uci set "$config.$id=$type"
+		mark_changed "$config"
+	elif [ "$current" != "$type" ]; then
+		echo "audiowrt-playback-registry: $config.$id already exists as $current, expected $type" >&2
+		return 1
+	fi
+}
+
+list_has() {
+	local key="$1" needle="$2" value values
+	values="$(uci -q get "$key" 2>/dev/null || true)"
+	for value in $values; do
+		[ "$value" = "$needle" ] && return 0
+	done
+	return 1
+}
+
+add_list_value() {
+	local config="$1" section="$2" option="$3" value="$4"
+	if ! list_has "$config.$section.$option" "$value"; then
+		uci add_list "$config.$section.$option=$value"
+		mark_changed "$config"
+	fi
+}
+
+set_value() {
+	local config="$1" section="$2" option="$3" value="$4" current
+	current="$(uci -q get "$config.$section.$option" 2>/dev/null || true)"
+	[ "$current" = "$value" ] && return 0
+	uci set "$config.$section.$option=$value"
+	mark_changed "$config"
+}
+
+commit_changes() {
+	[ "$codecs_changed" -eq 0 ] || uci commit "$CODECS_CONFIG"
+	[ "$players_changed" -eq 0 ] || uci commit "$PLAYERS_CONFIG"
+}
+
+register_player() {
+	local codec="$1" player="$2" name="$3" executable="$4" mimes="$5" extensions="$6"
+	local item
+
+	codecs_changed=0
+	players_changed=0
+
+	ensure_section "$CODECS_CONFIG" "$codec" codec
+	for item in $mimes; do
+		add_list_value "$CODECS_CONFIG" "$codec" mime "$item"
+	done
+	for item in $extensions; do
+		add_list_value "$CODECS_CONFIG" "$codec" extension "$item"
+	done
+
+	ensure_section "$PLAYERS_CONFIG" "$player" player
+	set_value "$PLAYERS_CONFIG" "$player" name "$name"
+	set_value "$PLAYERS_CONFIG" "$player" executable "$executable"
+	add_list_value "$PLAYERS_CONFIG" "$player" codec "$codec"
+
+	if [ "$codecs_changed" -eq 1 ] || [ "$players_changed" -eq 1 ]; then
+		commit_changes
+	fi
+}
+
+
+for manifest in /usr/share/audiowrt/players/*.manifest; do
+	[ -r "$manifest" ] || continue
+	[ "${1:-}" != exclude ] || [ "${manifest##*/}" != "$2.manifest" ] || continue
+	. "$manifest"
+done
+mkdir -p /tmp/audiowrt/registry
+for entry in "$CODECS_CONFIG:audiowrt-codecs" "$PLAYERS_CONFIG:audiowrt-players"; do
+	src=${entry%%:*}; dest=${entry#*:}
+	cmp -s "$work/$src" "/tmp/audiowrt/registry/$dest" || mv "$work/$src" "/tmp/audiowrt/registry/$dest"
+done
+reload_consumers

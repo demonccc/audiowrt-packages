@@ -1,0 +1,17 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+case "${1:-}" in
+	configure)
+		/usr/libexec/audiowrt/extensions/configure-settings shairport-sync shairport_sync /usr/share/audiowrt/extensions/airplay.settings
+		/etc/init.d/shairport-sync enabled || /etc/init.d/shairport-sync enable
+		/etc/init.d/shairport-sync restart >/dev/null 2>&1 || true
+		;;
+	disable)
+		/etc/init.d/shairport-sync stop >/dev/null 2>&1 || true
+		/etc/init.d/shairport-sync disable >/dev/null 2>&1 || true
+		;;
+	*) echo "Usage: $0 {configure|disable}" >&2; exit 2 ;;
+esac

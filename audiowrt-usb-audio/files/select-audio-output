@@ -1,0 +1,79 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+. /usr/libexec/audiowrt/audio-runtime
+audio_lock
+
+write_state() {
+	audio_state usb "$1" "$2" "$3" '' '' "$4"
+}
+
+current_output="$(state_value output_type || true)"
+[ "$current_output" = bluetooth ] && [ "${1:-}" != force ] && exit 0
+
+card=""
+if [ -r /proc/asound/cards ]; then
+	card="$(awk '
+		/USB-Audio/ {
+			line=$0
+			sub(/^[[:space:]]*/, "", line)
+			split(line, fields, /[[:space:]]+/)
+			print fields[1]
+			exit
+		}
+	' /proc/asound/cards)"
+fi
+
+if [ -z "$card" ]; then
+	if [ -z "$current_output" ] || [ "$current_output" = 'usb' ]; then
+		write_state 0 "" "" "No USB audio playback device detected."
+		rm -f "$ASOUND_FILE"
+		restart_engines
+	fi
+	logger -t audiowrt-audio "No USB audio playback device detected"
+	exit 0
+fi
+
+pcm=""
+if [ -r /proc/asound/pcm ]; then
+	pcm="$(awk -v card="$card" '
+		$0 ~ "^[[:space:]]*" card "-[0-9][0-9]:" && /playback/ {
+			line=$0
+			sub(/^[[:space:]]*/, "", line)
+			split(line, parts, /[-:]/)
+			print parts[2] + 0
+			exit
+		}
+	' /proc/asound/pcm)"
+fi
+[ -n "$pcm" ] || pcm="0"
+
+mkdir -p "$RUNTIME_DIR"
+audio_asound <<EOF
+pcm.audiowrt_dmix {
+	type dmix
+	ipc_key 2468
+	ipc_perm 0666
+	slave {
+		pcm "hw:${card},${pcm}"
+		rate 44100
+	}
+}
+
+pcm.!default {
+	type plug
+	slave.pcm "audiowrt_dmix"
+}
+
+ctl.!default {
+	type hw
+	card ${card}
+}
+EOF
+
+write_state 1 "$card" "$pcm" ""
+logger -t audiowrt-audio "Selected USB audio card ${card}, PCM ${pcm}"
+
+restart_engines

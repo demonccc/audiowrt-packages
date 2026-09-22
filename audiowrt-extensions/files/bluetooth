@@ -1,0 +1,20 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+case "${1:-}" in
+	configure)
+		/etc/init.d/dbus enable >/dev/null 2>&1 || true
+		/etc/init.d/dbus start >/dev/null 2>&1 || true
+		/etc/init.d/bluetoothd enable >/dev/null 2>&1 || true
+		/etc/init.d/bluetoothd restart >/dev/null 2>&1 || true
+		/etc/init.d/bluealsa enable >/dev/null 2>&1 || true
+		/etc/init.d/bluealsa restart >/dev/null 2>&1 || true
+		;;
+	disable)
+		/etc/init.d/bluealsa stop >/dev/null 2>&1 || true
+		/etc/init.d/bluealsa disable >/dev/null 2>&1 || true
+		;;
+	*) echo "Usage: $0 {configure|disable}" >&2; exit 2 ;;
+esac

@@ -1,0 +1,9 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+register_player \
+	aac native_aac \
+	'AudioWRT AAC Player' \
+	/usr/bin/audiowrt-player-aac \
+	'audio/aac audio/aacp' \
+	'aac'
