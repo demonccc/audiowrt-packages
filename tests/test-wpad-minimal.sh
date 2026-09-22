@@ -12,7 +12,7 @@ grep -q '^AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/hosta
 # The package is derived from the selected hostapd/wpa_supplicant source;
 # PKG_VERSION must therefore come from the canonical OpenWrt recipe.
 ! grep -q '^PKG_VERSION:=' "$makefile"
-grep -q '^PKG_RELEASE:=1$' "$makefile"
+grep -q '^PKG_RELEASE:=2$' "$makefile"
 grep -q '^  PROVIDES:=hostapd wpa-supplicant$' "$makefile"
 grep -q '+libmbedtls' "$makefile"
 ! grep -q 'audiowrt-minimal-mbedtls' "$makefile" "$supplicant_config" "$hostapd_config"

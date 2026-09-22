@@ -5,25 +5,18 @@ OpenWrt launches both hostapd and wpa_supplicant with -s from /etc/init.d/wpad.
 The option is enabled by CONFIG_DEBUG_SYSLOG, but upstream places the syslog
 open/close implementations inside !CONFIG_NO_STDOUT_DEBUG.
 
-AudioWRT deliberately removes stdout/debug formatting to save flash. Keep the
-standard -s command-line contract while making the syslog setup calls no-ops in
-that constrained build instead of pulling the full debug implementation back
-in.
+AudioWRT removes stdout/debug formatting to save flash. In that configuration,
+retain the -s command-line contract and use the inline no-op functions already
+provided by upstream when CONFIG_DEBUG_SYSLOG is disabled.
 
 --- a/src/utils/wpa_debug.h
 +++ b/src/utils/wpa_debug.h
-@@ -309,7 +309,13 @@ enum hostapd_logger_level {
+@@ -309,7 +309,7 @@ enum hostapd_logger_level {
  };
  
  
 -#ifdef CONFIG_DEBUG_SYSLOG
-+#if defined(CONFIG_DEBUG_SYSLOG) && \
-+	!defined(CONFIG_NO_STDOUT_DEBUG)
++#if defined(CONFIG_DEBUG_SYSLOG) && !defined(CONFIG_NO_STDOUT_DEBUG)
  
  void wpa_debug_open_syslog(void);
  void wpa_debug_close_syslog(void);
-+#else
-+
-+/* Keep OpenWrt's standard -s command-line ABI in the size-reduced build. */
-+static inline void wpa_debug_open_syslog(void) {}
-+static inline void wpa_debug_close_syslog(void) {}
