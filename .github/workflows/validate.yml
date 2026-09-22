@@ -47,6 +47,10 @@ jobs:
         shell: bash
         run: bash tests/test-wpad-minimal.sh
 
+      - name: Validate wpad syslog patch
+        shell: bash
+        run: bash tests/test-wpad-syslog-patch.sh
+
       - name: Validate minimal BlueALSA contract
         shell: bash
         run: bash tests/test-bluealsa-minimal.sh

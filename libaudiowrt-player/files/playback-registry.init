@@ -1,6 +1,0 @@
-#!/bin/sh /etc/rc.common
-# SPDX-License-Identifier: GPL-2.0-only
-START=12
-start() {
-	/usr/libexec/audiowrt-playback-registry rebuild
-}

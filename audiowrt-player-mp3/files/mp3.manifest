@@ -1,9 +1,0 @@
-#!/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
-
-register_player \
-	mp3 native_mp3 \
-	'AudioWRT MP3 Player' \
-	/usr/bin/audiowrt-player-mp3 \
-	'audio/mpeg audio/mp3' \
-	'mp3'

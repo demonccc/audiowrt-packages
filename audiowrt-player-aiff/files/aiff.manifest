@@ -1,9 +1,0 @@
-#!/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
-
-register_player \
-	aiff native_aiff \
-	'AudioWRT AIFF Player' \
-	/usr/bin/audiowrt-player-aiff \
-	'audio/aiff audio/x-aiff' \
-	'aif aiff'

@@ -1,7 +1,0 @@
-enabled=1
-respawn=1
-name=%H
-output_backend=alsa
-mdns_backend=tinysvcmdns
-alsa_output_device=default
-ignore_volume_control=no

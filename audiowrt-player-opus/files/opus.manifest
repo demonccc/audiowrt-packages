@@ -1,9 +1,0 @@
-#!/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
-
-register_player \
-	opus native_opus \
-	'AudioWRT Opus Player' \
-	/usr/bin/audiowrt-player-opus \
-	'audio/opus audio/ogg;codecs=opus audio/ogg application/ogg' \
-	'opus ogg oga'

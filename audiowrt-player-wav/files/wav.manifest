@@ -1,9 +1,0 @@
-#!/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
-
-register_player \
-	wav native_wav \
-	'AudioWRT WAV/PCM Player' \
-	/usr/bin/audiowrt-player-wav \
-	'audio/wav audio/x-wav audio/wave' \
-	'wav'

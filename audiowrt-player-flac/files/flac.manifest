@@ -1,9 +1,0 @@
-#!/bin/sh
-# SPDX-License-Identifier: GPL-2.0-only
-
-register_player \
-	flac native_flac \
-	'AudioWRT FLAC Player' \
-	/usr/bin/audiowrt-player-flac \
-	'audio/flac audio/x-flac' \
-	'flac'
