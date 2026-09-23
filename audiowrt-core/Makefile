@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-core
-PKG_VERSION:=1.0.3
+PKG_VERSION:=1.0.4
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
@@ -31,6 +31,8 @@ define Build/Compile
 endef
 
 define Package/audiowrt-core/install
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt
+	printf '%s\n' 'AudioWRT core package marker' > $(1)/usr/share/audiowrt/core
 endef
 
 $(eval $(call BuildPackage,audiowrt-core))
