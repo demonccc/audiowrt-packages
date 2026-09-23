@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-udhcpd
-PKG_VERSION:=1.0.1
+PKG_VERSION:=1.0.2
 PKG_RELEASE:=1
 PKGARCH:=all
 
@@ -30,6 +30,8 @@ define Build/Compile
 endef
 
 define Package/audiowrt-udhcpd/install
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt
+	printf '%s\n' 'BusyBox udhcpd applet marker' > $(1)/usr/share/audiowrt/udhcpd
 endef
 
 $(eval $(call BuildPackage,audiowrt-udhcpd))

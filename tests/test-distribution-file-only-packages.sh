@@ -7,6 +7,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 for package in \
     audiowrt-core \
+    audiowrt-udhcpd \
     audiowrt-provisioning \
     luci-app-audiowrt-core \
     audiowrt-config \
@@ -19,5 +20,10 @@ for package in \
         }
     done
 done
+
+grep -Fq "BusyBox udhcpd applet marker" "$repo_root/audiowrt-udhcpd/Makefile" || {
+    echo "ERROR: audiowrt-udhcpd must install a package payload so OpenWrt emits its APK." >&2
+    exit 1
+}
 
 printf 'Distribution file-only package tests passed.\n'
