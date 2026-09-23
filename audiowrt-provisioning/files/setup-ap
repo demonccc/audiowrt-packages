@@ -7,13 +7,13 @@ stop_owned() {
 	local name="$1" pid
 	pid=$(cat "$AUDIOWRT_SETUP_DIR/$name.pid" 2>/dev/null || true)
 	case "$pid" in ''|*[!0-9]*) return 0 ;; esac
-	# A stale PID must never kill somebody else's daemon.
 	if [ -r "/proc/$pid/cmdline" ] &&
 	   tr '\000' ' ' < "/proc/$pid/cmdline" | grep -Fq "$AUDIOWRT_SETUP_DIR/$name.conf"; then
 		kill "$pid" 2>/dev/null || true
 		tries=0
 		while kill -0 "$pid" 2>/dev/null && [ "$tries" -lt 5 ]; do
-			sleep 1; tries=$((tries + 1))
+			sleep 1
+			tries=$((tries + 1))
 		done
 	fi
 	rm -f "$AUDIOWRT_SETUP_DIR/$name.pid"
@@ -33,51 +33,69 @@ stop_ap() {
 }
 
 start_ap() {
-	local radio="${1:-}" ssid="${2:-$AUDIOWRT_SETUP_SSID}" phy path candidate band channel country
+	local radio="${1:-}" ssid="${2:-$AUDIOWRT_SETUP_SSID}"
+	local phy path candidate band country
+
 	[ "$(uci -q get wireless."$radio" 2>/dev/null)" = wifi-device ] || return 2
+
+	band=$(uci -q get wireless."$radio".band 2>/dev/null || echo 2g)
+	[ "$band" = 2g ] || {
+		echo "Setup AP requires the 2.4 GHz radio; got '$band' on $radio." >&2
+		return 5
+	}
+
 	stop_ap
 	umask 077
 	mkdir -p "$AUDIOWRT_SETUP_DIR"
-	# Resolve the configured radio by its hardware path, not by radioN=phyN.
+
 	phy=$(uci -q get wireless."$radio".phy 2>/dev/null || true)
 	path=$(uci -q get wireless."$radio".path 2>/dev/null || true)
 	if [ -z "$phy" ] && [ -n "$path" ]; then
 		for candidate in /sys/class/ieee80211/*; do
 			case "$(readlink -f "$candidate/device")" in
-				*"/$path"|*"/$path/"*) phy=${candidate##*/}; break ;;
+				*"/$path"|"*/$path/"*)
+					phy=${candidate##*/}
+					break
+					;;
 			esac
 		done
 	fi
 	[ -n "$phy" ] && [ -d "/sys/class/ieee80211/$phy" ] || {
-		echo "Cannot resolve PHY for $radio ($path)." >&2; return 3;
+		echo "Cannot resolve PHY for $radio ($path)." >&2
+		return 3
 	}
-	# Release this PHY from netifd for the lifetime of the setup AP. This is
-	# operational only; the radio's stored disabled flag is never changed.
+
+	# Release this PHY from netifd for the lifetime of the setup AP.
+	# The radio's stored disabled flag is never changed.
 	wifi down "$radio" || return 4
 	iw phy "$phy" interface add "$AUDIOWRT_SETUP_IF" type __ap || return 4
 	: > "$AUDIOWRT_SETUP_DIR/owned"
 	ip link set "$AUDIOWRT_SETUP_IF" up || return 4
 	ip addr add "$AUDIOWRT_SETUP_IP/24" dev "$AUDIOWRT_SETUP_IF" || return 4
-	band=$(uci -q get wireless."$radio".band 2>/dev/null || echo 2g)
-	case "$band" in 2g) band=g ;; 5g) band=a ;; *) echo 'Setup requires a 2.4 or 5 GHz radio.' >&2; return 5 ;; esac
+
 	country=$(uci -q get wireless."$radio".country 2>/dev/null || true)
 	{
 		printf 'interface=%s\ndriver=nl80211\n' "$AUDIOWRT_SETUP_IF"
-		# Hex SSID avoids hostapd config injection and preserves arbitrary bytes.
 		printf 'ssid2=%s\n' "$(printf '%s' "$ssid" | hexdump -v -e '1/1 "%02x"')"
-		printf 'hw_mode=%s\nchannel=0\nacs_exclude_dfs=1\nap_isolate=1\nauth_algs=1\nwpa=0\n' "$band"
+		printf 'hw_mode=g\nchannel=1\nap_isolate=1\nauth_algs=1\nwpa=0\n'
 		[ -z "$country" ] || printf 'country_code=%s\nieee80211d=1\n' "$country"
 	} > "$AUDIOWRT_SETUP_DIR/hostapd.conf"
-	hostapd "$AUDIOWRT_SETUP_DIR/hostapd.conf" </dev/null >"$AUDIOWRT_SETUP_DIR/hostapd.log" 2>&1 &
+
+	hostapd "$AUDIOWRT_SETUP_DIR/hostapd.conf" </dev/null \
+		>"$AUDIOWRT_SETUP_DIR/hostapd.log" 2>&1 &
 	printf '%s\n' "$!" > "$AUDIOWRT_SETUP_DIR/hostapd.pid"
+
 	tries=0
 	until grep -q 'AP-ENABLED' "$AUDIOWRT_SETUP_DIR/hostapd.log"; do
-		if ! kill -0 "$(cat "$AUDIOWRT_SETUP_DIR/hostapd.pid")" 2>/dev/null || [ "$tries" -ge "$AUDIOWRT_SETUP_TIMEOUT" ]; then
+		if ! kill -0 "$(cat "$AUDIOWRT_SETUP_DIR/hostapd.pid")" 2>/dev/null ||
+		   [ "$tries" -ge "$AUDIOWRT_SETUP_TIMEOUT" ]; then
 			cat "$AUDIOWRT_SETUP_DIR/hostapd.log" >&2
 			return 6
 		fi
-		sleep 1; tries=$((tries + 1))
+		sleep 1
+		tries=$((tries + 1))
 	done
+
 	cat > "$AUDIOWRT_SETUP_DIR/udhcpd.conf" <<-EOF
 	start ${AUDIOWRT_SETUP_IP%.*}.100
 	end ${AUDIOWRT_SETUP_IP%.*}.199
@@ -88,13 +106,18 @@ start_ap() {
 	option lease 600
 	option subnet 255.255.255.0
 	EOF
+
 	# The setup network deliberately advertises no DNS or default route.
-	udhcpd -f "$AUDIOWRT_SETUP_DIR/udhcpd.conf" </dev/null >"$AUDIOWRT_SETUP_DIR/udhcpd.log" 2>&1 &
+	udhcpd -f "$AUDIOWRT_SETUP_DIR/udhcpd.conf" </dev/null \
+		>"$AUDIOWRT_SETUP_DIR/udhcpd.log" 2>&1 &
 	printf '%s\n' "$!" > "$AUDIOWRT_SETUP_DIR/udhcpd.pid"
+
 	sleep 1
 	kill -0 "$(cat "$AUDIOWRT_SETUP_DIR/udhcpd.pid")" 2>/dev/null || {
-		cat "$AUDIOWRT_SETUP_DIR/udhcpd.log" >&2; return 7;
+		cat "$AUDIOWRT_SETUP_DIR/udhcpd.log" >&2
+		return 7
 	}
+
 	printf '%s\n' "$radio" > "$AUDIOWRT_SETUP_DIR/radio"
 	printf '%s\n' "$ssid" > "$AUDIOWRT_SETUP_DIR/ssid"
 	printf '%s\n' "$AUDIOWRT_SETUP_IF" > "$AUDIOWRT_SETUP_DIR/interface"
@@ -103,7 +126,21 @@ start_ap() {
 }
 
 case "${1:-}" in
-	start) shift; trap 'stop_ap' HUP INT TERM; start_ap "$@" || { result=$?; cp "$AUDIOWRT_SETUP_DIR/hostapd.log" /tmp/audiowrt/setup-failure.log 2>/dev/null || true; stop_ap; exit "$result"; } ;;
-	stop) stop_ap ;;
-	*) exit 2 ;;
+	start)
+		shift
+		trap 'stop_ap' HUP INT TERM
+		start_ap "$@" || {
+			result=$?
+			cp "$AUDIOWRT_SETUP_DIR/hostapd.log" \
+				/tmp/audiowrt/setup-failure.log 2>/dev/null || true
+			stop_ap
+			exit "$result"
+		}
+		;;
+	stop)
+		stop_ap
+		;;
+	*)
+		exit 2
+		;;
 esac
