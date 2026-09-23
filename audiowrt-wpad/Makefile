@@ -20,7 +20,7 @@ define Package/audiowrt-wpad
   CATEGORY:=AudioWRT
   TITLE:=AudioWRT minimal WPA2/WPA3 client + open setup AP
   URL:=https://w1.fi/
-  DEPENDS:=+libnl-tiny +hostapd-common +libubox +ucode +libucode +ucode-mod-fs +ucode-mod-nl80211 +ucode-mod-rtnl +ucode-mod-ubus +ucode-mod-uloop +libubus +libblobmsg-json +libudebug +libmbedtls
+  DEPENDS:=+libnl-tiny +libubox +ucode +libucode +ucode-mod-fs +ucode-mod-nl80211 +ucode-mod-rtnl +ucode-mod-ubus +ucode-mod-uloop +libubus +libblobmsg-json +libudebug +libmbedtls
   PROVIDES:=hostapd wpa-supplicant
   USERID:=network=101:network=101
 endef
