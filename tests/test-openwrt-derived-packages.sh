@@ -130,6 +130,10 @@ grep -Fq 'PROVIDES:=hostapd wpa-supplicant' "$repo_root/audiowrt-wpad/Makefile"
 grep -Fq '$(Build/Prepare/AudioWRTDerived)' "$repo_root/audiowrt-wpad/Makefile"
 grep -Fq 'hostapd_multi.a' "$repo_root/audiowrt-wpad/Makefile"
 grep -Fq 'wpa_supplicant_multi.a' "$repo_root/audiowrt-wpad/Makefile"
+if grep -Fq '+hostapd-common' "$repo_root/audiowrt-wpad/Makefile"; then
+  echo 'ERROR: AudioWRT wpad must not depend on the unused hostapd-common package.' >&2
+  exit 1
+fi
 if grep -Fq '+wpa-supplicant-mbedtls' "$repo_root/audiowrt-wpad/Makefile"; then
   echo 'ERROR: AudioWRT wpad regressed to the full OpenWrt supplicant metapackage.' >&2
   exit 1
