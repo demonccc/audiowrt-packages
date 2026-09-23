@@ -24,6 +24,7 @@ stop_ap() {
 	old_radio=$(cat "$AUDIOWRT_SETUP_DIR/radio" 2>/dev/null || true)
 	stop_owned udhcpd
 	stop_owned hostapd
+	/usr/libexec/audiowrt/provision-web stop || true
 	if [ -f "$AUDIOWRT_SETUP_DIR/owned" ]; then
 		iw dev "$AUDIOWRT_SETUP_IF" del 2>/dev/null || true
 	fi
@@ -34,7 +35,7 @@ stop_ap() {
 
 start_ap() {
 	local radio="${1:-}" ssid="${2:-$AUDIOWRT_SETUP_SSID}"
-	local phy path candidate band country
+	local phy path candidate band country pool_start pool_end
 
 	[ "$(uci -q get wireless."$radio" 2>/dev/null)" = wifi-device ] || return 2
 
@@ -53,7 +54,7 @@ start_ap() {
 	if [ -z "$phy" ] && [ -n "$path" ]; then
 		for candidate in /sys/class/ieee80211/*; do
 			case "$(readlink -f "$candidate/device")" in
-				*"/$path"|"*/$path/"*)
+				*"/$path"|*"/$path/"*)
 					phy=${candidate##*/}
 					break
 					;;
@@ -68,6 +69,7 @@ start_ap() {
 	# Release this PHY from netifd for the lifetime of the setup AP.
 	# The radio's stored disabled flag is never changed.
 	wifi down "$radio" || return 4
+	printf '%s\n' "$radio" > "$AUDIOWRT_SETUP_DIR/radio"
 	iw phy "$phy" interface add "$AUDIOWRT_SETUP_IF" type __ap || return 4
 	: > "$AUDIOWRT_SETUP_DIR/owned"
 	ip link set "$AUDIOWRT_SETUP_IF" up || return 4
@@ -96,9 +98,12 @@ start_ap() {
 		tries=$((tries + 1))
 	done
 
+	pool_start=$(audiowrt_setup_dhcp_pool)
+	pool_end=${pool_start#* }
+	pool_start=${pool_start%% *}
 	cat > "$AUDIOWRT_SETUP_DIR/udhcpd.conf" <<-EOF
-	start ${AUDIOWRT_SETUP_IP%.*}.100
-	end ${AUDIOWRT_SETUP_IP%.*}.199
+	start $pool_start
+	end $pool_end
 	interface $AUDIOWRT_SETUP_IF
 	max_leases 100
 	lease_file $AUDIOWRT_SETUP_DIR/leases
@@ -117,6 +122,7 @@ start_ap() {
 		cat "$AUDIOWRT_SETUP_DIR/udhcpd.log" >&2
 		return 7
 	}
+	/usr/libexec/audiowrt/provision-web start || return 8
 
 	printf '%s\n' "$radio" > "$AUDIOWRT_SETUP_DIR/radio"
 	printf '%s\n' "$ssid" > "$AUDIOWRT_SETUP_DIR/ssid"
