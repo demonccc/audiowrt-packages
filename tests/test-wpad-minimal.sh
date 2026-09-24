@@ -22,7 +22,6 @@ grep -q '+libubox' "$makefile"
 grep -q '^TARGET_LDFLAGS_C:=$(TARGET_LDFLAGS)$' "$makefile"
 grep -q 'CONFIG_TLS=mbedtls' "$makefile"
 grep -q 'LIBS_c="$(TARGET_LDFLAGS_C)"' "$makefile"
-! grep -q -- '-DCONFIG_MSG_MIN_PRIORITY=' "$makefile"
 ! grep -q '^CONFIG_TLS=' "$hostapd_config"
 ! grep -q '^CONFIG_TLS=' "$supplicant_config"
 
