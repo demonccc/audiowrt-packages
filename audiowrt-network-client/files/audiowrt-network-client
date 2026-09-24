@@ -87,14 +87,16 @@ ethernet_link_up() {
 	[ "$(cat "/sys/class/net/$dev/carrier" 2>/dev/null || echo 0)" = 1 ]
 }
 
-default_route_device() {
-	ip route show default 2>/dev/null | awk 'NR == 1 { for (i = 1; i <= NF; i++) if ($i == "dev") { print $(i + 1); exit } }'
+default_route_interface() {
+	ubus call network.interface dump 2>/dev/null |
+		jsonfilter -e "@.interface[@.route[@.target='0.0.0.0' && !@.table]].interface" 2>/dev/null |
+		head -n 1 || true
 }
 
 route_gateway() {
-	dev="$1"
-	[ -n "$dev" ] || return 0
-	ip route show default dev "$dev" 2>/dev/null | awk 'NR == 1 { for (i = 1; i <= NF; i++) if ($i == "via") { print $(i + 1); exit } }'
+	printf '%s' "$1" |
+		jsonfilter -e "@.route[@.target='0.0.0.0' && !@.table].nexthop" 2>/dev/null |
+		head -n 1 || true
 }
 
 status() {
@@ -105,24 +107,19 @@ status() {
 	runtime_ip="$(printf '%s' "$state" | json_value '@["ipv4-address"][0].address')"
 	runtime_prefix="$(printf '%s' "$state" | json_value '@["ipv4-address"][0].mask')"
 	runtime_dns="$(printf '%s' "$state" | jsonfilter -e '@["dns-server"][*]' 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
-	gateway="$(route_gateway "$l3_device")"
-	default_dev="$(default_route_device)"
-	wifi_state="$(ubus call network.interface.audiowrt_wifi status 2>/dev/null || true)"
-	wifi_dev="$(printf '%s' "$wifi_state" | json_value '@.l3_device')"
+	gateway="$(route_gateway "$state")"
+	default_iface="$(default_route_interface)"
 
 	link=0
 	ethernet_link_up "$l3_device" && link=1
 
 	active_route=''
-	if [ -n "$default_dev" ]; then
-		if [ "$default_dev" = "$wifi_dev" ]; then
-			active_route='wifi'
-		elif [ "$default_dev" = "$l3_device" ] || [ "$default_dev" = "$physical_device" ]; then
-			active_route='ethernet'
-		else
-			active_route="$default_dev"
-		fi
-	fi
+	case "$default_iface" in
+		audiowrt_wifi) active_route='wifi' ;;
+		"$ETH_INTERFACE") active_route='ethernet' ;;
+		'') ;;
+		*) active_route="$default_iface" ;;
+	esac
 
 	speed=''
 	duplex=''
