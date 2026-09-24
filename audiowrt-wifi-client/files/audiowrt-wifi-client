@@ -70,8 +70,9 @@ status() {
 	runtime_ip="$(printf '%s' "$state" | jsonfilter -e '@["ipv4-address"][0].address' 2>/dev/null || true)"
 	runtime_prefix="$(printf '%s' "$state" | jsonfilter -e '@["ipv4-address"][0].mask' 2>/dev/null || true)"
 	runtime_dns="$(printf '%s' "$state" | jsonfilter -e '@["dns-server"][*]' 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
-	runtime_gateway=''
-	[ -z "$dev" ] || runtime_gateway="$(ip route show default dev "$dev" 2>/dev/null | awk 'NR == 1 { for (i = 1; i <= NF; i++) if ($i == "via") { print $(i + 1); exit } }')"
+	runtime_gateway="$(printf '%s' "$state" |
+		jsonfilter -e "@.route[@.target='0.0.0.0' && !@.table].nexthop" 2>/dev/null |
+		head -n 1 || true)"
 	rx_bytes=''
 	tx_bytes=''
 	[ -z "$dev" ] || rx_bytes="$(cat "/sys/class/net/$dev/statistics/rx_bytes" 2>/dev/null || true)"
