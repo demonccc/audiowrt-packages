@@ -167,8 +167,14 @@ class RuntimeTests(unittest.TestCase):
         runtime.write_text(runtime.read_text().replace("/sys/class/net", str(net)))
         prefix = f'. "{runtime}"; ' + r'''
             ubus() { if [ "$1" = list ]; then echo network.interface.lan; else echo '{}'; fi; }
-            jsonfilter() { cat >/dev/null; case "$*" in *up*) echo true ;; *) echo "$DEV" ;; esac; }
-            ip() { [ "$HAS_IP" = 1 ] && echo "1: $DEV inet 192.168.1.2/24 scope global"; }
+            jsonfilter() {
+                cat >/dev/null
+                case "$*" in
+                    *up*) echo true ;;
+                    *ipv4-address*) [ "$HAS_IP" = 1 ] && echo 192.168.1.2 ;;
+                    *) echo "$DEV" ;;
+                esac
+            }
             iw() { case "$*" in *info*) echo "type $MODE" ;; *link*) echo 'Connected to 00:11:22:33:44:55';; esac; }
         '''
         self.shell(prefix + 'DEV=eth0; HAS_IP=1; MODE=managed; audiowrt_connected')
@@ -188,7 +194,7 @@ class RuntimeTests(unittest.TestCase):
             "uci": "case \"$*\" in *wireless.radio0.phy*) echo phy0;; *wireless.radio0.band*) echo 2g;; *wireless.radio0.path*|*country*) exit 1;; *) echo wifi-device;; esac",
             "iw": 'echo "$*" >> "$ROOT/iw.log"',
             "wifi": ":",
-            "ip": ":",
+            "ifconfig": ":",
             "hostapd": "echo 'driver initialization failed'; exit 7",
             "udhcpd": 'touch "$ROOT/dhcp-started"',
         }.items():
