@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-config
-PKG_VERSION:=1.0.0
+PKG_VERSION:=1.0.1
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
@@ -26,6 +26,7 @@ endef
 define Package/audiowrt-config/install
 	$(INSTALL_DIR) $(1)/usr/libexec/audiowrt
 	$(INSTALL_DATA) ./files/config-save $(1)/usr/libexec/audiowrt/config-save
+	$(INSTALL_BIN) ./files/configure-settings $(1)/usr/libexec/audiowrt/configure-settings
 endef
 
 $(eval $(call BuildPackage,audiowrt-config))
