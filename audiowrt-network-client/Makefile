@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-network-client
-PKG_VERSION:=1.0.0
+PKG_VERSION:=1.0.1
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
@@ -12,7 +12,7 @@ define Package/audiowrt-network-client
   SECTION:=net
   CATEGORY:=Network
   TITLE:=AudioWRT network client manager
-  DEPENDS:=+audiowrt-config +uci +ubus +netifd +ip-tiny +jsonfilter
+  DEPENDS:=+audiowrt-config +uci +ubus +netifd +jsonfilter
 endef
 
 define Package/audiowrt-network-client/description
