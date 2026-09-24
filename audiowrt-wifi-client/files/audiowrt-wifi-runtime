@@ -29,7 +29,7 @@ audiowrt_setup_dhcp_pool() {
 audiowrt_setup_active() {
 	[ -s "$AUDIOWRT_SETUP_DIR/hostapd.pid" ] || return 1
 	kill -0 "$(cat "$AUDIOWRT_SETUP_DIR/hostapd.pid")" 2>/dev/null &&
-		ip link show "$AUDIOWRT_SETUP_IF" >/dev/null 2>&1
+		[ -d "/sys/class/net/$AUDIOWRT_SETUP_IF" ]
 }
 
 audiowrt_link() {
@@ -58,12 +58,13 @@ audiowrt_link() {
 }
 
 audiowrt_interface_up() {
-	local state dev
+	local state dev address
 	state=$(ubus call "network.interface.$1" status 2>/dev/null) || return 1
 	[ "$(printf '%s' "$state" | jsonfilter -e '@.up')" = true ] || return 1
 	dev=$(printf '%s' "$state" | jsonfilter -e '@.l3_device')
 	[ -n "$dev" ] && audiowrt_link "$dev" || return 1
-	ip -o addr show dev "$dev" scope global | grep -qE ' inet6? '
+	address=$(printf '%s' "$state" | jsonfilter -e '@["ipv4-address"][0].address' 2>/dev/null || true)
+	[ -n "$address" ]
 }
 
 audiowrt_client_up() {
