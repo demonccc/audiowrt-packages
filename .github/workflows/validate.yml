@@ -43,6 +43,10 @@ jobs:
         shell: bash
         run: bash tests/test-wifi-client-package.sh
 
+      - name: Validate unified network client contract
+        shell: bash
+        run: bash tests/test-network-client-package.sh
+
       - name: Validate minimal multicall wpad contract
         shell: bash
         run: bash tests/test-wpad-minimal.sh
@@ -122,8 +126,10 @@ jobs:
             audiowrt-airplay \
             audiowrt-spotify \
             audiowrt-bluetooth \
+            audiowrt-network-client \
             audiowrt-wifi-client \
             luci-app-audiowrt \
+            luci-app-audiowrt-network-client \
             luci-app-audiowrt-wifi-client \
             luci-app-audiowrt-core \
             luci-app-audiowrt-dlna; do
@@ -202,8 +208,10 @@ jobs:
             audiowrt-btctl \
             bluez-alsa \
             audiowrt-bluetooth \
+            audiowrt-network-client \
             audiowrt-wifi-client \
             luci-app-audiowrt \
+            luci-app-audiowrt-network-client \
             luci-app-audiowrt-wifi-client \
             luci-app-audiowrt-core \
             kmod-audiowrt-bluetooth \

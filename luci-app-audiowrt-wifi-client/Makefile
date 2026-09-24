@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-audiowrt-wifi-client
-PKG_VERSION:=1.0.1
+PKG_VERSION:=1.0.2
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
@@ -12,15 +12,13 @@ define Package/luci-app-audiowrt-wifi-client
   SECTION:=luci
   CATEGORY:=LuCI
   SUBMENU:=3. Applications
-  TITLE:=AudioWRT Wi-Fi client interface
-  DEPENDS:=+luci-base +rpcd-mod-file +audiowrt-wifi-client
+  TITLE:=AudioWRT Network Client compatibility package
+  DEPENDS:=+luci-app-audiowrt-network-client
 endef
 
 define Package/luci-app-audiowrt-wifi-client/description
- Reusable LuCI page for scanning and configuring an opt-in Wi-Fi client,
- including automatic DHCP or manual IPv4 address, netmask, gateway and DNS.
- Installing the package does not change OpenWrt networking until the user
- explicitly connects to a network.
+ Compatibility package for existing AudioWRT profiles. The Wi-Fi-only LuCI
+ page has been replaced by the unified Network Client page.
 endef
 
 define Build/Prepare
@@ -33,10 +31,6 @@ define Build/Compile
 endef
 
 define Package/luci-app-audiowrt-wifi-client/install
-	$(INSTALL_DIR) $(1)/www
-	$(CP) ./htdocs/* $(1)/www/
-	$(INSTALL_DIR) $(1)/
-	$(CP) ./root/* $(1)/
 endef
 
 $(eval $(call BuildPackage,luci-app-audiowrt-wifi-client))

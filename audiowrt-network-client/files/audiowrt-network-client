@@ -1,0 +1,215 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+set -eu
+
+ETH_INTERFACE='lan'
+
+usage() {
+	cat <<'USAGE'
+Usage:
+  audiowrt-network-client status
+  audiowrt-network-client configure-ethernet <dhcp|static> [ipaddr] [netmask] [gateway] [dns1] [dns2]
+USAGE
+}
+
+validate_ipv4() {
+	printf '%s\n' "$1" | awk -F. '
+		NF != 4 { exit 1 }
+		{
+			for (i = 1; i <= 4; i++) {
+				if ($i !~ /^[0-9]+$/ || $i < 0 || $i > 255) exit 1
+			}
+		}
+	' >/dev/null 2>&1
+}
+
+validate_netmask() {
+	case "$1" in
+		0.0.0.0|128.0.0.0|192.0.0.0|224.0.0.0|240.0.0.0|248.0.0.0|252.0.0.0|254.0.0.0|255.0.0.0|\
+		255.128.0.0|255.192.0.0|255.224.0.0|255.240.0.0|255.248.0.0|255.252.0.0|255.254.0.0|255.255.0.0|\
+		255.255.128.0|255.255.192.0|255.255.224.0|255.255.240.0|255.255.248.0|255.255.252.0|255.255.254.0|255.255.255.0|\
+		255.255.255.128|255.255.255.192|255.255.255.224|255.255.255.240|255.255.255.248|255.255.255.252|255.255.255.254|255.255.255.255) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+state_json() {
+	ubus call "network.interface.$ETH_INTERFACE" status 2>/dev/null || true
+}
+
+json_value() {
+	jsonfilter -e "$1" 2>/dev/null || true
+}
+
+first_ethernet_port() {
+	dev="$1"
+	[ -n "$dev" ] || return 1
+
+	if [ -d "/sys/class/net/$dev/brif" ]; then
+		for port in /sys/class/net/"$dev"/brif/*; do
+			[ -e "$port" ] || continue
+			name="${port##*/}"
+			[ "$(cat "/sys/class/net/$name/carrier" 2>/dev/null || echo 0)" = 1 ] && {
+				printf '%s\n' "$name"
+				return 0
+			}
+		done
+		for port in /sys/class/net/"$dev"/brif/*; do
+			[ -e "$port" ] || continue
+			printf '%s\n' "${port##*/}"
+			return 0
+		done
+	fi
+
+	for lower in /sys/class/net/"$dev"/lower_*; do
+		[ -e "$lower" ] || continue
+		name="${lower##*lower_}"
+		[ "$(cat "/sys/class/net/$name/carrier" 2>/dev/null || echo 0)" = 1 ] && {
+			printf '%s\n' "$name"
+			return 0
+		}
+	done
+
+	[ -d "/sys/class/net/$dev" ] && printf '%s\n' "$dev"
+}
+
+ethernet_link_up() {
+	dev="$1"
+	[ -n "$dev" ] || return 1
+	if [ -d "/sys/class/net/$dev/brif" ]; then
+		for port in /sys/class/net/"$dev"/brif/*; do
+			[ -e "$port" ] || continue
+			[ "$(cat "/sys/class/net/${port##*/}/carrier" 2>/dev/null || echo 0)" = 1 ] && return 0
+		done
+		return 1
+	fi
+	[ "$(cat "/sys/class/net/$dev/carrier" 2>/dev/null || echo 0)" = 1 ]
+}
+
+default_route_device() {
+	ip route show default 2>/dev/null | awk 'NR == 1 { for (i = 1; i <= NF; i++) if ($i == "dev") { print $(i + 1); exit } }'
+}
+
+route_gateway() {
+	dev="$1"
+	[ -n "$dev" ] || return 0
+	ip route show default dev "$dev" 2>/dev/null | awk 'NR == 1 { for (i = 1; i <= NF; i++) if ($i == "via") { print $(i + 1); exit } }'
+}
+
+status() {
+	state="$(state_json)"
+	up="$(printf '%s' "$state" | json_value '@.up')"
+	l3_device="$(printf '%s' "$state" | json_value '@.l3_device')"
+	physical_device="$(first_ethernet_port "$l3_device" 2>/dev/null || true)"
+	runtime_ip="$(printf '%s' "$state" | json_value '@["ipv4-address"][0].address')"
+	runtime_prefix="$(printf '%s' "$state" | json_value '@["ipv4-address"][0].mask')"
+	runtime_dns="$(printf '%s' "$state" | jsonfilter -e '@["dns-server"][*]' 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+	gateway="$(route_gateway "$l3_device")"
+	default_dev="$(default_route_device)"
+	wifi_state="$(ubus call network.interface.audiowrt_wifi status 2>/dev/null || true)"
+	wifi_dev="$(printf '%s' "$wifi_state" | json_value '@.l3_device')"
+
+	link=0
+	ethernet_link_up "$l3_device" && link=1
+
+	active_route=''
+	if [ -n "$default_dev" ]; then
+		if [ "$default_dev" = "$wifi_dev" ]; then
+			active_route='wifi'
+		elif [ "$default_dev" = "$l3_device" ] || [ "$default_dev" = "$physical_device" ]; then
+			active_route='ethernet'
+		else
+			active_route="$default_dev"
+		fi
+	fi
+
+	speed=''
+	duplex=''
+	[ -n "$physical_device" ] && speed="$(cat "/sys/class/net/$physical_device/speed" 2>/dev/null || true)"
+	[ -n "$physical_device" ] && duplex="$(cat "/sys/class/net/$physical_device/duplex" 2>/dev/null || true)"
+	rx_bytes=''
+	tx_bytes=''
+	[ -n "$l3_device" ] && rx_bytes="$(cat "/sys/class/net/$l3_device/statistics/rx_bytes" 2>/dev/null || true)"
+	[ -n "$l3_device" ] && tx_bytes="$(cat "/sys/class/net/$l3_device/statistics/tx_bytes" 2>/dev/null || true)"
+
+	printf 'ethernet_interface=%s\n' "$ETH_INTERFACE"
+	printf 'ethernet_device=%s\n' "$l3_device"
+	printf 'ethernet_physical_device=%s\n' "$physical_device"
+	printf 'ethernet_up=%s\n' "$([ "$up" = true ] && echo 1 || echo 0)"
+	printf 'ethernet_link=%s\n' "$link"
+	printf 'ethernet_ip_mode=%s\n' "$(uci -q get network.$ETH_INTERFACE.proto || echo dhcp)"
+	printf 'ethernet_ipaddr=%s\n' "$(uci -q get network.$ETH_INTERFACE.ipaddr || true)"
+	printf 'ethernet_netmask=%s\n' "$(uci -q get network.$ETH_INTERFACE.netmask || true)"
+	printf 'ethernet_gateway=%s\n' "$(uci -q get network.$ETH_INTERFACE.gateway || true)"
+	printf 'ethernet_dns=%s\n' "$(uci -q get network.$ETH_INTERFACE.dns || true)"
+	printf 'ethernet_runtime_ip=%s\n' "$runtime_ip"
+	printf 'ethernet_runtime_prefix=%s\n' "$runtime_prefix"
+	printf 'ethernet_runtime_gateway=%s\n' "$gateway"
+	printf 'ethernet_runtime_dns=%s\n' "$runtime_dns"
+	printf 'ethernet_speed=%s\n' "$speed"
+	printf 'ethernet_duplex=%s\n' "$duplex"
+	printf 'ethernet_rx_bytes=%s\n' "$rx_bytes"
+	printf 'ethernet_tx_bytes=%s\n' "$tx_bytes"
+	printf 'active_route=%s\n' "$active_route"
+}
+
+configure_ethernet() (
+	mode="${1:-dhcp}"
+	ipaddr="${2:-}"
+	netmask="${3:-}"
+	gateway="${4:-}"
+	dns1="${5:-}"
+	dns2="${6:-}"
+
+	uci -q get network.$ETH_INTERFACE >/dev/null 2>&1 || {
+		echo "ERROR: network.$ETH_INTERFACE does not exist." >&2
+		exit 2
+	}
+
+	case "$mode" in
+		dhcp) ;;
+		static)
+			validate_ipv4 "$ipaddr" || { echo 'ERROR: invalid static IPv4 address.' >&2; exit 3; }
+			validate_netmask "$netmask" || { echo 'ERROR: invalid IPv4 netmask.' >&2; exit 4; }
+			validate_ipv4 "$gateway" || { echo 'ERROR: invalid IPv4 gateway.' >&2; exit 5; }
+			[ -z "$dns1" ] || validate_ipv4 "$dns1" || { echo 'ERROR: invalid primary DNS server.' >&2; exit 6; }
+			[ -z "$dns2" ] || validate_ipv4 "$dns2" || { echo 'ERROR: invalid secondary DNS server.' >&2; exit 7; }
+			;;
+		*) echo "ERROR: unsupported IP mode: $mode" >&2; exit 8 ;;
+	esac
+
+	. /usr/libexec/audiowrt/config-save
+	save_begin network || exit 9
+	save_uci set network.$ETH_INTERFACE.proto="$mode"
+	save_uci delete network.$ETH_INTERFACE.ipaddr 2>/dev/null || true
+	save_uci delete network.$ETH_INTERFACE.netmask 2>/dev/null || true
+	save_uci delete network.$ETH_INTERFACE.gateway 2>/dev/null || true
+	save_uci delete network.$ETH_INTERFACE.dns 2>/dev/null || true
+
+	if [ "$mode" = static ]; then
+		save_uci set network.$ETH_INTERFACE.ipaddr="$ipaddr"
+		save_uci set network.$ETH_INTERFACE.netmask="$netmask"
+		save_uci set network.$ETH_INTERFACE.gateway="$gateway"
+		[ -z "$dns1" ] || save_uci add_list network.$ETH_INTERFACE.dns="$dns1"
+		[ -z "$dns2" ] || save_uci add_list network.$ETH_INTERFACE.dns="$dns2"
+	fi
+
+	save_finish || exit 10
+	ubus call network reload '{}' >/dev/null 2>&1 || true
+)
+
+case "${1:-}" in
+	status) status ;;
+	configure-ethernet)
+		mkdir -p /tmp/audiowrt
+		mkdir /tmp/audiowrt/network-client.lock 2>/dev/null || {
+			echo 'Network change in progress.' >&2
+			exit 1
+		}
+		trap 'rmdir /tmp/audiowrt/network-client.lock' EXIT
+		shift
+		configure_ethernet "$@"
+		;;
+	*) usage; exit 2 ;;
+esac
