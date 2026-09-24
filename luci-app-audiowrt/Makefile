@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-audiowrt
-PKG_VERSION:=1.0.1
+PKG_VERSION:=1.0.2
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
@@ -13,11 +13,11 @@ define Package/luci-app-audiowrt
   CATEGORY:=LuCI
   SUBMENU:=3. Applications
   TITLE:=AudioWRT audio management interface
-  DEPENDS:=+luci-base +rpcd-mod-file +audiowrt-audio +audiowrt-extensions
+  DEPENDS:=+luci-base +rpcd-mod-file +audiowrt-audio
 endef
 
 define Package/luci-app-audiowrt/description
- Reusable LuCI interface for AudioWRT audio outputs and music-service extensions. It does not modify OpenWrt router or network configuration. When luci-mod-status is installed, AudioWRT adds an audio section to the native OpenWrt Status overview.
+ Reusable LuCI interface for AudioWRT audio outputs. It does not modify OpenWrt router or network configuration. When luci-mod-status is installed, AudioWRT adds an audio section to the native OpenWrt Status overview.
 endef
 
 define Build/Prepare
