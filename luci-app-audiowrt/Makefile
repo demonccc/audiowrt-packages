@@ -1,12 +1,13 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-audiowrt
-PKG_VERSION:=1.0.3
+PKG_VERSION:=1.0.4
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
 
 include $(INCLUDE_DIR)/package.mk
+include $(TOPDIR)/feeds/audiowrt/include/audiowrt-luci-minify.mk
 
 define Package/luci-app-audiowrt
   SECTION:=luci
@@ -27,11 +28,13 @@ define Build/Configure
 endef
 
 define Build/Compile
+	$(call AudioWRT/BuildJsMin)
 endef
 
 define Package/luci-app-audiowrt/install
 	$(INSTALL_DIR) $(1)/www
 	$(CP) ./htdocs/* $(1)/www/
+	$(call AudioWRT/MinifyJS,$(1)/www)
 	$(INSTALL_DIR) $(1)/
 	$(CP) ./root/* $(1)/
 endef
