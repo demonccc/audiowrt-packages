@@ -63,18 +63,10 @@ grep -q 'admin/network/wireless' "$menu_filter"
 [ ! -e "$repo_root/luci-app-audiowrt-core/htdocs/luci-static/resources/view/audiowrt-core/network.js" ]
 [ ! -e "$repo_root/luci-app-audiowrt-core/htdocs/luci-static/resources/view/audiowrt-core/system.js" ]
 
-# Optional audio services are standalone modules. The obsolete shared
-# extensions manager and LuCI Extensions page must not return.
-[ ! -e "$repo_root/audiowrt-extensions" ]
-[ ! -e "$repo_root/luci-app-audiowrt/htdocs/luci-static/resources/view/audiowrt/extensions.js" ]
-! grep -q 'audiowrt-extensions' "$repo_root/audiowrt-mpd/Makefile"
-! grep -q 'audiowrt-extensions' "$repo_root/audiowrt-airplay/Makefile"
-! grep -q 'audiowrt-extensions' "$repo_root/audiowrt-spotify/Makefile"
+# Optional audio services own their integration directly.
 grep -q '/usr/libexec/audiowrt/mpd configure' "$repo_root/audiowrt-mpd/Makefile"
 grep -q '/usr/libexec/audiowrt/airplay configure' "$repo_root/audiowrt-airplay/Makefile"
 grep -q '/usr/libexec/audiowrt/spotify configure' "$repo_root/audiowrt-spotify/Makefile"
 grep -q 'configure-settings' "$repo_root/audiowrt-config/Makefile"
-! grep -q 'admin/audiowrt/extensions' "$repo_root/luci-app-audiowrt/root/usr/share/luci/menu.d/luci-app-audiowrt.json"
-! grep -q 'audiowrt-extensions' "$repo_root/luci-app-audiowrt/root/usr/share/rpcd/acl.d/luci-app-audiowrt.json"
 
 echo 'AudioWRT appliance integration tests passed.'
