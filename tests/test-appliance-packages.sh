@@ -22,6 +22,8 @@ grep -q '+audiowrt-wifi-client' "$provisioning/Makefile"
 grep -q 'provisioning auto' "$provisioning/files/provision-supervisor"
 grep -q 'audiowrt_connected' "$provisioning/files/audiowrtctl"
 grep -q 'wifi-runtime' "$repo_root/audiowrt-wifi-client/Makefile"
+grep -q '+luci-app-audiowrt-network-client' "$repo_root/luci-app-audiowrt-wifi-client/Makefile"
+grep -q '"title": "Network Client"' "$repo_root/luci-app-audiowrt-network-client/root/usr/share/luci/menu.d/luci-app-audiowrt-network-client.json"
 if grep -Eq 'uci-defaults|uci -q commit|rm -f.*/etc/' "$provisioning/files/audiowrt-provisioning.init"; then
     echo 'ERROR: provisioning init must not persist or migrate configuration.' >&2
     exit 1

@@ -51,6 +51,32 @@ scan() {
 }
 
 status() {
+	state="$(ubus call network.interface.audiowrt_wifi status 2>/dev/null || true)"
+	dev="$(printf '%s' "$state" | jsonfilter -e '@.l3_device' 2>/dev/null || true)"
+	link=''
+	if [ -n "$dev" ]; then
+		link="$(iw dev "$dev" link 2>/dev/null || true)"
+	fi
+
+	actual_bssid="$(printf '%s\n' "$link" | sed -n 's/^Connected to \([^ ]*\).*/\1/p' | head -n 1)"
+	actual_ssid="$(printf '%s\n' "$link" | sed -n 's/^[[:space:]]*SSID: //p' | head -n 1)"
+	frequency="$(printf '%s\n' "$link" | sed -n 's/^[[:space:]]*freq: //p' | head -n 1)"
+	signal="$(printf '%s\n' "$link" | sed -n 's/^[[:space:]]*signal: \([-0-9.]*\).*/\1/p' | head -n 1)"
+	rx_bitrate="$(printf '%s\n' "$link" | sed -n 's/^[[:space:]]*rx bitrate: //p' | head -n 1)"
+	tx_bitrate="$(printf '%s\n' "$link" | sed -n 's/^[[:space:]]*tx bitrate: //p' | head -n 1)"
+	channel=''
+	[ -z "$dev" ] || channel="$(iw dev "$dev" info 2>/dev/null | sed -n 's/.*channel \([0-9][0-9]*\).*/\1/p' | head -n 1)"
+
+	runtime_ip="$(printf '%s' "$state" | jsonfilter -e '@["ipv4-address"][0].address' 2>/dev/null || true)"
+	runtime_prefix="$(printf '%s' "$state" | jsonfilter -e '@["ipv4-address"][0].mask' 2>/dev/null || true)"
+	runtime_dns="$(printf '%s' "$state" | jsonfilter -e '@["dns-server"][*]' 2>/dev/null | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+	runtime_gateway=''
+	[ -z "$dev" ] || runtime_gateway="$(ip route show default dev "$dev" 2>/dev/null | awk 'NR == 1 { for (i = 1; i <= NF; i++) if ($i == "via") { print $(i + 1); exit } }')"
+	rx_bytes=''
+	tx_bytes=''
+	[ -z "$dev" ] || rx_bytes="$(cat "/sys/class/net/$dev/statistics/rx_bytes" 2>/dev/null || true)"
+	[ -z "$dev" ] || tx_bytes="$(cat "/sys/class/net/$dev/statistics/tx_bytes" 2>/dev/null || true)"
+
 	printf 'client_present=%s\n' "$(uci -q get wireless.audiowrt_client >/dev/null 2>&1 && echo 1 || echo 0)"
 	printf 'client_enabled=%s\n' "$([ "$(uci -q get wireless.audiowrt_client.disabled || echo 1)" = '0' ] && echo 1 || echo 0)"
 	printf 'radio=%s\n' "$(uci -q get wireless.audiowrt_client.device || true)"
@@ -62,6 +88,20 @@ status() {
 	printf 'netmask=%s\n' "$(uci -q get network.audiowrt_wifi.netmask || true)"
 	printf 'gateway=%s\n' "$(uci -q get network.audiowrt_wifi.gateway || true)"
 	printf 'dns=%s\n' "$(uci -q get network.audiowrt_wifi.dns || true)"
+	printf 'device=%s\n' "$dev"
+	printf 'actual_ssid=%s\n' "$actual_ssid"
+	printf 'actual_bssid=%s\n' "$actual_bssid"
+	printf 'frequency=%s\n' "$frequency"
+	printf 'channel=%s\n' "$channel"
+	printf 'signal=%s\n' "$signal"
+	printf 'rx_bitrate=%s\n' "$rx_bitrate"
+	printf 'tx_bitrate=%s\n' "$tx_bitrate"
+	printf 'runtime_ip=%s\n' "$runtime_ip"
+	printf 'runtime_prefix=%s\n' "$runtime_prefix"
+	printf 'runtime_gateway=%s\n' "$runtime_gateway"
+	printf 'runtime_dns=%s\n' "$runtime_dns"
+	printf 'rx_bytes=%s\n' "$rx_bytes"
+	printf 'tx_bytes=%s\n' "$tx_bytes"
 	printf 'setup_enabled=%s\n' "$(audiowrt_setup_active && echo 1 || echo 0)"
 	printf 'network_up=%s\n' "$(audiowrt_client_up && echo 1 || echo 0)"
 	printf 'pending=%s\n' "$([ -d /tmp/audiowrt/client ] && echo 1 || echo 0)"
