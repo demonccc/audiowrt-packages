@@ -69,6 +69,7 @@ if grep -q 'DEPENDS:=.*+kmod-bluetooth.*+kmod-btusb' "$bluetooth"; then
     exit 1
 fi
 grep -q '/usr/bin/audiowrt-btctl' "$wrapper"
+grep -Fq 'adapters) /usr/bin/audiowrt-btctl adapters ;;' "$wrapper"
 if grep -Eq '\b(bluetoothctl|hciconfig)\b' "$wrapper"; then
     echo 'ERROR: Bluetooth wrapper still requires generic BlueZ CLI utilities.' >&2
     exit 1
