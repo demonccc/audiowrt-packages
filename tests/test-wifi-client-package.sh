@@ -66,10 +66,12 @@ grep -q 'network.audiowrt_wifi.gateway=' "$script"
 grep -q 'add_list network.audiowrt_wifi.dns=' "$script"
 grep -q "_('Automatic (DHCP)')" "$ui"
 grep -q "_('Manual')" "$ui"
-grep -q "_('IP address')" "$ui"
-grep -q "_('Netmask')" "$ui"
-grep -q "_('Gateway')" "$ui"
-grep -q "_('Primary DNS (optional)')" "$ui"
+grep -q '^function makeIpFields' "$ui"
+grep -q '^function validateIpFields' "$ui"
+grep -q '^function stageIpFields' "$ui"
+for field in ipaddr netmask gateway dns1 dns2; do
+    grep -q "$field: $field" "$ui"
+done
 
 # Scan presentation must use per-BSSID capability data instead of inferring
 # Wi-Fi generation from frequency alone.
