@@ -2,19 +2,30 @@
 	"luci-app-audiowrt": {
 		"description": "Grant access to the reusable AudioWRT audio interface",
 		"read": {
-			"uci": [ "audiowrt-audio", "system" ],
+			"uci": [
+				"audiowrt-audio",
+				"system"
+			],
 			"file": {
-				"/usr/sbin/audiowrt-audio": [ "exec" ],
-				"/usr/sbin/audiowrt-extensions": [ "exec" ],
-				"/usr/sbin/audiowrt-bluetooth": [ "exec" ]
+				"/usr/sbin/audiowrt-audio": [
+					"exec"
+				],
+				"/usr/sbin/audiowrt-bluetooth": [
+					"exec"
+				]
 			}
 		},
 		"write": {
-			"uci": [ "audiowrt-audio" ],
+			"uci": [
+				"audiowrt-audio"
+			],
 			"file": {
-				"/usr/sbin/audiowrt-audio": [ "exec" ],
-				"/usr/sbin/audiowrt-extensions": [ "exec" ],
-				"/usr/sbin/audiowrt-bluetooth": [ "exec" ]
+				"/usr/sbin/audiowrt-audio": [
+					"exec"
+				],
+				"/usr/sbin/audiowrt-bluetooth": [
+					"exec"
+				]
 			}
 		}
 	}
