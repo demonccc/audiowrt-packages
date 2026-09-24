@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-mpd
-PKG_VERSION:=1.0.1
+PKG_VERSION:=1.0.2
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
@@ -12,7 +12,7 @@ define Package/audiowrt-mpd
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT MPD integration
-  DEPENDS:=+audiowrt-extensions +mpd
+  DEPENDS:=+mpd
 endef
 
 define Package/audiowrt-mpd/description
@@ -34,12 +34,18 @@ define Package/audiowrt-mpd/install
 	$(INSTALL_DIR) $(1)/etc/init.d $(1)/etc/rc.d
 	$(INSTALL_BIN) ./files/mpd-runtime.init $(1)/etc/init.d/audiowrt-mpd-runtime
 	ln -s ../init.d/audiowrt-mpd-runtime $(1)/etc/rc.d/S92audiowrt-mpd-runtime
+
+	$(INSTALL_DIR) $(1)/usr/libexec/audiowrt
+	$(INSTALL_BIN) ./files/mpd $(1)/usr/libexec/audiowrt/mpd
+
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt
+	$(INSTALL_DATA) ./files/mpd.conf $(1)/usr/share/audiowrt/mpd.conf
 endef
 
 define Package/audiowrt-mpd/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt/extensions/mpd configure
+/usr/libexec/audiowrt/mpd configure
 endef
 
 $(eval $(call BuildPackage,audiowrt-mpd))
