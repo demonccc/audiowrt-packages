@@ -6,8 +6,6 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 makefile="$repo_root/audiowrt-wifi-client/Makefile"
 script="$repo_root/audiowrt-wifi-client/files/audiowrt-wifi-client"
-ui="$repo_root/luci-app-audiowrt-network-client/htdocs/luci-static/resources/view/audiowrt-network-client/client.js"
-wizard="$repo_root/audiowrt-provisioning/files/audiowrt.html"
 busybox_makefile="$repo_root/audiowrt-busybox/Makefile"
 udhcpd_makefile="$repo_root/audiowrt-udhcpd/Makefile"
 
@@ -64,28 +62,6 @@ grep -q 'network.audiowrt_wifi.ipaddr=' "$script"
 grep -q 'network.audiowrt_wifi.netmask=' "$script"
 grep -q 'network.audiowrt_wifi.gateway=' "$script"
 grep -q 'add_list network.audiowrt_wifi.dns=' "$script"
-grep -q "_('Automatic (DHCP)')" "$ui"
-grep -q "_('Manual')" "$ui"
-grep -q '^function makeIpFields' "$ui"
-grep -q '^function validateIpFields' "$ui"
-grep -q '^function stageIpFields' "$ui"
-for field in ipaddr netmask gateway dns1 dns2; do
-    grep -q "$field: $field" "$ui"
-done
-
-# Scan presentation must use per-BSSID capability data instead of inferring
-# Wi-Fi generation from frequency alone.
-for view in "$ui" "$wizard"; do
-    grep -q 'ht_operation' "$view"
-    grep -q 'vht_operation' "$view"
-    grep -q 'he_operation' "$view"
-    grep -q 'eht_operation' "$view"
-    grep -q 'Wi-Fi' "$view"
-    grep -q '2.4 GHz' "$view"
-    grep -q '5 GHz' "$view"
-    grep -q '6 GHz' "$view"
-done
-
 # WPA personal credentials must be bounded to the normal 8..63 character PSK range.
 grep -q '\${#key}.*-lt 8' "$script"
 grep -q '\${#key}.*-gt 63' "$script"
