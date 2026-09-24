@@ -74,6 +74,15 @@ if grep -Eq '\b(bluetoothctl|hciconfig)\b' "$wrapper"; then
     exit 1
 fi
 grep -Fq '#define BLUEZ_STORAGE "/tmp/lib/bluetooth"' "$btctl_source"
+grep -Fq 'strcmp(argv[1], "adapters") == 0' "$btctl_source"
+grep -Fq 'g_variant_lookup(props, "Address", "&s", &address);' "$btctl_source"
+grep -Fq 'g_variant_lookup(props, "Alias", "&s", &alias);' "$btctl_source"
+grep -Fq 'g_variant_lookup(props, "Name", "&s", &name);' "$btctl_source"
+grep -Fq 'g_variant_lookup(props, "Powered", "b", &powered);' "$btctl_source"
+grep -Fq 'g_variant_lookup(props, "Discoverable", "b", &discoverable);' "$btctl_source"
+grep -Fq 'g_variant_lookup(props, "Pairable", "b", &pairable);' "$btctl_source"
+grep -Fq 'g_variant_lookup(props, "Discovering", "b", &discovering);' "$btctl_source"
+grep -Fq 'g_print("%s|%s|%s|%s|%d|%d|%d|%d\n"' "$btctl_source"
 grep -Fq 'mkdir -p /tmp/lib/bluetooth' "$wrapper"
 if grep -Rqs '/var/lib/bluetooth' "$wrapper" "$btctl_source"; then
     echo 'ERROR: Bluetooth runtime state must not depend on /var persistence semantics.' >&2
