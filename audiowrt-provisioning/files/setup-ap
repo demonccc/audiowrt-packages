@@ -72,8 +72,7 @@ start_ap() {
 	printf '%s\n' "$radio" > "$AUDIOWRT_SETUP_DIR/radio"
 	iw phy "$phy" interface add "$AUDIOWRT_SETUP_IF" type __ap || return 4
 	: > "$AUDIOWRT_SETUP_DIR/owned"
-	ip link set "$AUDIOWRT_SETUP_IF" up || return 4
-	ip addr add "$AUDIOWRT_SETUP_IP/24" dev "$AUDIOWRT_SETUP_IF" || return 4
+	ifconfig "$AUDIOWRT_SETUP_IF" "$AUDIOWRT_SETUP_IP" netmask 255.255.255.0 up || return 4
 
 	country=$(uci -q get wireless."$radio".country 2>/dev/null || true)
 	{
