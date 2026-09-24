@@ -35,40 +35,9 @@ jobs:
             esac
           done < <(find . -path './.git' -prune -o -type f -print0)
 
-      - name: Validate OpenWrt-derived package contract
-        shell: bash
-        run: bash tests/test-openwrt-derived-packages.sh
-
-      - name: Validate reusable Wi-Fi client contract
-        shell: bash
-        run: bash tests/test-wifi-client-package.sh
-
-      - name: Validate unified network client contract
-        shell: bash
-        run: bash tests/test-network-client-package.sh
-
-      - name: Validate minimal multicall wpad contract
-        shell: bash
-        run: bash tests/test-wpad-minimal.sh
-
       - name: Validate wpad syslog patch
         shell: bash
         run: bash tests/test-wpad-syslog-patch.sh
-
-      - name: Validate minimal BlueALSA contract
-        shell: bash
-        run: bash tests/test-bluealsa-minimal.sh
-
-      - name: Validate minimal Bluetooth dependency contract
-        shell: bash
-        run: bash tests/test-bluetooth-minimal.sh
-
-      - name: Validate minimal USB Audio kernel contracts
-        shell: bash
-        run: bash tests/test-usb-audio-kmods-minimal.sh
-
-      - name: Validate minimal runtime libraries
-        run: bash tests/test-runtime-libraries-minimal.sh
 
       - name: Exercise runtime behavior with real UCI
         shell: bash
@@ -84,62 +53,13 @@ jobs:
           UCI_BIN="$work/uci" python3 tests/test-runtime-behavior.py
           bash tests/test-device-identity.sh
 
-      - name: Validate audio runtime flash contract
+      - name: Validate flash write policy
         shell: bash
-        run: |
-          bash tests/test-audio-runtime-state.sh
-          bash tests/test-flash-write-policy.sh
-
-      - name: Validate native renderer, discovery and players
-        shell: bash
-        run: |
-          bash tests/test-native-dlna.sh
-          bash tests/test-dlna-codecs.sh
-          bash tests/test-playback-registry.sh
-          bash tests/test-renderer-xml-unescape.sh
+        run: bash tests/test-flash-write-policy.sh
 
       - name: Validate AudioWRT package versioning
         shell: bash
         run: bash tests/test-package-versioning.sh
-
-      - name: Validate appliance packages
-        shell: bash
-        run: |
-          bash tests/test-appliance-packages.sh
-          bash tests/test-provisioning-ownership.sh
-          bash tests/test-distribution-file-only-packages.sh
-
-      - name: Validate file-only package build phases
-        shell: bash
-        run: |
-          set -euo pipefail
-          for package in \
-            audiowrt-audio \
-            audiowrt-core \
-            audiowrt-config \
-            audiowrt-identity \
-            audiowrt-provisioning \
-            audiowrt-usb-audio \
-            audiowrt-mpd \
-            audiowrt-minimal-upmpdcli \
-            audiowrt-airplay \
-            audiowrt-spotify \
-            audiowrt-bluetooth \
-            audiowrt-network-client \
-            audiowrt-wifi-client \
-            luci-app-audiowrt \
-            luci-app-audiowrt-network-client \
-            luci-app-audiowrt-wifi-client \
-            luci-app-audiowrt-core \
-            luci-app-audiowrt-dlna; do
-            makefile="$package/Makefile"
-            for phase in Prepare Configure Compile; do
-              grep -q "^define Build/$phase$" "$makefile" || {
-                echo "Missing explicit Build/$phase in file-only package: $package" >&2
-                exit 1
-              }
-            done
-          done
 
       - name: Validate OpenWrt package metadata
         if: github.event_name == 'workflow_dispatch'

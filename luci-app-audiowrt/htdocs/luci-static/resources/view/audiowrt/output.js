@@ -7,37 +7,85 @@
 
 function parseUsbCards(text) {
 	var cards = [];
+
 	(text || '').split(/\n/).forEach(function(line) {
-		if (line.indexOf('USB-Audio') < 0) return;
+		if (line.indexOf('USB-Audio') < 0)
+			return;
+
 		var m = line.match(/^\s*(\d+)\s+\[([^\]]+)\]:\s*(.+?)\s+-\s+(.+)$/);
-		if (m) cards.push({ card: m[1], id: m[2].trim(), name: m[4].trim() || m[3].trim() });
+		if (m) {
+			cards.push({
+				card: m[1],
+				id: m[2].trim(),
+				name: m[4].trim() || m[3].trim()
+			});
+		}
 	});
+
 	return cards;
 }
 
 function parseState(text) {
 	var state = {};
+
 	(text || '').split(/\n/).forEach(function(line) {
 		var p = line.indexOf('=');
-		if (p > 0) state[line.substring(0, p)] = line.substring(p + 1);
+		if (p > 0)
+			state[line.substring(0, p)] = line.substring(p + 1);
 	});
+
 	return state;
 }
 
 function parseBluetoothDevices(text) {
-	return (text || '').trim().split(/\n/).filter(Boolean).map(function(line) {
-		var f = line.split('|');
-		return {
-			mac: f[0],
-			name: f[1] || f[0],
-			paired: f[2] === '1',
-			connected: f[3] === '1',
-			selected: f[4] === '1',
-			saved: f[5] === '1',
-			preferred: f[6] === '1',
-			present: f[7] === '1'
-		};
-	});
+	return (text || '')
+		.trim()
+		.split(/\n/)
+		.filter(Boolean)
+		.map(function(line) {
+			var f = line.split('|');
+
+			return {
+				mac: f[0],
+				name: f[1] || f[0],
+				paired: f[2] === '1',
+				connected: f[3] === '1',
+				selected: f[4] === '1',
+				saved: f[5] === '1',
+				preferred: f[6] === '1',
+				present: f[7] === '1'
+			};
+		});
+}
+
+function parseBluetoothAdapters(text) {
+	return (text || '')
+		.trim()
+		.split(/\n/)
+		.filter(Boolean)
+		.map(function(line) {
+			var f = line.split('|');
+
+			return {
+				interface: f[0] || '',
+				address: f[1] || '',
+				alias: f[2] || '',
+				name: f[3] || '',
+				powered: f[4] === '1',
+				discoverable: f[5] === '1',
+				pairable: f[6] === '1',
+				discovering: f[7] === '1'
+			};
+		})
+		.sort(function(a, b) {
+			var ai = /^hci(\d+)$/.exec(a.interface);
+			var bi = /^hci(\d+)$/.exec(b.interface);
+
+			if (ai && bi)
+				return Number(ai[1]) - Number(bi[1]);
+
+			return a.interface.localeCompare(b.interface);
+		});
 }
 
 function actionButton(label, handler) {
@@ -48,13 +96,46 @@ function actionButton(label, handler) {
 	}, label);
 }
 
+function yesNo(value) {
+	return value ? _('Yes') : _('No');
+}
+
+function usbTabLabel(card, index, total) {
+	if (total === 1)
+		return card.name || _('USB Audio');
+
+	var name = card.name || '';
+	if (name.length > 26)
+		name = name.substring(0, 23) + '...';
+
+	return name || _('USB Audio %d').format(index + 1);
+}
+
+function adapterDisplayName(adapter) {
+	return adapter.alias || adapter.name || adapter.interface || _('Bluetooth');
+}
+
+function bluetoothTabLabel(adapter, adapters) {
+	var label = adapterDisplayName(adapter);
+	var duplicates = adapters.filter(function(item) {
+		return adapterDisplayName(item) === label;
+	}).length;
+
+	return duplicates > 1
+		? '%s · %s'.format(label, adapter.interface)
+		: label;
+}
+
 return view.extend({
 	scanning: false,
-	btSupported: false,
+	btPackageAvailable: false,
+	btAdapters: [],
+	activeTab: null,
 
 	load: function() {
 		return Promise.all([
 			L.resolveDefault(fs.stat('/usr/sbin/audiowrt-bluetooth'), null),
+			L.resolveDefault(fs.exec('/usr/sbin/audiowrt-bluetooth', [ 'adapters' ]), { stdout: '' }),
 			L.resolveDefault(fs.exec('/usr/sbin/audiowrt-bluetooth', [ 'devices' ]), { stdout: '' }),
 			L.resolveDefault(fs.read('/proc/asound/cards'), ''),
 			L.resolveDefault(fs.exec('/usr/sbin/audiowrt-audio', [ 'status' ]), { stdout: '' })
@@ -63,6 +144,7 @@ return view.extend({
 
 	deviceStatus: function(dev) {
 		var status;
+
 		if (dev.saved && !dev.present)
 			status = _('Saved · Waiting');
 		else if (dev.connected && dev.selected)
@@ -76,18 +158,23 @@ return view.extend({
 
 		if (dev.saved && dev.present)
 			status += ' · ' + _('✓ Saved');
+
 		return status;
 	},
 
 	runBluetoothAction: function(action, dev, message) {
 		var self = this;
+
 		ui.showModal(_('Bluetooth audio'), [
 			E('p', { 'class': 'spinning' }, message)
 		]);
+
 		return fs.exec('/usr/sbin/audiowrt-bluetooth', [ action, dev.mac ]).then(function(res) {
 			ui.hideModal();
+
 			if (res.code)
 				throw new Error(res.stderr || _('Bluetooth operation failed.'));
+
 			return self.refreshBluetooth();
 		}).catch(function(err) {
 			ui.hideModal();
@@ -99,25 +186,45 @@ return view.extend({
 		var self = this;
 		var buttons = [];
 
-		if (dev.connected && !dev.selected)
+		if (dev.connected && !dev.selected) {
 			buttons.push(actionButton(_('Use'), function() {
-				self.runBluetoothAction('use', dev, _('Switching audio output to ') + dev.name + '...');
+				self.runBluetoothAction(
+					'use',
+					dev,
+					_('Switching audio output to ') + dev.name + '...'
+				);
 			}));
+		}
 
-		if (!dev.connected && dev.present && (dev.paired || dev.saved))
+		if (!dev.connected && dev.present && (dev.paired || dev.saved)) {
 			buttons.push(actionButton(_('Connect'), function() {
-				self.runBluetoothAction('connect', dev, _('Connecting to ') + dev.name + '...');
+				self.runBluetoothAction(
+					'connect',
+					dev,
+					_('Connecting to ') + dev.name + '...'
+				);
 			}));
+		}
 
-		if (dev.connected)
+		if (dev.connected) {
 			buttons.push(actionButton(_('Disconnect'), function() {
-				self.runBluetoothAction('disconnect', dev, _('Disconnecting ') + dev.name + '...');
+				self.runBluetoothAction(
+					'disconnect',
+					dev,
+					_('Disconnecting ') + dev.name + '...'
+				);
 			}));
+		}
 
-		if (!dev.saved && (dev.paired || dev.connected))
+		if (!dev.saved && (dev.paired || dev.connected)) {
 			buttons.push(actionButton(_('Save'), function() {
-				self.runBluetoothAction('save', dev, _('Saving ') + dev.name + _(' for future reboots...'));
+				self.runBluetoothAction(
+					'save',
+					dev,
+					_('Saving ') + dev.name + _(' for future reboots...')
+				);
 			}));
+		}
 
 		return E('div', { 'class': 'tr' }, [
 			E('div', { 'class': 'td left' }, dev.name),
@@ -129,63 +236,208 @@ return view.extend({
 
 	renderNearbyRow: function(dev) {
 		var self = this;
+
 		return E('div', { 'class': 'tr' }, [
 			E('div', { 'class': 'td left' }, dev.name),
 			E('div', { 'class': 'td left' }, dev.mac),
 			E('div', { 'class': 'td left' }, _('Discovered')),
 			E('div', { 'class': 'td right' }, actionButton(_('Pair'), function() {
-				self.runBluetoothAction('pair', dev, _('Pairing with ') + dev.name + '...');
+				self.runBluetoothAction(
+					'pair',
+					dev,
+					_('Pairing with ') + dev.name + '...'
+				);
 			}))
 		]);
 	},
 
-	renderBluetooth: function(devices) {
+	renderAdapterInfo: function(adapter) {
+		var items = [];
+
+		function add(label, value) {
+			if (value === '' || value === null || value === undefined)
+				return;
+			items.push(label, value);
+		}
+
+		add(_('Alias'), adapter.alias);
+		add(_('Name'), adapter.name);
+		add(_('Address'), adapter.address);
+		add(_('Interface'), adapter.interface);
+		add(_('Powered'), yesNo(adapter.powered));
+		add(_('Discoverable'), yesNo(adapter.discoverable));
+		add(_('Pairable'), yesNo(adapter.pairable));
+		add(_('Discovering'), yesNo(adapter.discovering));
+
+		return E('div', { 'class': 'cbi-section' }, [
+			E('h3', {}, _('Adapter information')),
+			E('div', { 'class': 'cbi-section-node' }, [
+				L.itemlist(E('span'), items)
+			])
+		]);
+	},
+
+	renderBluetoothDevices: function(adapter, devices) {
 		var self = this;
-		var mine = devices.filter(function(dev) { return dev.paired || dev.connected || dev.saved; });
-		var nearby = devices.filter(function(dev) { return !dev.paired && !dev.connected && !dev.saved; });
+		var mine = devices.filter(function(dev) {
+			return dev.paired || dev.connected || dev.saved;
+		});
+		var nearby = devices.filter(function(dev) {
+			return !dev.paired && !dev.connected && !dev.saved;
+		});
 
 		var scanButton = E('button', {
-			'id': 'audiowrt-bt-scan',
 			'class': 'btn cbi-button-action',
 			'disabled': this.scanning ? 'disabled' : null,
-			'click': function() { self.scanBluetooth(); }
+			'click': function() {
+				self.scanBluetooth(adapter);
+			}
 		}, this.scanning ? _('Scanning...') : _('Scan for devices'));
 
 		return E('div', {}, [
-			E('h4', {}, _('My devices')),
-			mine.length
-				? E('div', { 'class': 'table' }, mine.map(function(dev) { return self.renderMyDeviceRow(dev); }))
-				: E('p', {}, _('No paired, connected or saved Bluetooth devices yet.')),
-			E('h4', { 'style': 'margin-top:1.5rem' }, _('Nearby devices')),
-			E('p', {}, scanButton),
-			nearby.length
-				? E('div', { 'class': 'table' }, nearby.map(function(dev) { return self.renderNearbyRow(dev); }))
-				: E('p', {}, this.scanning ? _('Waiting for nearby Bluetooth devices...') : _('No new Bluetooth devices discovered.'))
+			this.renderAdapterInfo(adapter),
+
+			E('div', { 'class': 'cbi-section' }, [
+				E('h3', {}, _('My devices')),
+				mine.length
+					? E('div', { 'class': 'table' }, mine.map(function(dev) {
+						return self.renderMyDeviceRow(dev);
+					}))
+					: E('p', {}, _('No paired, connected or saved Bluetooth devices yet.'))
+			]),
+
+			E('div', { 'class': 'cbi-section' }, [
+				E('h3', {}, _('Nearby devices')),
+				E('p', {}, scanButton),
+				nearby.length
+					? E('div', { 'class': 'table' }, nearby.map(function(dev) {
+						return self.renderNearbyRow(dev);
+					}))
+					: E('p', {}, this.scanning
+						? _('Waiting for nearby Bluetooth devices...')
+						: _('No new Bluetooth devices discovered.'))
+			])
 		]);
+	},
+
+	renderBluetoothEmpty: function() {
+		if (!this.btPackageAvailable) {
+			return E('p', {}, _(
+				'Bluetooth audio support is not included in this firmware build.'
+			));
+		}
+
+		return E('p', {}, _('No Bluetooth adapter detected.'));
+	},
+
+	renderUsbContent: function(card, audioState) {
+		var selected =
+			audioState.output_type === 'usb' &&
+			audioState.ready === '1' &&
+			String(audioState.card || '') === String(card.card);
+
+		return E('div', { 'class': 'cbi-section' }, [
+			E('h3', {}, _('USB audio device')),
+			E('div', { 'class': 'cbi-section-node' }, [
+				L.itemlist(E('span'), [
+					_('Name'), card.name,
+					_('ALSA card'), String(card.card),
+					_('Status'), selected ? _('Selected and ready') : _('Ready')
+				])
+			])
+		]);
+	},
+
+	renderUsbEmpty: function() {
+		return E('p', {}, _('No USB audio device detected.'));
+	},
+
+	setTab: function(tabId) {
+		this.activeTab = tabId;
+
+		document.querySelectorAll('#audiowrt-output-tabs > li').forEach(function(tab) {
+			tab.className = tab.getAttribute('data-tab') === tabId
+				? 'cbi-tab'
+				: 'cbi-tab-disabled';
+		});
+
+		document.querySelectorAll('.audiowrt-output-pane').forEach(function(pane) {
+			pane.style.display = pane.getAttribute('data-tab') === tabId ? '' : 'none';
+		});
+	},
+
+	tabNode: function(id, label, active) {
+		var self = this;
+
+		return E('li', {
+			'class': active ? 'cbi-tab' : 'cbi-tab-disabled',
+			'data-tab': id
+		}, [
+			E('a', {
+				'href': '#',
+				'click': function(ev) {
+					ev.preventDefault();
+					self.setTab(id);
+				}
+			}, label)
+		]);
+	},
+
+	paneNode: function(id, content, active) {
+		return E('div', {
+			'class': 'audiowrt-output-pane',
+			'data-tab': id,
+			'style': active ? '' : 'display:none'
+		}, [ content ]);
 	},
 
 	refreshBluetooth: function() {
 		var self = this;
-		if (!this.btSupported)
+
+		if (!this.btPackageAvailable)
 			return Promise.resolve();
 
-		return L.resolveDefault(
-			fs.exec('/usr/sbin/audiowrt-bluetooth', [ 'devices' ]),
-			{ stdout: '' }
-		).then(function(res) {
-			var node = document.getElementById('audiowrt-bt-content');
-			if (node)
-				node.replaceChildren(self.renderBluetooth(parseBluetoothDevices(res.stdout || '')));
+		return Promise.all([
+			L.resolveDefault(
+				fs.exec('/usr/sbin/audiowrt-bluetooth', [ 'adapters' ]),
+				{ stdout: '' }
+			),
+			L.resolveDefault(
+				fs.exec('/usr/sbin/audiowrt-bluetooth', [ 'devices' ]),
+				{ stdout: '' }
+			)
+		]).then(function(data) {
+			self.btAdapters = parseBluetoothAdapters(data[0].stdout || '');
+			var devices = parseBluetoothDevices(data[1].stdout || '');
+
+			self.btAdapters.forEach(function(adapter) {
+				var node = document.getElementById(
+					'audiowrt-bt-' + adapter.interface
+				);
+
+				if (node) {
+					node.replaceChildren(
+						self.renderBluetoothDevices(adapter, devices)
+					);
+				}
+			});
 		});
 	},
 
-	scanBluetooth: function() {
+	scanBluetooth: function(adapter) {
 		var self = this;
+
 		if (this.scanning)
 			return;
+
 		this.scanning = true;
 		this.refreshBluetooth();
 
+		/*
+		 * Adapter enumeration is now explicit. Device discovery/actions still use
+		 * the existing backend behavior, which selects the first BlueZ adapter.
+		 * The adapter object is kept here for the future adapter-aware commands.
+		 */
 		fs.exec('/usr/sbin/audiowrt-bluetooth', [ 'scan', '8' ]).then(function(res) {
 			if (res.code)
 				throw new Error(res.stderr || _('Bluetooth scan failed.'));
@@ -199,31 +451,70 @@ return view.extend({
 
 	render: function(data) {
 		var self = this;
-		this.btSupported = !!data[0];
-		var devices = this.btSupported ? parseBluetoothDevices(data[1].stdout || '') : [];
-		var usbCards = parseUsbCards(data[2]);
-		var audioState = parseState(data[3].stdout || '');
-		var usbNode;
+
+		this.btPackageAvailable = !!data[0];
+		this.btAdapters = this.btPackageAvailable
+			? parseBluetoothAdapters(data[1].stdout || '')
+			: [];
+
+		var devices = this.btPackageAvailable
+			? parseBluetoothDevices(data[2].stdout || '')
+			: [];
+
+		var usbCards = parseUsbCards(data[3]);
+		var audioState = parseState(data[4].stdout || '');
+
+		var tabs = [];
+		var panes = [];
+		var firstTab = null;
+
+		function addTab(id, label, content) {
+			var active = firstTab === null;
+
+			if (active)
+				firstTab = id;
+
+			tabs.push(self.tabNode(id, label, active));
+			panes.push(self.paneNode(id, content, active));
+		}
 
 		if (!usbCards.length) {
-			usbNode = E('p', {}, _('No USB audio device connected.'));
-		} else if (usbCards.length === 1) {
-			usbNode = E('p', {}, [
-				E('strong', {}, '✓ ' + usbCards[0].name),
-				' ',
-				E('span', {}, audioState.output_type === 'usb' && audioState.ready === '1'
-					? _('— Selected and ready')
-					: _('— Ready'))
-			]);
+			addTab(
+				'usb-empty',
+				_('USB Audio'),
+				this.renderUsbEmpty()
+			);
 		} else {
-			usbNode = E('div', {}, usbCards.map(function(card) {
-				return E('p', {}, [
-					E('strong', {}, '✓ ' + card.name),
-					' ',
-					E('span', {}, _('— USB Audio Class device'))
-				]);
-			}));
+			usbCards.forEach(function(card, index) {
+				addTab(
+					'usb-' + card.card,
+					usbTabLabel(card, index, usbCards.length),
+					self.renderUsbContent(card, audioState)
+				);
+			});
 		}
+
+		if (!this.btAdapters.length) {
+			addTab(
+				'bluetooth-empty',
+				_('Bluetooth'),
+				this.renderBluetoothEmpty()
+			);
+		} else {
+			this.btAdapters.forEach(function(adapter) {
+				addTab(
+					'bluetooth-' + adapter.interface,
+					bluetoothTabLabel(adapter, self.btAdapters),
+					E('div', {
+						'id': 'audiowrt-bt-' + adapter.interface
+					}, [
+						self.renderBluetoothDevices(adapter, devices)
+					])
+				);
+			});
+		}
+
+		this.activeTab = firstTab;
 
 		poll.add(function() {
 			return self.refreshBluetooth();
@@ -231,16 +522,11 @@ return view.extend({
 
 		return E('div', { 'class': 'cbi-map' }, [
 			E('h2', {}, _('Audio Output')),
-			E('div', { 'class': 'cbi-section' }, [
-				E('h3', {}, _('USB Audio')),
-				usbNode
-			]),
-			E('div', { 'class': 'cbi-section' }, [
-				E('h3', {}, _('Bluetooth Audio')),
-				this.btSupported
-					? E('div', { 'id': 'audiowrt-bt-content' }, [ this.renderBluetooth(devices) ])
-					: E('p', {}, _('Bluetooth audio support is not included in this firmware build.'))
-			])
+			E('ul', {
+				'id': 'audiowrt-output-tabs',
+				'class': 'cbi-tabmenu'
+			}, tabs),
+			E('div', {}, panes)
 		]);
 	},
 
