@@ -322,6 +322,7 @@ status() {
 
 case "${1:-}" in
 	status) status ;;
+	adapters) /usr/bin/audiowrt-btctl adapters ;;
 	devices) devices ;;
 	scan) scan "${2:-8}" ;;
 	pair) pair_device "${2:-}" ;;
@@ -333,7 +334,7 @@ case "${1:-}" in
 	watch) watch_saved ;;
 	usb) /usr/sbin/audiowrt-audio output usb ;;
 	*)
-		echo 'Usage: audiowrt-bluetooth {status|devices|scan [seconds]|pair <MAC>|connect <MAC>|use <MAC>|disconnect [MAC]|save <MAC>|restore|watch|usb}' >&2
+		echo 'Usage: audiowrt-bluetooth {status|adapters|devices|scan [seconds]|pair <MAC>|connect <MAC>|use <MAC>|disconnect [MAC]|save <MAC>|restore|watch|usb}' >&2
 		exit 2
 		;;
 esac
