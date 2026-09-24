@@ -33,6 +33,7 @@ grep -q 'CONFIG_TLS=' "$makefile"
 # The provisioning AP stays intentionally minimal/open.
 for keep in \
     CONFIG_DRIVER_NL80211=y \
+    CONFIG_L2_PACKET=y \
     CONFIG_IEEE80211N=y \
     CONFIG_ACS=y \
     CONFIG_UBUS=y; do
