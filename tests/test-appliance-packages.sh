@@ -63,4 +63,10 @@ grep -q 'admin/network/wireless' "$menu_filter"
 [ ! -e "$repo_root/luci-app-audiowrt-core/htdocs/luci-static/resources/view/audiowrt-core/network.js" ]
 [ ! -e "$repo_root/luci-app-audiowrt-core/htdocs/luci-static/resources/view/audiowrt-core/system.js" ]
 
+# Optional audio services own their integration directly.
+grep -q '/usr/libexec/audiowrt/mpd configure' "$repo_root/audiowrt-mpd/Makefile"
+grep -q '/usr/libexec/audiowrt/airplay configure' "$repo_root/audiowrt-airplay/Makefile"
+grep -q '/usr/libexec/audiowrt/spotify configure' "$repo_root/audiowrt-spotify/Makefile"
+grep -q 'configure-settings' "$repo_root/audiowrt-config/Makefile"
+
 echo 'AudioWRT appliance integration tests passed.'

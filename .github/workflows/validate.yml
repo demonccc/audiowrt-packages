@@ -120,7 +120,6 @@ jobs:
             audiowrt-identity \
             audiowrt-provisioning \
             audiowrt-usb-audio \
-            audiowrt-extensions \
             audiowrt-mpd \
             audiowrt-minimal-upmpdcli \
             audiowrt-airplay \
@@ -185,7 +184,6 @@ jobs:
             audiowrt-identity \
             audiowrt-provisioning \
             audiowrt-usb-audio \
-            audiowrt-extensions \
             audiowrt-mpd \
             audiowrt-renderer \
             libaudiowrt-player \

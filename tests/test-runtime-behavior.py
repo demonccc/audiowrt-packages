@@ -142,11 +142,11 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(config.stat().st_mtime_ns, before)
 
     @unittest.skipUnless(UCI, "UCI_BIN is required for real UCI tests")
-    def test_extension_defaults_preserve_explicit_name_and_skip_rewrite(self):
-        script = self.copy("audiowrt-extensions/files/configure-settings", "configure-settings")
+    def test_module_defaults_preserve_explicit_name_and_skip_rewrite(self):
+        script = self.copy("audiowrt-config/files/configure-settings", "configure-settings")
         config = self.root / "config/shairport-sync"
         config.write_text("config shairport-sync 'shairport_sync'\n option name 'Living Room'\n option enabled '0'\n")
-        template = REPO / "audiowrt-extensions/files/airplay.settings"
+        template = REPO / "audiowrt-airplay/files/airplay.settings"
         action = f'sh "{script}" shairport-sync shairport_sync "{template}"'
         self.shell(action)
         self.assertIn("'Living Room'", config.read_text())

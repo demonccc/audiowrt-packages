@@ -5,7 +5,7 @@ set -eu
 
 case "${1:-}" in
 	configure)
-		/usr/libexec/audiowrt/extensions/configure-settings shairport-sync shairport_sync /usr/share/audiowrt/extensions/airplay.settings
+		/usr/libexec/audiowrt/configure-settings shairport-sync shairport_sync /usr/share/audiowrt/airplay.settings
 		/etc/init.d/shairport-sync enabled || /etc/init.d/shairport-sync enable
 		/etc/init.d/shairport-sync restart >/dev/null 2>&1 || true
 		;;

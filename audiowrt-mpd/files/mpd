@@ -9,7 +9,7 @@ case "${1:-}" in
 		chown -R mpd:mpd /tmp/mpd 2>/dev/null || true
 		candidate=$(mktemp /tmp/mpd/config.XXXXXX)
 		trap 'rm -f "$candidate"' EXIT
-		cp /usr/share/audiowrt/extensions/mpd.conf "$candidate"
+		cp /usr/share/audiowrt/mpd.conf "$candidate"
 		if ! cmp -s "$candidate" /etc/mpd.conf; then
 			cp "$candidate" /etc/mpd.conf
 		fi

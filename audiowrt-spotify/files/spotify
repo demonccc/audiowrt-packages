@@ -5,7 +5,7 @@ set -eu
 
 case "${1:-}" in
 	configure)
-		/usr/libexec/audiowrt/extensions/configure-settings librespot main /usr/share/audiowrt/extensions/spotify.settings
+		/usr/libexec/audiowrt/configure-settings librespot main /usr/share/audiowrt/spotify.settings
 		/etc/init.d/librespot enabled || /etc/init.d/librespot enable
 		/etc/init.d/librespot restart >/dev/null 2>&1 || true
 		;;
