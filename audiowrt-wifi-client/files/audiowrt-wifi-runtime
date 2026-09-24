@@ -4,6 +4,9 @@
 # Provisioning runtime constants. This file is part of the immutable package;
 # it is not UCI state and is never written to /etc/config.
 AUDIOWRT_SETUP_IP='192.168.77.1'
+if [ -r /etc/audiowrt/provisioning-ip ]; then
+	IFS= read -r AUDIOWRT_SETUP_IP < /etc/audiowrt/provisioning-ip || true
+fi
 AUDIOWRT_SETUP_SSID='AudioWRT-Setup'
 AUDIOWRT_SETUP_TIMEOUT=45
 
@@ -13,6 +16,15 @@ audiowrt_first_radio() {
 
 AUDIOWRT_SETUP_DIR=/tmp/audiowrt/setup
 AUDIOWRT_SETUP_IF=awsetup
+
+audiowrt_setup_dhcp_pool() {
+	local prefix="${AUDIOWRT_SETUP_IP%.*}" host="${AUDIOWRT_SETUP_IP##*.}"
+	if [ "$host" -ge 100 ] && [ "$host" -le 199 ]; then
+		printf '%s.1 %s.99\n' "$prefix" "$prefix"
+	else
+		printf '%s.100 %s.199\n' "$prefix" "$prefix"
+	fi
+}
 
 audiowrt_setup_active() {
 	[ -s "$AUDIOWRT_SETUP_DIR/hostapd.pid" ] || return 1

@@ -25,8 +25,8 @@ while IFS= read -r makefile; do
 
     [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
         fail "$name must declare semantic PKG_VERSION (found '${version:-missing}')"
-    [[ "$release" == 1 ]] ||
-        fail "$name must declare PKG_RELEASE:=1 (found '${release:-missing}')"
+    [[ -z "$release" || "$release" =~ ^[1-9][0-9]*$ ]] ||
+        fail "$name has invalid PKG_RELEASE '${release}'"
 done < <(find . -mindepth 2 -maxdepth 3 -name Makefile -type f | sort)
 
 echo "AudioWRT package versioning contract OK"

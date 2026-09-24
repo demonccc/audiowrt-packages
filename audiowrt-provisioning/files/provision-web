@@ -1,0 +1,75 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+. /usr/libexec/audiowrt/wifi-runtime
+
+WEB_DIR="$AUDIOWRT_SETUP_DIR/www"
+LISTENERS_FILE="$AUDIOWRT_SETUP_DIR/main-http-listeners"
+
+restore_main_http() {
+	[ -f "$LISTENERS_FILE" ] || return 0
+	uci -q delete uhttpd.provisioning || true
+	uci -q delete uhttpd.main.listen_http || true
+	while IFS= read -r listener; do
+		if [ -n "$listener" ]; then
+			uci add_list uhttpd.main.listen_http="$listener" || return 1
+		fi
+	done < "$LISTENERS_FILE"
+	/etc/init.d/uhttpd restart
+	rm -f "$LISTENERS_FILE"
+}
+
+start_web() {
+	local lan_ip listener
+	mkdir -p "$WEB_DIR/cgi-bin"
+	cp /www/audiowrt.html "$WEB_DIR/index.html" || return 1
+	for cgi in audiowrt-status audiowrt-scan audiowrt-radios audiowrt-provision audiowrt-root; do
+		cp "/www/cgi-bin/$cgi" "$WEB_DIR/cgi-bin/$cgi" || return 1
+	done
+	cat > "$WEB_DIR/cgi-bin/provision-redirect" <<'EOF' || return 1
+#!/bin/sh
+. /usr/libexec/audiowrt/wifi-runtime
+printf 'Status: 302 Found\r\nLocation: http://%s/\r\nCache-Control: no-store\r\n\r\n' "$AUDIOWRT_SETUP_IP"
+EOF
+	chmod 0755 "$WEB_DIR/cgi-bin/provision-redirect" || return 1
+
+	# Save the normal LuCI listeners and replace only wildcard HTTP binds while
+	# this AP is active, allowing the isolated server to own setup-IP:80.
+	uci -q show uhttpd.main.listen_http 2>/dev/null |
+		sed -n "s/^uhttpd\.main\.listen_http='\(.*\)'$/\1/p" > "$LISTENERS_FILE"
+	uci -q delete uhttpd.main.listen_http || true
+	while IFS= read -r listener; do
+		case "$listener" in
+			0.0.0.0:80|\[::\]:80|:::80|\*:80|"$AUDIOWRT_SETUP_IP:80") continue ;;
+		esac
+		if [ -n "$listener" ]; then
+			uci add_list uhttpd.main.listen_http="$listener" || return 1
+		fi
+	done < "$LISTENERS_FILE"
+	lan_ip=$(ip -o -4 addr show dev br-lan scope global 2>/dev/null |
+		awk 'NR == 1 { sub(/\/.*/, "", $4); print $4 }')
+	[ -n "$lan_ip" ] || lan_ip=127.0.0.1
+	[ "$lan_ip" != "$AUDIOWRT_SETUP_IP" ] || lan_ip=127.0.0.1
+	uci add_list uhttpd.main.listen_http="$lan_ip:80" || return 1
+
+	uci set uhttpd.provisioning=uhttpd || return 1
+	uci set uhttpd.provisioning.enabled=1 || return 1
+	uci set uhttpd.provisioning.home="$WEB_DIR" || return 1
+	uci add_list uhttpd.provisioning.listen_http="$AUDIOWRT_SETUP_IP:80" || return 1
+	uci set uhttpd.provisioning.cgi_prefix=/cgi-bin || return 1
+	uci set uhttpd.provisioning.index_page=index.html || return 1
+	uci set uhttpd.provisioning.error_page=/cgi-bin/provision-redirect || return 1
+	uci set uhttpd.provisioning.no_dirlists=1 || return 1
+	/etc/init.d/uhttpd restart || return 1
+}
+
+case "${1:-}" in
+	start)
+		if start_web; then :; else restore_main_http || true; exit 1; fi
+		;;
+	stop)
+		restore_main_http
+		rm -rf "$WEB_DIR"
+		;;
+	*) exit 2 ;;
+esac
