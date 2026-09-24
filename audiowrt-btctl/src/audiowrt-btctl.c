@@ -125,6 +125,71 @@ static gboolean power_on(void) {
 	return ok;
 }
 
+static gchar *safe_field(const gchar *value) {
+	gchar *safe = g_strdup(value ? value : "");
+	for (gchar *p = safe; *p; p++)
+		if (*p == '|' || *p == '\n' || *p == '\r') *p = ' ';
+	return safe;
+}
+
+static int print_adapters(void) {
+	GError *error = NULL;
+	GVariant *objects = managed_objects(&error);
+	if (!objects) {
+		g_printerr("ERROR: %s\n", error ? error->message : "cannot query BlueZ");
+		g_clear_error(&error);
+		return 2;
+	}
+
+	GVariantIter iter;
+	const gchar *path;
+	GVariant *interfaces;
+
+	g_variant_iter_init(&iter, objects);
+	while (g_variant_iter_next(&iter, "{&o@a{sa{sv}}}", &path, &interfaces)) {
+		GVariant *props = find_interface(interfaces, "org.bluez.Adapter1");
+		if (props) {
+			const gchar *address = NULL, *alias = NULL, *name = NULL;
+			gboolean powered = FALSE, discoverable = FALSE, pairable = FALSE, discovering = FALSE;
+			const gchar *slash = strrchr(path, '/');
+			const gchar *interface = slash && slash[1] ? slash + 1 : path;
+
+			g_variant_lookup(props, "Address", "&s", &address);
+			g_variant_lookup(props, "Alias", "&s", &alias);
+			g_variant_lookup(props, "Name", "&s", &name);
+			g_variant_lookup(props, "Powered", "b", &powered);
+			g_variant_lookup(props, "Discoverable", "b", &discoverable);
+			g_variant_lookup(props, "Pairable", "b", &pairable);
+			g_variant_lookup(props, "Discovering", "b", &discovering);
+
+			gchar *safe_interface = safe_field(interface);
+			gchar *safe_address = safe_field(address);
+			gchar *safe_alias = safe_field(alias);
+			gchar *safe_name = safe_field(name);
+
+			g_print("%s|%s|%s|%s|%d|%d|%d|%d\n",
+				safe_interface,
+				safe_address,
+				safe_alias,
+				safe_name,
+				powered ? 1 : 0,
+				discoverable ? 1 : 0,
+				pairable ? 1 : 0,
+				discovering ? 1 : 0);
+
+			g_free(safe_interface);
+			g_free(safe_address);
+			g_free(safe_alias);
+			g_free(safe_name);
+			g_variant_unref(props);
+		}
+		g_variant_unref(interfaces);
+	}
+
+	g_variant_unref(objects);
+	return 0;
+}
+
 static void print_devices(void) {
 	GError *error = NULL;
 	GVariant *objects = managed_objects(&error);
@@ -393,7 +458,7 @@ static int storage_import(const char *adapter, const char *mac, const char *enco
 }
 
 static void usage(const char *prog) {
-	g_printerr("Usage: %s {power|devices|scan [seconds]|pair <MAC>|connect <MAC>|disconnect <MAC>|name <MAC>}\n", prog);
+	g_printerr("Usage: %s {adapters|power|devices|scan [seconds]|pair <MAC>|connect <MAC>|disconnect <MAC>|name <MAC>}\n", prog);
 }
 
 int main(int argc, char **argv) {
@@ -406,7 +471,8 @@ int main(int argc, char **argv) {
 	bus = g_bus_get_sync(G_BUS_TYPE_SYSTEM, NULL, &error);
 	if (!bus) { g_printerr("ERROR: %s\n", error->message); g_clear_error(&error); return 2; }
 	int rc = 0;
-	if (strcmp(argv[1], "power") == 0) rc = power_on() ? 0 : 2;
+	if (strcmp(argv[1], "adapters") == 0) rc = print_adapters();
+	else if (strcmp(argv[1], "power") == 0) rc = power_on() ? 0 : 2;
 	else if (strcmp(argv[1], "devices") == 0) { if (!power_on()) rc = 2; else print_devices(); }
 	else if (strcmp(argv[1], "scan") == 0) {
 		int seconds = argc > 2 ? atoi(argv[2]) : 8; if (seconds < 2) seconds = 2; if (seconds > 30) seconds = 30;
