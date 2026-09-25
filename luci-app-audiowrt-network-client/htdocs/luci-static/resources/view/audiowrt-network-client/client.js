@@ -377,17 +377,6 @@ function signalIcon(dbm) {
 }
 
 
-function cardStyle() {
-	return [
-		'flex:0 0 520px',
-		'width:520px',
-		'max-width:100%',
-		'height:205px',
-		'box-sizing:border-box'
-	].join(';');
-}
-
-
 function linkLabel(active) {
 	return active
 		? _('Active')
@@ -395,227 +384,84 @@ function linkLabel(active) {
 }
 
 
-function compactHeadline(
-	icon,
-	title,
-	activeRoute
-) {
-	return E('div', {
-		'style': [
-			'display:flex',
-			'align-items:center',
-			'gap:.75rem',
-			'margin:.15rem 0 .65rem'
-		].join(';')
-	}, [
-		E('img', {
-			'src': icon,
-			'style':
-				'width:40px;height:40px;flex:none'
-		}),
-
-		E('div', {}, [
-			E('strong', {
-				'style': 'font-size:1.05rem'
-			}, title),
-
-			activeRoute
-				? E('div', {
-					'style': [
-						'font-size:.85rem',
-						'font-weight:600',
-						'margin-top:.1rem'
-					].join(';')
-				}, _('Active uplink'))
-				: ''
-		])
-	]);
-}
-
-
 function ethernetStatus(status) {
-	var link =
-		status.ethernet_link === '1';
-
-	var activeRoute =
-		status.active_route === 'ethernet';
-
-	var ip =
-		status.ethernet_runtime_ip || '-';
-
-	if (status.ethernet_runtime_prefix) {
-		ip += '/' +
-			status.ethernet_runtime_prefix;
-	}
+	var link = status.ethernet_link === '1';
+	var activeRoute = status.active_route === 'ethernet';
+	var ip = status.ethernet_runtime_ip || '-';
+	if (status.ethernet_runtime_prefix)
+		ip += '/' + status.ethernet_runtime_prefix;
 
 	var speed = '-';
-	var n = Number(
-		status.ethernet_speed || 0
-	);
-
+	var n = Number(status.ethernet_speed || 0);
 	if (n >= 1000)
 		speed = (n / 1000) + ' Gbps';
 	else if (n > 0)
 		speed = n + ' Mbps';
+	if (speed !== '-' && status.ethernet_duplex)
+		speed += ' · ' + status.ethernet_duplex;
 
-	if (
-		speed !== '-' &&
-		status.ethernet_duplex
-	) {
-		speed += ' · ' +
-			status.ethernet_duplex;
-	}
-
-	return E('div', {
-		'class': 'ifacebox',
-		'style': cardStyle()
-	}, [
-		E('div', {
-			'class':
-				'ifacebox-head center ' +
-				(link ? 'active' : '')
-		}, E('strong', {}, _('Ethernet'))),
-
-		E('div', {
-			'class': 'ifacebox-body left'
-		}, [
-			compactHeadline(
-				L.resource(
-					link
-						? 'icons/ethernet.svg'
-						: 'icons/ethernet_disabled.svg'
-				),
-				_('Ethernet'),
-				activeRoute
-			),
-
+	return E('div', { 'class': 'ifacebox' }, [
+		E('div', { 'class': 'ifacebox-head center ' + (link ? 'active' : '') },
+			E('strong', {}, _('Ethernet'))),
+		E('div', { 'class': 'ifacebox-body left' }, [
+			E('img', {
+				'src': L.resource(link ? 'icons/ethernet.svg' : 'icons/ethernet_disabled.svg'),
+				'alt': '',
+				'width': '40',
+				'height': '40'
+			}),
 			L.itemlist(E('span'), [
-				_('Link'),
-				linkLabel(link),
-
-				_('Address'),
-				ip,
-
-				_('IP configuration'),
-				ipModeLabel(
-					status.ethernet_ip_mode
-				),
-
-				_('Speed'),
-				speed,
-
-				_('Traffic'),
-				'%s RX / %s TX'.format(
-					formatBytes(
-						status.ethernet_rx_bytes
-					),
-					formatBytes(
-						status.ethernet_tx_bytes
-					)
-				)
+				_('Route'), activeRoute ? _('Active uplink') : _('Inactive'),
+				_('Link'), linkLabel(link),
+				_('Address'), ip,
+				_('IP configuration'), ipModeLabel(status.ethernet_ip_mode),
+				_('Speed'), speed,
+				_('Traffic'), '%s RX / %s TX'.format(
+					formatBytes(status.ethernet_rx_bytes),
+					formatBytes(status.ethernet_tx_bytes))
 			])
 		])
 	]);
 }
 
 
-function wifiStatus(
-	status,
-	activeRoute
-) {
-	var link =
-		status.network_up === '1';
+function wifiStatus(status, activeRoute) {
+	var link = status.network_up === '1';
+	var active = activeRoute === 'wifi';
+	var ip = status.runtime_ip || '-';
+	if (status.runtime_prefix)
+		ip += '/' + status.runtime_prefix;
 
-	var active =
-		activeRoute === 'wifi';
-
-	var ip =
-		status.runtime_ip || '-';
-
-	if (status.runtime_prefix) {
-		ip += '/' +
-			status.runtime_prefix;
-	}
-
-	var channel =
-		status.channel || '-';
-
-	var band =
-		bandFromFrequency(
-			status.frequency
-		);
-
-	if (
-		status.channel &&
-		band !== '-'
-	) {
+	var channel = status.channel || '-';
+	var band = bandFromFrequency(status.frequency);
+	if (status.channel && band !== '-')
 		channel += ' · ' + band;
-	}
 
-	var title =
-		status.actual_ssid ||
-		status.ssid ||
-		_('Not configured');
+	var title = status.actual_ssid || status.ssid || _('Not configured');
 
-	return E('div', {
-		'class': 'ifacebox',
-		'style': cardStyle()
-	}, [
-		E('div', {
-			'class':
-				'ifacebox-head center ' +
-				(link ? 'active' : '')
-		}, E('strong', {}, _('Wi-Fi'))),
-
-		E('div', {
-			'class': 'ifacebox-body left'
-		}, [
-			compactHeadline(
-				signalIcon(
-					link
-						? status.signal
-						: ''
-				),
-				title,
-				active
-			),
-
+	return E('div', { 'class': 'ifacebox' }, [
+		E('div', { 'class': 'ifacebox-head center ' + (link ? 'active' : '') },
+			E('strong', {}, _('Wi-Fi'))),
+		E('div', { 'class': 'ifacebox-body left' }, [
+			E('img', {
+				'src': signalIcon(link ? status.signal : ''),
+				'alt': '',
+				'width': '40',
+				'height': '40'
+			}),
 			L.itemlist(E('span'), [
-				_('Link'),
-					linkLabel(link),
-
-				_('Signal'),
-					status.signal
-						? '%s dBm'.format(
-							status.signal
-						)
-						: '-',
-
-				_('Channel'),
-					channel,
-
-				_('Address'),
-					ip,
-
-				_('RX / TX rate'),
-					'%s / %s'.format(
-						shortRate(
-							status.rx_bitrate
-						),
-						shortRate(
-							status.tx_bitrate
-						)
-					),
-
-				_('Traffic'),
-					'%s RX / %s TX'.format(
-						formatBytes(
-							status.rx_bytes
-						),
-						formatBytes(
-							status.tx_bytes
-						)
-					)
+				_('Network'), title,
+				_('Route'), active ? _('Active uplink') : _('Inactive'),
+				_('Link'), linkLabel(link),
+				_('Signal'), status.signal ? '%s dBm'.format(status.signal) : '-',
+				_('Channel'), channel,
+				_('Address'), ip,
+				_('RX / TX rate'), '%s / %s'.format(
+					shortRate(status.rx_bitrate),
+					shortRate(status.tx_bitrate)),
+				_('Traffic'), '%s RX / %s TX'.format(
+					formatBytes(status.rx_bytes),
+					formatBytes(status.tx_bytes))
 			])
 		])
 	]);
@@ -852,13 +698,7 @@ function passwordField() {
 	return {
 		input: input,
 
-		node: E('div', {
-			'style':
-				'display:flex;gap:.5rem'
-		}, [
-			input,
-			toggle
-		])
+		node: E('span', {}, [ input, ' ', toggle ])
 	};
 }
 
@@ -1140,31 +980,12 @@ function stageIpFields(
 }
 
 
-function scanGridStyle() {
-	return [
-		'display:grid',
-		'grid-template-columns:minmax(280px,1fr) 120px 190px 130px',
-		'gap:.75rem',
-		'align-items:center',
-		'min-width:820px'
-	].join(';');
-}
-
-
 function scanHeader() {
-	return E('div', {
-		'style':
-			scanGridStyle() +
-			';font-weight:600;' +
-			'border-bottom:1px solid #ddd;' +
-			'padding:.55rem .65rem'
-	}, [
-		E('div', {}, _('Network')),
-		E('div', {}, _('Access points')),
-		E('div', {}, _('Security')),
-		E('div', {
-			'style': 'text-align:right'
-		}, _('Action'))
+	return E('tr', { 'class': 'tr table-titles' }, [
+		E('th', { 'class': 'th' }, _('Network')),
+		E('th', { 'class': 'th' }, _('Access points')),
+		E('th', { 'class': 'th' }, _('Security')),
+		E('th', { 'class': 'th right' }, _('Action'))
 	]);
 }
 
@@ -1209,15 +1030,7 @@ return view.extend({
 
 		this.pendingWifi = null;
 
-		this.statusNode = E('div', {
-			'style': [
-				'display:flex',
-				'gap:1rem',
-				'flex-wrap:wrap',
-				'align-items:stretch',
-				'margin:.75rem 0 1.5rem'
-			].join(';')
-		});
+		this.statusNode = E('div', { 'class': 'network-status-table' });
 
 		this.refreshStatus();
 
@@ -1233,13 +1046,7 @@ return view.extend({
 				''
 			);
 
-		this.wifiCandidateNode =
-			E('div', {
-				'class':
-					'cbi-value-description',
-				'style':
-					'margin-top:.65rem'
-			}, '');
+		this.wifiCandidateNode = E('div', { 'class': 'cbi-value-description' }, '');
 
 		var ethernetConfig =
 			E('div', {
@@ -1264,10 +1071,7 @@ return view.extend({
 				])
 			]);
 
-		this.scanResult = E('div', {
-			'style':
-				'margin-top:1rem;overflow-x:auto'
-		}, [
+		this.scanResult = E('div', { 'class': 'cbi-section' }, [
 			E('em', {}, _(
 				'Press Scan to discover nearby Wi-Fi networks.'
 			))
@@ -1720,257 +1524,96 @@ return view.extend({
 	scan: function() {
 		var self = this;
 
-		dom.content(
-			this.scanResult,
-			E('p', {
-				'class': 'spinning'
-			}, _(
-				'Scanning all radios…'
-			))
-		);
+		dom.content(this.scanResult,
+			E('p', { 'class': 'spinning' }, _('Scanning all radios…')));
 
-		fs.exec(
-			WIFI_CLIENT,
-			[ 'scan' ]
-		).then(function(res) {
-			if (res.code) {
-				throw new Error(
-					res.stderr ||
-					_('Wi-Fi scan failed.')
-				);
-			}
+		fs.exec(WIFI_CLIENT, [ 'scan' ]).then(function(res) {
+			if (res.code)
+				throw new Error(res.stderr || _('Wi-Fi scan failed.'));
 
-			var groups =
-				groupedNetworks(
-					parseScan(
-						res.stdout
-					)
-				);
-
+			var groups = groupedNetworks(parseScan(res.stdout));
 			if (!groups.length) {
-				dom.content(
-					self.scanResult,
-					E('p', {}, _(
-						'No Wi-Fi networks were found.'
-					))
-				);
-
+				dom.content(self.scanResult,
+					E('p', {}, _('No Wi-Fi networks were found.')));
 				return;
 			}
 
-			var rows = [];
+			var rows = [ scanHeader() ];
 
-			rows.push(
-				scanHeader()
-			);
+			groups.forEach(function(groupData) {
+				var bands = groupData.bands.map(bandLabel).join(' / ');
+				var standards = groupData.generations.length
+					? groupData.generations.map(wifiLabel).join(' / ')
+					: _('Legacy Wi-Fi');
 
-			groups.forEach(
-				function(groupData) {
-					var bands =
-						groupData.bands
-							.map(
-								bandLabel
-							)
-							.join(' / ');
+				var details = E('tr', {
+					'class': 'tr',
+					'style': 'display:none'
+				}, [
+					E('td', { 'class': 'td', 'colspan': '4' }, [
+						E('table', { 'class': 'table cbi-section-table' }, [
+							E('tr', { 'class': 'tr table-titles' }, [
+								E('th', { 'class': 'th' }, _('BSSID')),
+								E('th', { 'class': 'th' }, _('Mode')),
+								E('th', { 'class': 'th' }, _('Signal')),
+								E('th', { 'class': 'th right' }, _('Action'))
+							])
+						].concat(groupData.aps.map(function(ap) {
+							return E('tr', { 'class': 'tr' }, [
+								E('td', { 'class': 'td' }, ap.bssid || '-'),
+								E('td', { 'class': 'td' },
+									'%s · %s · %s'.format(
+										wifiLabel(ap.generation),
+										bandLabel(ap.band),
+										_('Channel %s').format(ap.channel || '-'))),
+								E('td', { 'class': 'td' }, '%s dBm'.format(ap.signal)),
+								E('td', { 'class': 'td right' },
+									E('button', {
+										'class': 'btn',
+										'click': function() { self.connectDialog(ap, true); }
+									}, _('Select')))
+							]);
+						}))
+					])
+				]);
 
-					var standards =
-						groupData.generations.length
-							? groupData.generations
-								.map(
-									wifiLabel
-								)
-								.join(' / ')
-							: _(
-								'Legacy Wi-Fi'
-							);
+				rows.push(E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td' }, [
+						E('strong', {}, groupData.ssid),
+						E('div', { 'class': 'cbi-value-description' },
+							'%s · %s · %s'.format(
+								standards,
+								bands,
+								_('Best: %s dBm').format(groupData.best.signal)))
+					]),
+					E('td', { 'class': 'td' }, _('%d').format(groupData.aps.length)),
+					E('td', { 'class': 'td' }, securityLabel(groupData.best.encryption)),
+					E('td', { 'class': 'td right' }, [
+						E('button', {
+							'class': 'btn cbi-button-action',
+							'click': function() { self.connectDialog(groupData.best, false); }
+						}, _('Select')),
+						' ',
+						E('button', {
+							'class': 'btn',
+							'click': function() {
+								details.style.display = details.style.display === 'none' ? '' : 'none';
+							}
+						}, _('Details'))
+					])
+				]));
+				rows.push(details);
+			});
 
-					var details =
-						E('div', {
-							'style':
-								'display:none;border-bottom:1px solid #ddd'
-						});
-
-					groupData.aps.forEach(
-						function(ap) {
-							details.appendChild(
-								E('div', {
-									'style':
-										scanGridStyle() +
-										';padding:.5rem .65rem;' +
-										'background:rgba(0,0,0,.025)'
-								}, [
-									E('div', {}, [
-										E('strong', {},
-											ap.bssid || '-'
-										),
-
-										E('div', {
-											'style':
-												'font-size:.9em;opacity:.75'
-										},
-										wifiLabel(
-											ap.generation
-										) +
-										' · ' +
-										bandLabel(
-											ap.band
-										) +
-										' · ' +
-										_(
-											'Channel %s'
-										).format(
-											ap.channel ||
-												'-'
-										))
-									]),
-
-									E('div', {},
-										'-'
-									),
-
-									E('div', {},
-										'%s dBm'.format(
-											ap.signal
-										)
-									),
-
-									E('div', {
-										'style':
-											'text-align:right'
-									}, [
-										E('button', {
-											'class':
-												'btn',
-
-											'click':
-												function() {
-													self.connectDialog(
-														ap,
-														true
-													);
-												}
-										}, _('Select'))
-									])
-								])
-							);
-						}
-					);
-
-					var action =
-						E('div', {
-							'style': [
-								'display:flex',
-								'gap:.4rem',
-								'justify-content:flex-end',
-								'align-items:center'
-							].join(';')
-						}, [
-							E('button', {
-								'class':
-									'btn cbi-button-action',
-
-								'click':
-									function() {
-										self.connectDialog(
-											groupData.best,
-											false
-										);
-									}
-							}, _('Select')),
-
-							E('button', {
-								'class': 'btn',
-								'style':
-									'min-width:40px',
-
-								'click':
-									function() {
-										details.style.display =
-											details.style.display ===
-												'none'
-												? ''
-												: 'none';
-									}
-							}, _('▾'))
-						]);
-
-					rows.push(
-						E('div', {}, [
-							E('div', {
-								'style':
-									scanGridStyle() +
-									';padding:.65rem;' +
-									'border-bottom:1px solid #ddd'
-							}, [
-								E('div', {}, [
-									E('strong', {},
-										groupData.ssid
-									),
-
-									E('div', {
-										'style':
-											'font-size:.9em;opacity:.75'
-									},
-									standards +
-									' · ' +
-									bands +
-									' · ' +
-									_(
-										'Best: %s dBm'
-									).format(
-										groupData
-											.best
-											.signal
-									))
-								]),
-
-								E('div', {},
-									_(
-										'%d'
-									).format(
-										groupData
-											.aps
-											.length
-									)
-								),
-
-								E('div', {},
-									securityLabel(
-										groupData
-											.best
-											.encryption
-									)
-								),
-
-								action
-							]),
-
-							details
-						])
-					);
-				}
-			);
-
-			dom.content(
-				self.scanResult,
-				E('div', {
-					'style':
-						'overflow-x:auto'
-				}, rows)
-			);
+			dom.content(self.scanResult,
+				E('div', { 'class': 'cbi-section cbi-tblsection' }, [
+					E('table', { 'class': 'table cbi-section-table' }, rows)
+				]));
 		}).catch(function(err) {
-			dom.content(
-				self.scanResult,
-				E('p', {
-					'class':
-						'alert-message error'
-				},
-				err.message ||
-					String(err))
-			);
+			dom.content(self.scanResult,
+				E('p', { 'class': 'alert-message error' }, err.message || String(err)));
 		});
 	},
-
 
 	connectDialog: function(
 		network,
