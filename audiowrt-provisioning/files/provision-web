@@ -23,7 +23,7 @@ start_web() {
 	local lan_ip listener
 	mkdir -p "$WEB_DIR/cgi-bin"
 	cp /www/audiowrt.html "$WEB_DIR/index.html" || return 1
-	for cgi in audiowrt-status audiowrt-scan audiowrt-radios audiowrt-provision audiowrt-root; do
+	for cgi in audiowrt-status audiowrt-scan audiowrt-radios audiowrt-provision; do
 		cp "/www/cgi-bin/$cgi" "$WEB_DIR/cgi-bin/$cgi" || return 1
 	done
 	cat > "$WEB_DIR/cgi-bin/provision-redirect" <<'EOF' || return 1
