@@ -120,8 +120,8 @@ endif
 	echo 'CONFIG_UDHCPD=y' >> $(PKG_BUILD_DIR)/.config
 	echo 'CONFIG_DHCPD_LEASES_FILE="/tmp/audiowrt-udhcpd.leases"' >> $(PKG_BUILD_DIR)/.config
 	for applet in $(AUDIOWRT_BUSYBOX_DISABLED_APPLETS); do \
-		sed -i -e "/^CONFIG_${applet}=/d" -e "/^# CONFIG_${applet} is not set/d" $(PKG_BUILD_DIR)/.config; \
-		echo "# CONFIG_${applet} is not set" >> $(PKG_BUILD_DIR)/.config; \
+		sed -i -e "/^CONFIG_$${applet}=/d" -e "/^# CONFIG_$${applet} is not set/d" $(PKG_BUILD_DIR)/.config; \
+		echo "# CONFIG_$${applet} is not set" >> $(PKG_BUILD_DIR)/.config; \
 	done
 	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
 endef
