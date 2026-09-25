@@ -11,6 +11,27 @@ PKG_MAINTAINER:=AudioWRT
 BUSYBOX_SYM=$(if $(CONFIG_BUSYBOX_CUSTOM),CONFIG,DEFAULT)
 BUSYBOX_IF_ENABLED=$(if $(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_$(1)),$(2))
 
+# Applets intentionally omitted from the AudioWRT build. None are required by
+# the current OpenWrt/AudioWRT runtime on the minimal image; diagnostic applets
+# that are useful on-device (notably vi, top and which) remain enabled.
+AUDIOWRT_BUSYBOX_DISABLED_APPLETS:= \
+	BRCTL \
+	CLEAR \
+	FREE \
+	IFCONFIG \
+	LESS \
+	MKSWAP \
+	NETMSG \
+	RESET \
+	RESIZE \
+	ROUTE \
+	SWAPOFF \
+	SWAPON \
+	TIME \
+	TRACEROUTE \
+	TRACEROUTE6 \
+	YES
+
 ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SUID),)
   PKG_FILE_MODES:=/bin/busybox:root:root:4755
 endif
@@ -98,6 +119,10 @@ endif
 		$(PKG_BUILD_DIR)/.config
 	echo 'CONFIG_UDHCPD=y' >> $(PKG_BUILD_DIR)/.config
 	echo 'CONFIG_DHCPD_LEASES_FILE="/tmp/audiowrt-udhcpd.leases"' >> $(PKG_BUILD_DIR)/.config
+	for applet in $(AUDIOWRT_BUSYBOX_DISABLED_APPLETS); do \
+		sed -i -e "/^CONFIG_${applet}=/d" -e "/^# CONFIG_${applet} is not set/d" $(PKG_BUILD_DIR)/.config; \
+		echo "# CONFIG_${applet} is not set" >> $(PKG_BUILD_DIR)/.config; \
+	done
 	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
 endef
 
