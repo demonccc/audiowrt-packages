@@ -5,7 +5,6 @@ set -eu
 
 WEB_DIR="$AUDIOWRT_SETUP_DIR/www"
 PID_FILE="$AUDIOWRT_SETUP_DIR/uhttpd.pid"
-CONF_FILE="$AUDIOWRT_SETUP_DIR/uhttpd.conf"
 
 stop_web() {
 	pid="$(cat "$PID_FILE" 2>/dev/null || true)"
@@ -29,15 +28,10 @@ start_web() {
 		cp "/www/cgi-bin/$cgi" "$WEB_DIR/cgi-bin/$cgi"
 	done
 
-	cat > "$CONF_FILE" <<EOF
-home $WEB_DIR
-listen_http $AUDIOWRT_SETUP_IP:80
-cgi_prefix /cgi-bin
-index_page index.html
-no_dirlists 1
-EOF
-
-	uhttpd -f -c "$CONF_FILE" </dev/null >"$AUDIOWRT_SETUP_DIR/uhttpd.log" 2>&1 &
+	uhttpd -f \
+		-h "$WEB_DIR" \
+		-x /cgi-bin \
+		-p "$AUDIOWRT_SETUP_IP:80" </dev/null >"$AUDIOWRT_SETUP_DIR/uhttpd.log" 2>&1 &
 	printf '%s\n' "$!" > "$PID_FILE"
 	sleep 1
 	kill -0 "$(cat "$PID_FILE")" 2>/dev/null || {
@@ -48,6 +42,6 @@ EOF
 
 case "${1:-}" in
 	start) start_web ;;
-	stop) stop_web; rm -rf "$WEB_DIR" "$CONF_FILE" ;;
+	stop) stop_web; rm -rf "$WEB_DIR" ;;
 	*) exit 2 ;;
 esac
