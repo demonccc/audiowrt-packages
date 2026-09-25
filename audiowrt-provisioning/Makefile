@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-provisioning
-PKG_VERSION:=1.0.6
+PKG_VERSION:=1.0.7
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
@@ -40,6 +40,7 @@ define Package/audiowrt-provisioning/install
 	$(INSTALL_BIN) ./files/provision-web $(1)/usr/libexec/audiowrt/provision-web
 	$(INSTALL_BIN) ./files/provision-supervisor $(1)/usr/libexec/audiowrt/provision-supervisor
 	$(INSTALL_BIN) ./files/audiowrt-setup-ssid $(1)/usr/libexec/audiowrt/setup-ssid
+	$(INSTALL_BIN) ./files/time-sync $(1)/usr/libexec/audiowrt/time-sync
 
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/audiowrt-provisioning.init $(1)/etc/init.d/audiowrt-provisioning
