@@ -137,7 +137,6 @@ function bluetoothTableHeader() {
 function actionButton(label, handler) {
 	return E('button', {
 		'class': 'btn cbi-button-action',
-		'style': 'margin-left:.4rem',
 		'click': handler
 	}, label);
 }
