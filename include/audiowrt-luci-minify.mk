@@ -15,10 +15,7 @@ define AudioWRT/BuildJsMin
 endef
 
 define AudioWRT/MinifyJS
-	find "$(1)" -type f -name '*.js' -exec sh -c ' \
-		for src do \
-			"$(AUDIOWRT_JSMIN)" < "$$src" > "$$src.min" || exit 1; \
-			mv -f "$$src.min" "$$src" || exit 1; \
-		done \
-	' sh {} +
+	find "$(1)" -type f -name '*.js' \
+		-exec sh "$(TOPDIR)/feeds/audiowrt/include/audiowrt-jsmin-file.sh" \
+		"$(AUDIOWRT_JSMIN)" {} \;
 endef
