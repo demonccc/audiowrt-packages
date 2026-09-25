@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=libaudiowrt-player
-PKG_VERSION:=1.1.1
+PKG_VERSION:=1.1.2
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -51,7 +51,6 @@ define Package/libaudiowrt-player/install
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/libaudiowrt-player.so.0 $(1)/usr/lib/libaudiowrt-player.so.0
 	$(INSTALL_DIR) $(1)/usr/libexec
 	$(INSTALL_BIN) ./files/audiowrt-playback-registry $(1)/usr/libexec/audiowrt-playback-registry
-	$(INSTALL_BIN) ./files/audiowrt-player-registry $(1)/usr/libexec/audiowrt-player-registry
 	$(INSTALL_DIR) $(1)/etc/config
 	ln -s /tmp/audiowrt/registry/audiowrt-codecs $(1)/etc/config/audiowrt-runtime-codecs
 	ln -s /tmp/audiowrt/registry/audiowrt-players $(1)/etc/config/audiowrt-runtime-players
