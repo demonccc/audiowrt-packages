@@ -1,0 +1,43 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+# Best-effort clock synchronization after network connectivity appears.
+# Failure is intentionally non-fatal: AudioWRT must remain usable on networks
+# without Internet access or with NTP blocked.
+
+set -u
+
+LOG_FILE=/tmp/audiowrt/time-sync.log
+TIMEOUT_SECONDS=5
+
+mkdir -p /tmp/audiowrt
+: > "$LOG_FILE"
+
+# Avoid racing the long-running sysntpd instance while doing the one-shot sync.
+/etc/init.d/sysntpd stop >/dev/null 2>&1 || true
+
+set -- -n -q
+server_count=0
+for server in $(uci -q get system.ntp.server 2>/dev/null || true); do
+	[ -n "$server" ] || continue
+	set -- "$@" -p "$server"
+	server_count=$((server_count + 1))
+done
+
+if [ "$server_count" -eq 0 ]; then
+	logger -t audiowrt "Time synchronization skipped: no NTP servers configured."
+	/etc/init.d/sysntpd start >/dev/null 2>&1 || true
+	exit 0
+fi
+
+if timeout "$TIMEOUT_SECONDS" /usr/sbin/ntpd "$@" >"$LOG_FILE" 2>&1; then
+	logger -t audiowrt "System time synchronized."
+else
+	rc=$?
+	logger -t audiowrt "Time synchronization failed (rc=$rc); continuing without Internet time."
+fi
+
+# Keep the normal OpenWrt NTP service running after the one-shot attempt.
+/etc/init.d/sysntpd start >/dev/null 2>&1 || true
+
+exit 0
