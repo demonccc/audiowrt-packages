@@ -19,9 +19,9 @@ function asList(value) {
 }
 
 function statusRow(label, id, value) {
-	return E('div', { 'class': 'tr' }, [
-		E('div', { 'class': 'td left', 'style': 'width:35%' }, [ E('strong', {}, label) ]),
-		E('div', { 'class': 'td left', 'id': id }, value || '-')
+	return E('tr', { 'class': 'tr' }, [
+		E('th', { 'class': 'th' }, label),
+		E('td', { 'class': 'td', 'id': id }, value || '-')
 	]);
 }
 
@@ -29,27 +29,31 @@ function renderCodecs(codecs) {
 	if (!codecs.length)
 		return E('p', {}, _('No codecs are currently registered in /etc/config/audiowrt-runtime-codecs.'));
 
-	return E('div', { 'class': 'table' }, [
-		E('div', { 'class': 'tr table-titles' }, [
-			E('div', { 'class': 'th left' }, _('Codec')),
-			E('div', { 'class': 'th left' }, _('DLNA default')),
-			E('div', { 'class': 'th left' }, _('Effective player')),
-			E('div', { 'class': 'th left' }, _('Fallbacks')),
-			E('div', { 'class': 'th left' }, _('MIME types'))
+	var rows = [
+		E('tr', { 'class': 'tr table-titles' }, [
+			E('th', { 'class': 'th' }, _('Codec')),
+			E('th', { 'class': 'th' }, _('DLNA default')),
+			E('th', { 'class': 'th' }, _('Effective player')),
+			E('th', { 'class': 'th' }, _('Fallbacks')),
+			E('th', { 'class': 'th' }, _('MIME types'))
 		])
-	].concat(codecs.map(function(c) {
+	];
+
+	codecs.forEach(function(c) {
 		var fallbacks = (c.players || []).filter(function(p) {
 			return p.available && p.id !== c.effective_player;
 		}).map(function(p) { return p.name || p.id; });
 
-		return E('div', { 'class': 'tr' }, [
-			E('div', { 'class': 'td left' }, [ E('strong', {}, String(c.id || '').toUpperCase()) ]),
-			E('div', { 'class': 'td left' }, c.default_player || _('Automatic')),
-			E('div', { 'class': 'td left' }, c.effective_player || _('Unavailable')),
-			E('div', { 'class': 'td left' }, fallbacks.length ? fallbacks.join(', ') : '-'),
-			E('div', { 'class': 'td left' }, c.mime || '-')
-		]);
-	})));
+		rows.push(E('tr', { 'class': 'tr' }, [
+			E('td', { 'class': 'td' }, E('strong', {}, String(c.id || '').toUpperCase())),
+			E('td', { 'class': 'td' }, c.default_player || _('Automatic')),
+			E('td', { 'class': 'td' }, c.effective_player || _('Unavailable')),
+			E('td', { 'class': 'td' }, fallbacks.length ? fallbacks.join(', ') : '-'),
+			E('td', { 'class': 'td' }, c.mime || '-')
+		]));
+	});
+
+	return E('table', { 'class': 'table cbi-section-table' }, rows);
 }
 
 return view.extend({
@@ -63,7 +67,7 @@ return view.extend({
 				args.push(option.option, value);
 		});
 		return fs.exec('/usr/libexec/audiowrt-save-renderer', args).then(function(result) {
-			if (result.code) throw new Error(result.stderr || _('Could not save renderer settings.'));
+			if (result.code) throw new Error(result.stderr || _('Could not save DLNA Renderer settings.'));
 			window.location.reload();
 		});
 	},
@@ -95,7 +99,7 @@ return view.extend({
 		rendererMap = new form.Map('audiowrt-dlna', _('DLNA Renderer'),
 			_('DLNA reads codec capabilities from /etc/config/audiowrt-runtime-codecs and installed players from /etc/config/audiowrt-runtime-players. Player preferences configured here belong only to the DLNA module.'));
 
-		s = rendererMap.section(form.TypedSection, 'renderer', _('Renderer'));
+		s = rendererMap.section(form.TypedSection, 'renderer', _('DLNA Renderer'));
 		this.rendererSection = s;
 		s.anonymous = true;
 		s.addremove = false;
@@ -159,10 +163,14 @@ return view.extend({
 
 		return rendererMap.render().then(function(node) {
 			return E('div', { 'class': 'cbi-map' }, [
-				E('h2', {}, _('Renderer status')),
+				E('h2', {}, _('DLNA Renderer status')),
 				E('div', { 'class': 'cbi-section' }, [
-					E('p', {}, _('Discovery: SSDP/DLNA and mDNS/DNS-SD are provided by this renderer service.')),
-					E('div', { 'class': 'table' }, [
+					E('div', { 'class': 'cbi-section-descr' }, _('Discovery: SSDP/DLNA and mDNS/DNS-SD are provided by the DLNA Renderer service.')),
+					E('table', { 'class': 'table cbi-section-table' }, [
+						E('tr', { 'class': 'tr table-titles' }, [
+							E('th', { 'class': 'th' }, _('Property')),
+							E('th', { 'class': 'th' }, _('Value'))
+						]),
 						statusRow(_('Playback'), 'dlna-state', status.state),
 						statusRow(_('Last controller'), 'dlna-controller', status.controller),
 						statusRow(_('Codec'), 'dlna-codec', status.codec ? String(status.codec).toUpperCase() : '-'),
@@ -172,8 +180,10 @@ return view.extend({
 						statusRow(_('URI'), 'dlna-uri', status.uri)
 					])
 				]),
-				E('h3', {}, _('Codec players')),
-				E('div', { 'class': 'cbi-section' }, [ renderCodecs(codecs) ]),
+				E('div', { 'class': 'cbi-section cbi-tblsection' }, [
+					E('h3', {}, _('Codec players')),
+					renderCodecs(codecs)
+				]),
 				node
 			]);
 		});
