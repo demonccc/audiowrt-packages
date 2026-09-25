@@ -17,9 +17,8 @@ endef
 define AudioWRT/MinifyJS
 	find "$(1)" -type f -name '*.js' -exec sh -c ' \
 		for src do \
-			tmp="$$src.min"; \
-			"$(AUDIOWRT_JSMIN)" < "$$src" > "$$tmp" || exit $$?; \
-			mv -f "$$tmp" "$$src" || exit $$?; \
+			"$(AUDIOWRT_JSMIN)" < "$$src" > "$$src.min" || exit 1; \
+			mv -f "$$src.min" "$$src" || exit 1; \
 		done \
 	' sh {} +
 endef
