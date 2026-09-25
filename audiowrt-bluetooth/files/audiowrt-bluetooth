@@ -311,6 +311,13 @@ watch_saved() {
 	done
 }
 
+kernel_adapters() {
+	for path in /sys/class/bluetooth/hci*; do
+		[ -e "$path" ] || continue
+		basename "$path"
+	done
+}
+
 status() {
 	selected_mac="$(upper_mac "$(runtime_selected)")"
 	ready=0
@@ -322,6 +329,7 @@ status() {
 
 case "${1:-}" in
 	status) status ;;
+	kernel-adapters) kernel_adapters ;;
 	adapters) /usr/bin/audiowrt-btctl adapters ;;
 	devices) devices ;;
 	scan) scan "${2:-8}" ;;
@@ -334,7 +342,7 @@ case "${1:-}" in
 	watch) watch_saved ;;
 	usb) /usr/sbin/audiowrt-audio output usb ;;
 	*)
-		echo 'Usage: audiowrt-bluetooth {status|adapters|devices|scan [seconds]|pair <MAC>|connect <MAC>|use <MAC>|disconnect [MAC]|save <MAC>|restore|watch|usb}' >&2
+		echo 'Usage: audiowrt-bluetooth {status|kernel-adapters|adapters|devices|scan [seconds]|pair <MAC>|connect <MAC>|use <MAC>|disconnect [MAC]|save <MAC>|restore|watch|usb}' >&2
 		exit 2
 		;;
 esac
