@@ -27,13 +27,25 @@ provisioning_start() {
 }
 
 provisioning_auto() {
+	# Boot order is intentional: configured Wi-Fi first, then LAN.
+	# Provisioning starts only when neither path provides link + an IP.
+	if uci -q get wireless.audiowrt_client >/dev/null 2>&1; then
+		elapsed=0
+		while [ "$elapsed" -lt "$AUDIOWRT_SETUP_TIMEOUT" ]; do
+			audiowrt_client_up && return 0
+			sleep 2
+			elapsed=$((elapsed + 2))
+		done
+	fi
+
 	elapsed=0
 	while [ "$elapsed" -lt "$AUDIOWRT_SETUP_TIMEOUT" ]; do
-		audiowrt_connected && return 0
+		audiowrt_interface_up lan && return 0
 		sleep 2
 		elapsed=$((elapsed + 2))
 	done
-	start_setup 'no Ethernet or station link with an IP address'
+
+	start_setup 'no usable Wi-Fi client or LAN connection'
 }
 
 provisioning_stop() {
