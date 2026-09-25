@@ -61,7 +61,6 @@ define Package/audiowrt-provisioning/install
 	$(INSTALL_BIN) ./files/audiowrt-scan.cgi $(1)/www/cgi-bin/audiowrt-scan
 	$(INSTALL_BIN) ./files/audiowrt-radios.cgi $(1)/www/cgi-bin/audiowrt-radios
 	$(INSTALL_BIN) ./files/audiowrt-provision.cgi $(1)/www/cgi-bin/audiowrt-provision
-	$(INSTALL_BIN) ./files/audiowrt-root.cgi $(1)/www/cgi-bin/audiowrt-root
 endef
 
 $(eval $(call BuildPackage,audiowrt-provisioning))
