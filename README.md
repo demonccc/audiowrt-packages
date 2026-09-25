@@ -118,8 +118,7 @@ AudioWRT keeps playback capabilities separate from module preferences:
 - Installing or removing a player never chooses a default for DLNA or another consumer. If no module-specific preference is configured, the consumer falls back to any available compatible player.
 - Legacy catalog files are ignored without flash migration. Both new catalog paths are immutable symlinks to `/tmp/audiowrt/registry`. Installed manifests under `/usr/share/audiowrt/players` are the single source of capabilities. The S12 initializer and package hooks rebuild only the RAM view. Playback never rewrites it.
 
-`/usr/libexec/audiowrt-playback-registry` rebuilds the derived RAM catalogs. The old `audiowrt-player-registry` command remains as a compatibility alias.
-
+`/usr/libexec/audiowrt-playback-registry` rebuilds the derived RAM catalogs. 
 ## Responsibility boundary
 
 Reusable packages in this feed provide capabilities. They do not decide that an OpenWrt device should become an AudioWRT appliance.
