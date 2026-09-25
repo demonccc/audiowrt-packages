@@ -130,11 +130,13 @@ return view.extend({
 	scanning: false,
 	btPackageAvailable: false,
 	btAdapters: [],
+	btKernelDetected: false,
 	activeTab: null,
 
 	load: function() {
 		return Promise.all([
 			L.resolveDefault(fs.stat('/usr/sbin/audiowrt-bluetooth'), null),
+			L.resolveDefault(fs.exec('/usr/sbin/audiowrt-bluetooth', [ 'kernel-adapters' ]), { stdout: '' }),
 			L.resolveDefault(fs.exec('/usr/sbin/audiowrt-bluetooth', [ 'adapters' ]), { stdout: '' }),
 			L.resolveDefault(fs.exec('/usr/sbin/audiowrt-bluetooth', [ 'devices' ]), { stdout: '' }),
 			L.resolveDefault(fs.read('/proc/asound/cards'), ''),
@@ -327,6 +329,12 @@ return view.extend({
 			));
 		}
 
+		if (this.btKernelDetected) {
+			return E('p', {}, _(
+				'Bluetooth adapter detected, but it could not be initialized. Check system logs for details.'
+			));
+		}
+
 		return E('p', {}, _('No Bluetooth adapter detected.'));
 	},
 
@@ -453,16 +461,17 @@ return view.extend({
 		var self = this;
 
 		this.btPackageAvailable = !!data[0];
+		this.btKernelDetected = this.btPackageAvailable && !!(data[1].stdout || '').trim();
 		this.btAdapters = this.btPackageAvailable
-			? parseBluetoothAdapters(data[1].stdout || '')
+			? parseBluetoothAdapters(data[2].stdout || '')
 			: [];
 
 		var devices = this.btPackageAvailable
-			? parseBluetoothDevices(data[2].stdout || '')
+			? parseBluetoothDevices(data[3].stdout || '')
 			: [];
 
-		var usbCards = parseUsbCards(data[3]);
-		var audioState = parseState(data[4].stdout || '');
+		var usbCards = parseUsbCards(data[4]);
+		var audioState = parseState(data[5].stdout || '');
 
 		var tabs = [];
 		var panes = [];
