@@ -1,12 +1,13 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-provisioning
-PKG_VERSION:=1.0.5
+PKG_VERSION:=1.0.6
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 
 include $(INCLUDE_DIR)/package.mk
+include $(TOPDIR)/feeds/audiowrt/include/audiowrt-luci-minify.mk
 
 define Package/audiowrt-provisioning
   SECTION:=sound
@@ -26,6 +27,7 @@ define Build/Configure
 endef
 
 define Build/Compile
+	$(call AudioWRT/BuildJsMin)
 endef
 
 define Package/audiowrt-provisioning/install
@@ -52,6 +54,7 @@ define Package/audiowrt-provisioning/install
 
 	$(INSTALL_DIR) $(1)/www
 	$(INSTALL_DATA) ./files/audiowrt.html $(1)/www/audiowrt.html
+	python3 $(TOPDIR)/feeds/audiowrt/include/audiowrt-html-minify.py $(AUDIOWRT_JSMIN) $(1)/www/audiowrt.html
 
 	$(INSTALL_DIR) $(1)/www/cgi-bin
 	$(INSTALL_BIN) ./files/audiowrt-status.cgi $(1)/www/cgi-bin/audiowrt-status
