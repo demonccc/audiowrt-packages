@@ -88,86 +88,50 @@ function parseBluetoothAdapters(text) {
 		});
 }
 
-function outputIcon(type) {
-	var common = {
-		'viewBox': '0 0 64 64',
-		'aria-hidden': 'true',
-		'style': 'width:38px;height:38px'
-	};
+function iconDataUri(type) {
+	var svg;
 
 	if (type === 'bluetooth') {
-		return E('svg', common, [
-			E('path', {
-				'd': 'M30 6 L48 22 L36 32 L48 42 L30 58 L30 38 L18 50 L14 46 L28 32 L14 18 L18 14 L30 26 Z',
-				'fill': 'none',
-				'stroke': '#1769aa',
-				'stroke-width': '6',
-				'stroke-linejoin': 'round',
-				'stroke-linecap': 'round'
-			})
-		]);
+		svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+			'<path d="M30 6 L48 22 L36 32 L48 42 L30 58 L30 38 L18 50 L14 46 L28 32 L14 18 L18 14 L30 26 Z" ' +
+			'fill="none" stroke="#1769aa" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+	} else {
+		svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+			'<path d="M8 26h13l12-10v32L21 38H8z" fill="#1769aa"/>' +
+			'<path d="M40 24c5 4 5 12 0 16M47 17c10 8 10 22 0 30" fill="none" stroke="#1769aa" stroke-width="5" stroke-linecap="round"/></svg>';
 	}
 
-	return E('svg', common, [
-		E('path', {
-			'd': 'M8 26h13l12-10v32L21 38H8z',
-			'fill': '#1769aa'
-		}),
-		E('path', {
-			'd': 'M40 24c5 4 5 12 0 16M47 17c10 8 10 22 0 30',
-			'fill': 'none',
-			'stroke': '#1769aa',
-			'stroke-width': '5',
-			'stroke-linecap': 'round'
-		})
-	]);
+	return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
 }
 
-function outputCardHeader(type, title, subtitle, ready) {
-	return E('div', {
-		'style': 'display:flex;align-items:center;gap:14px;padding-bottom:13px;margin-bottom:14px;border-bottom:1px solid #ddd'
-	}, [
-		E('div', {
-			'style': 'width:58px;height:58px;min-width:58px;border:1px solid #9da6ad;border-radius:8px;background:linear-gradient(#f8fafb,#dfe5e9);box-shadow:inset 0 1px 1px rgba(255,255,255,.9),0 1px 2px rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center'
-		}, [ outputIcon(type) ]),
-		E('div', { 'style': 'flex:1;min-width:0' }, [
-			E('div', { 'style': 'font-size:20px;font-weight:bold;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis' }, title),
-			E('div', { 'style': 'font-size:13px;color:#666' }, subtitle)
-		]),
-		ready ? E('span', {
-			'style': 'font-size:12px;font-weight:bold;padding:4px 8px;border-radius:10px;background:#dff0d8;color:#34752b'
-		}, _('Ready')) : ''
-	]);
-}
-
-function outputInfoRows(rows) {
-	var nodes = [];
-	rows.forEach(function(row) {
-		if (row[1] === '' || row[1] === null || row[1] === undefined)
-			return;
-		nodes.push(E('div', { 'style': 'font-weight:bold;color:#555' }, row[0]));
-		nodes.push(E('div', {}, String(row[1])));
+function outputIcon(type) {
+	return E('img', {
+		'src': iconDataUri(type),
+		'alt': '',
+		'width': '48',
+		'height': '48'
 	});
-	return E('div', {
-		'style': 'display:grid;grid-template-columns:115px 1fr;row-gap:8px;font-size:14px'
-	}, nodes);
 }
 
-function outputStateBox(label, value, positive) {
-	return E('div', {
-		'style': 'border:1px solid #ddd;border-radius:4px;padding:7px 9px;font-size:13px;background:#fff'
-	}, [
-		label + ' ',
-		E('span', {
-			'style': positive ? 'color:#287b28;font-weight:bold' : 'color:#777'
-		}, value)
+function outputIfaceBox(title, active, iconType, items) {
+	return E('div', { 'class': 'ifacebox' }, [
+		E('div', {
+			'class': 'ifacebox-head center' + (active ? ' active' : '')
+		}, E('strong', {}, title)),
+		E('div', { 'class': 'ifacebox-body left' }, [
+			outputIcon(iconType),
+			L.itemlist(E('span'), items)
+		])
 	]);
 }
 
-function outputCard(children) {
-	return E('div', {
-		'style': 'box-sizing:border-box;border:1px solid #c9c9c9;border-radius:5px;background:#fafafa;padding:16px;margin-bottom:16px'
-	}, children);
+function bluetoothTableHeader() {
+	return E('tr', { 'class': 'tr table-titles' }, [
+		E('th', { 'class': 'th' }, _('Name')),
+		E('th', { 'class': 'th' }, _('Address')),
+		E('th', { 'class': 'th' }, _('Status')),
+		E('th', { 'class': 'th right' }, _('Actions'))
+	]);
 }
 
 function actionButton(label, handler) {
@@ -272,88 +236,64 @@ return view.extend({
 
 		if (dev.connected && !dev.selected) {
 			buttons.push(actionButton(_('Use'), function() {
-				self.runBluetoothAction(
-					'use',
-					dev,
-					_('Switching audio output to ') + dev.name + '...'
-				);
+				self.runBluetoothAction('use', dev, _('Switching audio output to ') + dev.name + '...');
 			}));
 		}
 
 		if (!dev.connected && dev.present && (dev.paired || dev.saved)) {
 			buttons.push(actionButton(_('Connect'), function() {
-				self.runBluetoothAction(
-					'connect',
-					dev,
-					_('Connecting to ') + dev.name + '...'
-				);
+				self.runBluetoothAction('connect', dev, _('Connecting to ') + dev.name + '...');
 			}));
 		}
 
 		if (dev.connected) {
 			buttons.push(actionButton(_('Disconnect'), function() {
-				self.runBluetoothAction(
-					'disconnect',
-					dev,
-					_('Disconnecting ') + dev.name + '...'
-				);
+				self.runBluetoothAction('disconnect', dev, _('Disconnecting ') + dev.name + '...');
 			}));
 		}
 
 		if (!dev.saved && (dev.paired || dev.connected)) {
 			buttons.push(actionButton(_('Save'), function() {
-				self.runBluetoothAction(
-					'save',
-					dev,
-					_('Saving ') + dev.name + _(' for future reboots...')
-				);
+				self.runBluetoothAction('save', dev, _('Saving ') + dev.name + _(' for future reboots...'));
 			}));
 		}
 
-		return E('div', { 'class': 'tr' }, [
-			E('div', { 'class': 'td left' }, dev.name),
-			E('div', { 'class': 'td left' }, dev.mac),
-			E('div', { 'class': 'td left' }, this.deviceStatus(dev)),
-			E('div', { 'class': 'td right' }, buttons.length ? buttons : '-')
+		return E('tr', { 'class': 'tr' }, [
+			E('td', { 'class': 'td' }, dev.name),
+			E('td', { 'class': 'td' }, dev.mac),
+			E('td', { 'class': 'td' }, this.deviceStatus(dev)),
+			E('td', { 'class': 'td right' }, buttons.length ? buttons : '-')
 		]);
 	},
 
 	renderNearbyRow: function(dev) {
 		var self = this;
 
-		return E('div', { 'class': 'tr' }, [
-			E('div', { 'class': 'td left' }, dev.name),
-			E('div', { 'class': 'td left' }, dev.mac),
-			E('div', { 'class': 'td left' }, _('Discovered')),
-			E('div', { 'class': 'td right' }, actionButton(_('Pair'), function() {
-				self.runBluetoothAction(
-					'pair',
-					dev,
-					_('Pairing with ') + dev.name + '...'
-				);
+		return E('tr', { 'class': 'tr' }, [
+			E('td', { 'class': 'td' }, dev.name),
+			E('td', { 'class': 'td' }, dev.mac),
+			E('td', { 'class': 'td' }, _('Discovered')),
+			E('td', { 'class': 'td right' }, actionButton(_('Pair'), function() {
+				self.runBluetoothAction('pair', dev, _('Pairing with ') + dev.name + '...');
 			}))
 		]);
 	},
 
 	renderAdapterInfo: function(adapter) {
-		var title = adapterDisplayName(adapter);
-		var states = E('div', {
-			'style': 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:15px'
-		}, [
-			outputStateBox(_('Powered'), adapter.powered ? _('On') : _('Off'), adapter.powered),
-			outputStateBox(_('Pairable'), adapter.pairable ? _('On') : _('Off'), adapter.pairable),
-			outputStateBox(_('Discoverable'), adapter.discoverable ? _('On') : _('Off'), adapter.discoverable),
-			outputStateBox(_('Discovering'), adapter.discovering ? _('Yes') : _('No'), adapter.discovering)
-		]);
-
-		return outputCard([
-			outputCardHeader('bluetooth', title, _('Bluetooth adapter'), adapter.powered),
-			outputInfoRows([
-				[ _('Address'), adapter.address ],
-				[ _('Interface'), adapter.interface ]
-			]),
-			states
-		]);
+		return outputIfaceBox(
+			adapterDisplayName(adapter),
+			adapter.powered,
+			'bluetooth',
+			[
+				_('Type'), _('Bluetooth adapter'),
+				_('Address'), adapter.address,
+				_('Interface'), adapter.interface,
+				_('Powered'), yesNo(adapter.powered),
+				_('Pairable'), yesNo(adapter.pairable),
+				_('Discoverable'), yesNo(adapter.discoverable),
+				_('Discovering'), yesNo(adapter.discovering)
+			]
+		);
 	},
 
 	renderBluetoothDevices: function(adapter, devices) {
@@ -373,28 +313,44 @@ return view.extend({
 			}
 		}, this.scanning ? _('Scanning...') : _('Scan for devices'));
 
+		var mineRows = [ bluetoothTableHeader() ];
+		if (mine.length) {
+			mine.forEach(function(dev) {
+				mineRows.push(self.renderMyDeviceRow(dev));
+			});
+		} else {
+			mineRows.push(E('tr', { 'class': 'tr placeholder' }, [
+				E('td', { 'class': 'td', 'colspan': '4' },
+					E('em', {}, _('No paired, connected or saved Bluetooth devices yet.')))
+			]));
+		}
+
+		var nearbyRows = [ bluetoothTableHeader() ];
+		if (nearby.length) {
+			nearby.forEach(function(dev) {
+				nearbyRows.push(self.renderNearbyRow(dev));
+			});
+		} else {
+			nearbyRows.push(E('tr', { 'class': 'tr placeholder' }, [
+				E('td', { 'class': 'td', 'colspan': '4' },
+					E('em', {}, this.scanning
+						? _('Waiting for nearby Bluetooth devices...')
+						: _('No new Bluetooth devices discovered.')))
+			]));
+		}
+
 		return E('div', {}, [
 			this.renderAdapterInfo(adapter),
 
-			E('div', { 'class': 'cbi-section' }, [
+			E('div', { 'class': 'cbi-section cbi-tblsection' }, [
 				E('h3', {}, _('My devices')),
-				mine.length
-					? E('div', { 'class': 'table' }, mine.map(function(dev) {
-						return self.renderMyDeviceRow(dev);
-					}))
-					: E('p', {}, _('No paired, connected or saved Bluetooth devices yet.'))
+				E('table', { 'class': 'table cbi-section-table' }, mineRows)
 			]),
 
-			E('div', { 'class': 'cbi-section' }, [
+			E('div', { 'class': 'cbi-section cbi-tblsection' }, [
 				E('h3', {}, _('Nearby devices')),
 				E('p', {}, scanButton),
-				nearby.length
-					? E('div', { 'class': 'table' }, nearby.map(function(dev) {
-						return self.renderNearbyRow(dev);
-					}))
-					: E('p', {}, this.scanning
-						? _('Waiting for nearby Bluetooth devices...')
-						: _('No new Bluetooth devices discovered.'))
+				E('table', { 'class': 'table cbi-section-table' }, nearbyRows)
 			])
 		]);
 	},
@@ -421,20 +377,18 @@ return view.extend({
 			audioState.ready === '1' &&
 			String(audioState.card || '') === String(card.card);
 
-		return outputCard([
-			outputCardHeader('speaker', card.name || _('USB Audio'), _('USB audio device'), true),
-			outputInfoRows([
-				[ _('Device'), card.name || _('USB Audio') ],
-				[ _('ALSA card'), String(card.card) ],
-				[ _('Interface'), _('USB') ]
-			]),
-			E('div', {
-				'style': 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:15px'
-			}, [
-				outputStateBox(_('Device'), _('Connected'), true),
-				outputStateBox(_('Audio'), selected ? _('Ready') : _('Ready'), true)
-			])
-		]);
+		return outputIfaceBox(
+			card.name || _('USB Audio'),
+			true,
+			'speaker',
+			[
+				_('Type'), _('USB audio device'),
+				_('Device'), card.name || _('USB Audio'),
+				_('ALSA card'), String(card.card),
+				_('Interface'), _('USB'),
+				_('Status'), selected ? _('Selected and ready') : _('Ready')
+			]
+		);
 	},
 
 	renderUsbEmpty: function() {
