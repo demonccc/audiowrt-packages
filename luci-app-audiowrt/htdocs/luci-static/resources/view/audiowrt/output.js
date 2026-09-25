@@ -88,6 +88,88 @@ function parseBluetoothAdapters(text) {
 		});
 }
 
+function outputIcon(type) {
+	var common = {
+		'viewBox': '0 0 64 64',
+		'aria-hidden': 'true',
+		'style': 'width:38px;height:38px'
+	};
+
+	if (type === 'bluetooth') {
+		return E('svg', common, [
+			E('path', {
+				'd': 'M30 6 L48 22 L36 32 L48 42 L30 58 L30 38 L18 50 L14 46 L28 32 L14 18 L18 14 L30 26 Z',
+				'fill': 'none',
+				'stroke': '#1769aa',
+				'stroke-width': '6',
+				'stroke-linejoin': 'round',
+				'stroke-linecap': 'round'
+			})
+		]);
+	}
+
+	return E('svg', common, [
+		E('path', {
+			'd': 'M8 26h13l12-10v32L21 38H8z',
+			'fill': '#1769aa'
+		}),
+		E('path', {
+			'd': 'M40 24c5 4 5 12 0 16M47 17c10 8 10 22 0 30',
+			'fill': 'none',
+			'stroke': '#1769aa',
+			'stroke-width': '5',
+			'stroke-linecap': 'round'
+		})
+	]);
+}
+
+function outputCardHeader(type, title, subtitle, ready) {
+	return E('div', {
+		'style': 'display:flex;align-items:center;gap:14px;padding-bottom:13px;margin-bottom:14px;border-bottom:1px solid #ddd'
+	}, [
+		E('div', {
+			'style': 'width:58px;height:58px;min-width:58px;border:1px solid #9da6ad;border-radius:8px;background:linear-gradient(#f8fafb,#dfe5e9);box-shadow:inset 0 1px 1px rgba(255,255,255,.9),0 1px 2px rgba(0,0,0,.15);display:flex;align-items:center;justify-content:center'
+		}, [ outputIcon(type) ]),
+		E('div', { 'style': 'flex:1;min-width:0' }, [
+			E('div', { 'style': 'font-size:20px;font-weight:bold;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis' }, title),
+			E('div', { 'style': 'font-size:13px;color:#666' }, subtitle)
+		]),
+		ready ? E('span', {
+			'style': 'font-size:12px;font-weight:bold;padding:4px 8px;border-radius:10px;background:#dff0d8;color:#34752b'
+		}, _('Ready')) : ''
+	]);
+}
+
+function outputInfoRows(rows) {
+	var nodes = [];
+	rows.forEach(function(row) {
+		if (row[1] === '' || row[1] === null || row[1] === undefined)
+			return;
+		nodes.push(E('div', { 'style': 'font-weight:bold;color:#555' }, row[0]));
+		nodes.push(E('div', {}, String(row[1])));
+	});
+	return E('div', {
+		'style': 'display:grid;grid-template-columns:115px 1fr;row-gap:8px;font-size:14px'
+	}, nodes);
+}
+
+function outputStateBox(label, value, positive) {
+	return E('div', {
+		'style': 'border:1px solid #ddd;border-radius:4px;padding:7px 9px;font-size:13px;background:#fff'
+	}, [
+		label + ' ',
+		E('span', {
+			'style': positive ? 'color:#287b28;font-weight:bold' : 'color:#777'
+		}, value)
+	]);
+}
+
+function outputCard(children) {
+	return E('div', {
+		'style': 'box-sizing:border-box;border:1px solid #c9c9c9;border-radius:5px;background:#fafafa;padding:16px;margin-bottom:16px'
+	}, children);
+}
+
 function actionButton(label, handler) {
 	return E('button', {
 		'class': 'btn cbi-button-action',
@@ -254,28 +336,23 @@ return view.extend({
 	},
 
 	renderAdapterInfo: function(adapter) {
-		var items = [];
+		var title = adapterDisplayName(adapter);
+		var states = E('div', {
+			'style': 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:15px'
+		}, [
+			outputStateBox(_('Powered'), adapter.powered ? _('On') : _('Off'), adapter.powered),
+			outputStateBox(_('Pairable'), adapter.pairable ? _('On') : _('Off'), adapter.pairable),
+			outputStateBox(_('Discoverable'), adapter.discoverable ? _('On') : _('Off'), adapter.discoverable),
+			outputStateBox(_('Discovering'), adapter.discovering ? _('Yes') : _('No'), adapter.discovering)
+		]);
 
-		function add(label, value) {
-			if (value === '' || value === null || value === undefined)
-				return;
-			items.push(label, value);
-		}
-
-		add(_('Alias'), adapter.alias);
-		add(_('Name'), adapter.name);
-		add(_('Address'), adapter.address);
-		add(_('Interface'), adapter.interface);
-		add(_('Powered'), yesNo(adapter.powered));
-		add(_('Discoverable'), yesNo(adapter.discoverable));
-		add(_('Pairable'), yesNo(adapter.pairable));
-		add(_('Discovering'), yesNo(adapter.discovering));
-
-		return E('div', { 'class': 'cbi-section' }, [
-			E('h3', {}, _('Adapter information')),
-			E('div', { 'class': 'cbi-section-node' }, [
-				L.itemlist(E('span'), items)
-			])
+		return outputCard([
+			outputCardHeader('bluetooth', title, _('Bluetooth adapter'), adapter.powered),
+			outputInfoRows([
+				[ _('Address'), adapter.address ],
+				[ _('Interface'), adapter.interface ]
+			]),
+			states
 		]);
 	},
 
@@ -344,14 +421,18 @@ return view.extend({
 			audioState.ready === '1' &&
 			String(audioState.card || '') === String(card.card);
 
-		return E('div', { 'class': 'cbi-section' }, [
-			E('h3', {}, _('USB audio device')),
-			E('div', { 'class': 'cbi-section-node' }, [
-				L.itemlist(E('span'), [
-					_('Name'), card.name,
-					_('ALSA card'), String(card.card),
-					_('Status'), selected ? _('Selected and ready') : _('Ready')
-				])
+		return outputCard([
+			outputCardHeader('speaker', card.name || _('USB Audio'), _('USB audio device'), true),
+			outputInfoRows([
+				[ _('Device'), card.name || _('USB Audio') ],
+				[ _('ALSA card'), String(card.card) ],
+				[ _('Interface'), _('USB') ]
+			]),
+			E('div', {
+				'style': 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:15px'
+			}, [
+				outputStateBox(_('Device'), _('Connected'), true),
+				outputStateBox(_('Audio'), selected ? _('Ready') : _('Ready'), true)
 			])
 		]);
 	},
