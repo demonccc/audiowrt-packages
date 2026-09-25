@@ -175,10 +175,6 @@ Reusable Wi-Fi client backend. It can:
 
 Installing the package does **not** alter OpenWrt networking. All mutations require an explicit CLI or LuCI action.
 
-### `luci-app-audiowrt-wifi-client`
-
-Adds **Network -> Wi-Fi Client**. It scans all radios and lets the user explicitly select and connect to a network. It is suitable for ordinary OpenWrt installations as well as the AudioWRT distribution.
-
 ### `luci-app-audiowrt`
 
 Reusable audio-only LuCI interface for AudioWRT outputs and extensions.
