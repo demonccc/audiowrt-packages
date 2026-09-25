@@ -105,12 +105,17 @@ function iconDataUri(type) {
 }
 
 function outputIcon(type) {
-	return E('img', {
-		'src': iconDataUri(type),
-		'alt': '',
-		'width': '48',
-		'height': '48'
-	});
+	return E('span', {
+		'class': 'center',
+		'style': 'display:block;text-align:center'
+	}, [
+		E('img', {
+			'src': iconDataUri(type),
+			'alt': '',
+			'width': type === 'bluetooth' ? '32' : '40',
+			'height': type === 'bluetooth' ? '32' : '40'
+		})
+	]);
 }
 
 function outputIfaceBox(title, active, iconType, items) {
