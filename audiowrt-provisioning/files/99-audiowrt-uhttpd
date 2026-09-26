@@ -1,0 +1,6 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+uci -q set uhttpd.main.index_page='cgi-bin/audiowrt-entry'
+uci -q commit uhttpd
+exit 0
