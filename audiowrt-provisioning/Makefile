@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-provisioning
-PKG_VERSION:=1.0.8
+PKG_VERSION:=1.0.9
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
@@ -13,7 +13,7 @@ define Package/audiowrt-provisioning
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT runtime provisioning
-  DEPENDS:=+audiowrt-core +audiowrt-audio +audiowrt-wifi-client +hostapd +audiowrt-udhcpd +ubus +uci +uhttpd +luci-base +jsonfilter
+  DEPENDS:=+audiowrt-core +audiowrt-audio +audiowrt-wifi-client +luci-theme-audiowrt +hostapd +audiowrt-udhcpd +ubus +uci +uhttpd +luci-base +jsonfilter
 endef
 
 define Package/audiowrt-provisioning/description
