@@ -54,6 +54,7 @@ start_test() {
 	uclient-fetch -O "$STATIC/audiowrt/cascade.css" "$RAW/cascade.css"
 	uclient-fetch -O "$STATIC/audiowrt/mobile.css" "$RAW/mobile.css"
 	uclient-fetch -O "$STATIC/audiowrt/logo.svg" "$RAW/logo.svg"
+	uclient-fetch -O "$STATIC/audiowrt/logo-horizontal.svg" "$RAW/logo-horizontal.svg"
 
 	ln -sf ../bootstrap/logo_48.png "$STATIC/audiowrt/logo_48.png"
 	ln -sf ../bootstrap/header.ut "$THEMES/audiowrt/header.ut"
