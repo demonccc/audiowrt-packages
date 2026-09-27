@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-audiowrt
-PKG_VERSION:=0.1.0
+PKG_VERSION:=0.1.1
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
@@ -27,6 +27,7 @@ define Package/luci-theme-audiowrt/install
 	$(INSTALL_DATA) ./htdocs/luci-static/audiowrt/cascade.css $(1)/www/luci-static/audiowrt/cascade.css
 	$(INSTALL_DATA) ./htdocs/luci-static/audiowrt/mobile.css $(1)/www/luci-static/audiowrt/mobile.css
 	$(INSTALL_DATA) ./htdocs/luci-static/audiowrt/logo.svg $(1)/www/luci-static/audiowrt/logo.svg
+	$(INSTALL_DATA) ./htdocs/luci-static/audiowrt/logo-horizontal.svg $(1)/www/luci-static/audiowrt/logo-horizontal.svg
 	ln -s ../bootstrap/logo_48.png $(1)/www/luci-static/audiowrt/logo_48.png
 
 	$(INSTALL_DIR) $(1)/usr/share/ucode/luci/template/themes/audiowrt
