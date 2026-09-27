@@ -27,6 +27,7 @@ define Package/luci-theme-audiowrt/install
 	$(INSTALL_DATA) ./htdocs/luci-static/audiowrt/cascade.css $(1)/www/luci-static/audiowrt/cascade.css
 	$(INSTALL_DATA) ./htdocs/luci-static/audiowrt/mobile.css $(1)/www/luci-static/audiowrt/mobile.css
 	$(INSTALL_DATA) ./htdocs/luci-static/audiowrt/logo.svg $(1)/www/luci-static/audiowrt/logo.svg
+	ln -s ../bootstrap/logo_48.png $(1)/www/luci-static/audiowrt/logo_48.png
 
 	$(INSTALL_DIR) $(1)/usr/share/ucode/luci/template/themes/audiowrt
 	ln -s ../bootstrap/header.ut $(1)/usr/share/ucode/luci/template/themes/audiowrt/header.ut
