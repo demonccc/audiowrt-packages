@@ -19,6 +19,7 @@ while :; do
 		elapsed=0
 		while [ "$elapsed" -lt "$AUDIOWRT_SETUP_TIMEOUT" ]; do
 			if audiowrt_client_up; then
+				/usr/libexec/audiowrt/time-sync || true
 				: > /tmp/audiowrt/provisioning.done
 				rm -rf /tmp/audiowrt/client
 				break
@@ -33,5 +34,6 @@ while :; do
 	elif audiowrt_setup_active && [ ! -d /tmp/audiowrt/provision-request ] &&
 	     [ ! -d /tmp/audiowrt/provision.lock ] && audiowrt_client_up; then
 		/usr/libexec/audiowrt/setup-ap stop
+		/usr/libexec/audiowrt/time-sync || true
 	fi
 done

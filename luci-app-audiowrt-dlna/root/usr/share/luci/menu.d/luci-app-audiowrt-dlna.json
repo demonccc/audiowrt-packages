@@ -1,6 +1,6 @@
 {
   "admin/audiowrt/renderer": {
-    "title": "Renderer",
+    "title": "DLNA Renderer",
     "order": 15,
     "action": { "type": "view", "path": "audiowrt/dlna" },
     "depends": { "acl": [ "luci-app-audiowrt-renderer" ] }

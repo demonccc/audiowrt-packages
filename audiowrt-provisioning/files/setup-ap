@@ -24,7 +24,6 @@ stop_ap() {
 	old_radio=$(cat "$AUDIOWRT_SETUP_DIR/radio" 2>/dev/null || true)
 	stop_owned udhcpd
 	stop_owned hostapd
-	/usr/libexec/audiowrt/provision-web stop || true
 	if [ -f "$AUDIOWRT_SETUP_DIR/owned" ]; then
 		iw dev "$AUDIOWRT_SETUP_IF" del 2>/dev/null || true
 	fi
@@ -122,7 +121,6 @@ start_ap() {
 		cat "$AUDIOWRT_SETUP_DIR/udhcpd.log" >&2
 		return 7
 	}
-	/usr/libexec/audiowrt/provision-web start || return 8
 
 	printf '%s\n' "$radio" > "$AUDIOWRT_SETUP_DIR/radio"
 	printf '%s\n' "$ssid" > "$AUDIOWRT_SETUP_DIR/ssid"

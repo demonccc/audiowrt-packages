@@ -88,10 +88,60 @@ function parseBluetoothAdapters(text) {
 		});
 }
 
+function iconDataUri(type) {
+	var svg;
+
+	if (type === 'bluetooth') {
+		svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+			'<path d="M30 6 L48 22 L36 32 L48 42 L30 58 L30 38 L18 50 L14 46 L28 32 L14 18 L18 14 L30 26 Z" ' +
+			'fill="none" stroke="#1769aa" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/></svg>';
+	} else {
+		svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">' +
+			'<path d="M8 26h13l12-10v32L21 38H8z" fill="#1769aa"/>' +
+			'<path d="M40 24c5 4 5 12 0 16M47 17c10 8 10 22 0 30" fill="none" stroke="#1769aa" stroke-width="5" stroke-linecap="round"/></svg>';
+	}
+
+	return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+}
+
+function outputIcon(type) {
+	return E('span', {
+		'class': 'center',
+		'style': 'display:block;text-align:center'
+	}, [
+		E('img', {
+			'src': iconDataUri(type),
+			'alt': '',
+			'width': type === 'bluetooth' ? '32' : '40',
+			'height': type === 'bluetooth' ? '32' : '40'
+		})
+	]);
+}
+
+function outputIfaceBox(title, active, iconType, items) {
+	return E('div', { 'class': 'ifacebox' }, [
+		E('div', {
+			'class': 'ifacebox-head center' + (active ? ' active' : '')
+		}, E('strong', {}, title)),
+		E('div', { 'class': 'ifacebox-body left' }, [
+			outputIcon(iconType),
+			L.itemlist(E('span'), items)
+		])
+	]);
+}
+
+function bluetoothTableHeader() {
+	return E('tr', { 'class': 'tr table-titles' }, [
+		E('th', { 'class': 'th' }, _('Name')),
+		E('th', { 'class': 'th' }, _('Address')),
+		E('th', { 'class': 'th' }, _('Status')),
+		E('th', { 'class': 'th right' }, _('Actions'))
+	]);
+}
+
 function actionButton(label, handler) {
 	return E('button', {
 		'class': 'btn cbi-button-action',
-		'style': 'margin-left:.4rem',
 		'click': handler
 	}, label);
 }
@@ -130,11 +180,13 @@ return view.extend({
 	scanning: false,
 	btPackageAvailable: false,
 	btAdapters: [],
+	btKernelDetected: false,
 	activeTab: null,
 
 	load: function() {
 		return Promise.all([
 			L.resolveDefault(fs.stat('/usr/sbin/audiowrt-bluetooth'), null),
+			L.resolveDefault(fs.exec('/usr/sbin/audiowrt-bluetooth', [ 'kernel-adapters' ]), { stdout: '' }),
 			L.resolveDefault(fs.exec('/usr/sbin/audiowrt-bluetooth', [ 'adapters' ]), { stdout: '' }),
 			L.resolveDefault(fs.exec('/usr/sbin/audiowrt-bluetooth', [ 'devices' ]), { stdout: '' }),
 			L.resolveDefault(fs.read('/proc/asound/cards'), ''),
@@ -188,93 +240,64 @@ return view.extend({
 
 		if (dev.connected && !dev.selected) {
 			buttons.push(actionButton(_('Use'), function() {
-				self.runBluetoothAction(
-					'use',
-					dev,
-					_('Switching audio output to ') + dev.name + '...'
-				);
+				self.runBluetoothAction('use', dev, _('Switching audio output to ') + dev.name + '...');
 			}));
 		}
 
 		if (!dev.connected && dev.present && (dev.paired || dev.saved)) {
 			buttons.push(actionButton(_('Connect'), function() {
-				self.runBluetoothAction(
-					'connect',
-					dev,
-					_('Connecting to ') + dev.name + '...'
-				);
+				self.runBluetoothAction('connect', dev, _('Connecting to ') + dev.name + '...');
 			}));
 		}
 
 		if (dev.connected) {
 			buttons.push(actionButton(_('Disconnect'), function() {
-				self.runBluetoothAction(
-					'disconnect',
-					dev,
-					_('Disconnecting ') + dev.name + '...'
-				);
+				self.runBluetoothAction('disconnect', dev, _('Disconnecting ') + dev.name + '...');
 			}));
 		}
 
 		if (!dev.saved && (dev.paired || dev.connected)) {
 			buttons.push(actionButton(_('Save'), function() {
-				self.runBluetoothAction(
-					'save',
-					dev,
-					_('Saving ') + dev.name + _(' for future reboots...')
-				);
+				self.runBluetoothAction('save', dev, _('Saving ') + dev.name + _(' for future reboots...'));
 			}));
 		}
 
-		return E('div', { 'class': 'tr' }, [
-			E('div', { 'class': 'td left' }, dev.name),
-			E('div', { 'class': 'td left' }, dev.mac),
-			E('div', { 'class': 'td left' }, this.deviceStatus(dev)),
-			E('div', { 'class': 'td right' }, buttons.length ? buttons : '-')
+		return E('tr', { 'class': 'tr' }, [
+			E('td', { 'class': 'td' }, dev.name),
+			E('td', { 'class': 'td' }, dev.mac),
+			E('td', { 'class': 'td' }, this.deviceStatus(dev)),
+			E('td', { 'class': 'td right' }, buttons.length ? buttons : '-')
 		]);
 	},
 
 	renderNearbyRow: function(dev) {
 		var self = this;
 
-		return E('div', { 'class': 'tr' }, [
-			E('div', { 'class': 'td left' }, dev.name),
-			E('div', { 'class': 'td left' }, dev.mac),
-			E('div', { 'class': 'td left' }, _('Discovered')),
-			E('div', { 'class': 'td right' }, actionButton(_('Pair'), function() {
-				self.runBluetoothAction(
-					'pair',
-					dev,
-					_('Pairing with ') + dev.name + '...'
-				);
+		return E('tr', { 'class': 'tr' }, [
+			E('td', { 'class': 'td' }, dev.name),
+			E('td', { 'class': 'td' }, dev.mac),
+			E('td', { 'class': 'td' }, _('Discovered')),
+			E('td', { 'class': 'td right' }, actionButton(_('Pair'), function() {
+				self.runBluetoothAction('pair', dev, _('Pairing with ') + dev.name + '...');
 			}))
 		]);
 	},
 
 	renderAdapterInfo: function(adapter) {
-		var items = [];
-
-		function add(label, value) {
-			if (value === '' || value === null || value === undefined)
-				return;
-			items.push(label, value);
-		}
-
-		add(_('Alias'), adapter.alias);
-		add(_('Name'), adapter.name);
-		add(_('Address'), adapter.address);
-		add(_('Interface'), adapter.interface);
-		add(_('Powered'), yesNo(adapter.powered));
-		add(_('Discoverable'), yesNo(adapter.discoverable));
-		add(_('Pairable'), yesNo(adapter.pairable));
-		add(_('Discovering'), yesNo(adapter.discovering));
-
-		return E('div', { 'class': 'cbi-section' }, [
-			E('h3', {}, _('Adapter information')),
-			E('div', { 'class': 'cbi-section-node' }, [
-				L.itemlist(E('span'), items)
-			])
-		]);
+		return outputIfaceBox(
+			adapterDisplayName(adapter),
+			adapter.powered,
+			'bluetooth',
+			[
+				_('Type'), _('Bluetooth adapter'),
+				_('Address'), adapter.address,
+				_('Interface'), adapter.interface,
+				_('Powered'), yesNo(adapter.powered),
+				_('Pairable'), yesNo(adapter.pairable),
+				_('Discoverable'), yesNo(adapter.discoverable),
+				_('Discovering'), yesNo(adapter.discovering)
+			]
+		);
 	},
 
 	renderBluetoothDevices: function(adapter, devices) {
@@ -294,28 +317,44 @@ return view.extend({
 			}
 		}, this.scanning ? _('Scanning...') : _('Scan for devices'));
 
+		var mineRows = [ bluetoothTableHeader() ];
+		if (mine.length) {
+			mine.forEach(function(dev) {
+				mineRows.push(self.renderMyDeviceRow(dev));
+			});
+		} else {
+			mineRows.push(E('tr', { 'class': 'tr placeholder' }, [
+				E('td', { 'class': 'td', 'colspan': '4' },
+					E('em', {}, _('No paired, connected or saved Bluetooth devices yet.')))
+			]));
+		}
+
+		var nearbyRows = [ bluetoothTableHeader() ];
+		if (nearby.length) {
+			nearby.forEach(function(dev) {
+				nearbyRows.push(self.renderNearbyRow(dev));
+			});
+		} else {
+			nearbyRows.push(E('tr', { 'class': 'tr placeholder' }, [
+				E('td', { 'class': 'td', 'colspan': '4' },
+					E('em', {}, this.scanning
+						? _('Waiting for nearby Bluetooth devices...')
+						: _('No new Bluetooth devices discovered.')))
+			]));
+		}
+
 		return E('div', {}, [
 			this.renderAdapterInfo(adapter),
 
-			E('div', { 'class': 'cbi-section' }, [
+			E('div', { 'class': 'cbi-section cbi-tblsection' }, [
 				E('h3', {}, _('My devices')),
-				mine.length
-					? E('div', { 'class': 'table' }, mine.map(function(dev) {
-						return self.renderMyDeviceRow(dev);
-					}))
-					: E('p', {}, _('No paired, connected or saved Bluetooth devices yet.'))
+				E('table', { 'class': 'table cbi-section-table' }, mineRows)
 			]),
 
-			E('div', { 'class': 'cbi-section' }, [
+			E('div', { 'class': 'cbi-section cbi-tblsection' }, [
 				E('h3', {}, _('Nearby devices')),
 				E('p', {}, scanButton),
-				nearby.length
-					? E('div', { 'class': 'table' }, nearby.map(function(dev) {
-						return self.renderNearbyRow(dev);
-					}))
-					: E('p', {}, this.scanning
-						? _('Waiting for nearby Bluetooth devices...')
-						: _('No new Bluetooth devices discovered.'))
+				E('table', { 'class': 'table cbi-section-table' }, nearbyRows)
 			])
 		]);
 	},
@@ -324,6 +363,12 @@ return view.extend({
 		if (!this.btPackageAvailable) {
 			return E('p', {}, _(
 				'Bluetooth audio support is not included in this firmware build.'
+			));
+		}
+
+		if (this.btKernelDetected) {
+			return E('p', {}, _(
+				'Bluetooth adapter detected, but it could not be initialized. Check system logs for details.'
 			));
 		}
 
@@ -336,16 +381,18 @@ return view.extend({
 			audioState.ready === '1' &&
 			String(audioState.card || '') === String(card.card);
 
-		return E('div', { 'class': 'cbi-section' }, [
-			E('h3', {}, _('USB audio device')),
-			E('div', { 'class': 'cbi-section-node' }, [
-				L.itemlist(E('span'), [
-					_('Name'), card.name,
-					_('ALSA card'), String(card.card),
-					_('Status'), selected ? _('Selected and ready') : _('Ready')
-				])
-			])
-		]);
+		return outputIfaceBox(
+			card.name || _('USB Audio'),
+			true,
+			'speaker',
+			[
+				_('Type'), _('USB audio device'),
+				_('Device'), card.name || _('USB Audio'),
+				_('ALSA card'), String(card.card),
+				_('Interface'), _('USB'),
+				_('Status'), selected ? _('Selected and ready') : _('Ready')
+			]
+		);
 	},
 
 	renderUsbEmpty: function() {
@@ -453,16 +500,17 @@ return view.extend({
 		var self = this;
 
 		this.btPackageAvailable = !!data[0];
+		this.btKernelDetected = this.btPackageAvailable && !!(data[1].stdout || '').trim();
 		this.btAdapters = this.btPackageAvailable
-			? parseBluetoothAdapters(data[1].stdout || '')
+			? parseBluetoothAdapters(data[2].stdout || '')
 			: [];
 
 		var devices = this.btPackageAvailable
-			? parseBluetoothDevices(data[2].stdout || '')
+			? parseBluetoothDevices(data[3].stdout || '')
 			: [];
 
-		var usbCards = parseUsbCards(data[3]);
-		var audioState = parseState(data[4].stdout || '');
+		var usbCards = parseUsbCards(data[4]);
+		var audioState = parseState(data[5].stdout || '');
 
 		var tabs = [];
 		var panes = [];

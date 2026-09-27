@@ -32,7 +32,10 @@ provisioning_auto() {
 	if uci -q get wireless.audiowrt_client >/dev/null 2>&1; then
 		elapsed=0
 		while [ "$elapsed" -lt "$AUDIOWRT_SETUP_TIMEOUT" ]; do
-			audiowrt_client_up && return 0
+			if audiowrt_client_up; then
+				/usr/libexec/audiowrt/time-sync || true
+				return 0
+			fi
 			sleep 2
 			elapsed=$((elapsed + 2))
 		done
@@ -40,7 +43,10 @@ provisioning_auto() {
 
 	elapsed=0
 	while [ "$elapsed" -lt "$AUDIOWRT_SETUP_TIMEOUT" ]; do
-		audiowrt_interface_up lan && return 0
+		if audiowrt_interface_up lan; then
+			/usr/libexec/audiowrt/time-sync || true
+			return 0
+		fi
 		sleep 2
 		elapsed=$((elapsed + 2))
 	done
