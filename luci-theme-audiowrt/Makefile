@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-audiowrt
-PKG_VERSION:=0.1.1
+PKG_VERSION:=0.1.2
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
@@ -17,9 +17,9 @@ define Package/luci-theme-audiowrt
 endef
 
 define Package/luci-theme-audiowrt/description
- Lightweight monochrome AudioWRT theme for LuCI. The first iteration reuses
- Bootstrap's structural CSS and templates while overriding the visual language
- to match the AudioWRT provisioning UI.
+ Lightweight monochrome AudioWRT theme for LuCI. This iteration keeps
+ Bootstrap as the structural compatibility layer while replacing navigation,
+ controls, branding and legacy signal graphics with the AudioWRT UI language.
 endef
 
 define Package/luci-theme-audiowrt/install
@@ -28,10 +28,9 @@ define Package/luci-theme-audiowrt/install
 	$(INSTALL_DATA) ./htdocs/luci-static/audiowrt/mobile.css $(1)/www/luci-static/audiowrt/mobile.css
 	$(INSTALL_DATA) ./htdocs/luci-static/audiowrt/logo.svg $(1)/www/luci-static/audiowrt/logo.svg
 	$(INSTALL_DATA) ./htdocs/luci-static/audiowrt/logo-horizontal.svg $(1)/www/luci-static/audiowrt/logo-horizontal.svg
-	ln -s ../bootstrap/logo_48.png $(1)/www/luci-static/audiowrt/logo_48.png
 
 	$(INSTALL_DIR) $(1)/usr/share/ucode/luci/template/themes/audiowrt
-	ln -s ../bootstrap/header.ut $(1)/usr/share/ucode/luci/template/themes/audiowrt/header.ut
+	$(INSTALL_DATA) ./ucode/template/themes/audiowrt/header.ut $(1)/usr/share/ucode/luci/template/themes/audiowrt/header.ut
 	ln -s ../bootstrap/footer.ut $(1)/usr/share/ucode/luci/template/themes/audiowrt/footer.ut
 	ln -s ../bootstrap/sysauth.ut $(1)/usr/share/ucode/luci/template/themes/audiowrt/sysauth.ut
 
