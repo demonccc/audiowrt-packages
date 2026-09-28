@@ -8,15 +8,33 @@ set -eu
 error_file=/tmp/audiowrt/provisioning.error
 done_file=/tmp/audiowrt/provisioning.done
 
+configured_setup_radio() {
+	local radio=''
+	if [ -s /tmp/audiowrt/provisioning-radio ]; then
+		radio=$(cat /tmp/audiowrt/provisioning-radio 2>/dev/null || true)
+	elif [ -s /etc/audiowrt/provisioning-radio ]; then
+		radio=$(cat /etc/audiowrt/provisioning-radio 2>/dev/null || true)
+	fi
+	if [ -n "$radio" ]; then
+		[ "$(uci -q get wireless."$radio" 2>/dev/null)" = wifi-device ] || {
+			echo "ERROR: configured provisioning radio '$radio' is not available." >&2
+			return 2
+		}
+		printf '%s\n' "$radio"
+		return 0
+	fi
+	audiowrt_first_radio
+}
+
 start_setup() {
 	reason="$1"
-	radio="$(audiowrt_first_radio)"
+	radio="$(configured_setup_radio)"
 	[ -n "$radio" ] || { echo 'ERROR: no Wi-Fi radio is available.' >&2; return 3; }
 	/usr/sbin/audiowrt-wifi-client setup-start "$radio" "$(/usr/libexec/audiowrt/setup-ssid)"
 	mkdir -p /tmp/audiowrt
 	rm -f "$error_file"
 	rm -f "$done_file"
-	logger -t audiowrt "Provisioning mode enabled ($reason)"
+	logger -t audiowrt "Provisioning mode enabled ($reason) on $radio"
 }
 
 provisioning_start() {
@@ -65,6 +83,7 @@ status() {
 	fi
 	printf 'device_name=%s\n' "$(uci -q get system.@system[0].hostname || echo AudioWRT)"
 	printf 'provisioning=%s\n' "$provisioning"
+	printf 'provisioning_radio=%s\n' "$(cat "$AUDIOWRT_SETUP_DIR/radio" 2>/dev/null || true)"
 	printf 'wifi_ssid=%s\n' "$(uci -q get wireless.audiowrt_client.ssid || true)"
 	printf 'lan_dhcp=%s\n' "$(audiowrt_connected && echo 1 || echo 0)"
 	printf 'last_error=%s\n' "$(cat "$error_file" 2>/dev/null || true)"
