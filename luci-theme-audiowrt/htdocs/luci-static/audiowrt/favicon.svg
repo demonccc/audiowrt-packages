@@ -1,15 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="AudioWRT">
-  <g fill="none" stroke="#000" stroke-width="8" stroke-linecap="butt">
-    <path d="M48 10A40 40 0 0 0 10 48"/>
-    <path d="M52 10A40 40 0 0 1 90 48"/>
-    <path d="M10 52A40 40 0 0 0 48 90"/>
-    <path d="M90 52A40 40 0 0 1 52 90"/>
+  <g fill="none" stroke="#000" stroke-linecap="round">
+    <g stroke-width="7">
+      <path d="M14 31 A46 46 0 0 1 31 14"/>
+      <path d="M69 14 A46 46 0 0 1 86 31"/>
+      <path d="M14 69 A46 46 0 0 0 31 86"/>
+      <path d="M69 86 A46 46 0 0 0 86 69"/>
+    </g>
+    <g stroke-width="5">
+      <path d="M27 42 A25 25 0 0 1 42 27"/>
+      <path d="M58 27 A25 25 0 0 1 73 42"/>
+      <path d="M73 58 A25 25 0 0 1 58 73"/>
+      <path d="M42 73 A25 25 0 0 1 27 58"/>
+    </g>
   </g>
   <g fill="#000">
-    <rect x="27" y="43" width="8" height="18" rx="4"/>
-    <rect x="39" y="35" width="8" height="34" rx="4"/>
-    <rect x="48" y="27" width="8" height="50" rx="4"/>
-    <rect x="60" y="35" width="8" height="34" rx="4"/>
-    <rect x="72" y="43" width="8" height="18" rx="4"/>
+    <rect x="25" y="44" width="7" height="12" rx="3.5"/>
+    <rect x="36" y="36" width="7" height="28" rx="3.5"/>
+    <rect x="47" y="29" width="7" height="42" rx="3.5"/>
+    <rect x="58" y="36" width="7" height="28" rx="3.5"/>
+    <rect x="69" y="44" width="7" height="12" rx="3.5"/>
   </g>
 </svg>
