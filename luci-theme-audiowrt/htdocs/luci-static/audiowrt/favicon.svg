@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="AudioWRT">
+  <g fill="none" stroke="#000" stroke-width="8" stroke-linecap="butt">
+    <path d="M48 10A40 40 0 0 0 10 48"/>
+    <path d="M52 10A40 40 0 0 1 90 48"/>
+    <path d="M10 52A40 40 0 0 0 48 90"/>
+    <path d="M90 52A40 40 0 0 1 52 90"/>
+  </g>
+  <g fill="#000">
+    <rect x="30" y="43" width="8" height="18" rx="4"/>
+    <rect x="41" y="35" width="8" height="34" rx="4"/>
+    <rect x="52" y="27" width="8" height="50" rx="4"/>
+    <rect x="63" y="35" width="8" height="34" rx="4"/>
+    <rect x="74" y="43" width="8" height="18" rx="4"/>
+  </g>
+</svg>
