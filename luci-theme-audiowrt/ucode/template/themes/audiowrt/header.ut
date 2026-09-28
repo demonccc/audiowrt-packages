@@ -72,7 +72,8 @@
 				<div class="alert-message warning">
 					<h4>{{ _('JavaScript required!') }}</h4>
 					<p>{{ _('You must enable JavaScript in your browser or LuCI will not work properly.') }}</p>
-				</noscript>
+				</div>
+			</noscript>
 
 			<div id="tabmenu" style="display:none"></div>
 		{% endif %}
