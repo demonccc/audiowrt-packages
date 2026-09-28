@@ -24,7 +24,7 @@
 		<link rel="stylesheet" href="{{ media }}/cascade.css">
 		<link rel="stylesheet" href="{{ media }}/override.css">
 		<link rel="stylesheet" media="only screen and (max-device-width: 854px)" href="{{ media }}/mobile.css" />
-		<link rel="icon" type="image/svg+xml" href="{{ media }}/logo.svg?v=5">
+		<link rel="icon" type="image/svg+xml" href="{{ media }}/favicon.svg?v=6">
 		{% if (node?.css): %}
 		<link rel="stylesheet" href="{{ resource }}/{{ node.css }}">
 		{% endif %}
@@ -33,12 +33,16 @@
 		{% endif %}
 		<script src="{{ dispatcher.build_url('admin/translations', dispatcher.lang) }}"></script>
 		<script src="{{ resource }}/cbi.js"></script>
+		<script defer src="{{ media }}/menu.js?v=2"></script>
 	</head>
 
 	<body class="lang_{{ dispatcher.lang }} {{ entityencode(striptags(node?.title ?? ''), true) }}" data-page="{{ entityencode(join('-', ctx.request_path), true) }}">
 		{% if (!blank_page): %}
 		<header>
-			<a class="brand" href="/">{{ striptags(boardinfo.hostname ?? '?') }}</a>
+			<a class="brand" href="/">
+				<img class="aw-brand-logo" src="{{ media }}/logo-horizontal.svg?v=6" alt="AudioWRT">
+				<span class="aw-router-name">{{ striptags(boardinfo.hostname ?? '?') }}</span>
+			</a>
 			<ul class="nav" id="topmenu" style="display:none"></ul>
 			<div id="indicators" class="pull-right"></div>
 		</header>
