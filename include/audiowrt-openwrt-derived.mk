@@ -22,6 +22,18 @@ AUDIOWRT_DERIVED_FILES_DIR:=$(AUDIOWRT_DERIVED_WORK)/files
 AUDIOWRT_DERIVED_SRC_DIR:=$(AUDIOWRT_DERIVED_WORK)/src
 AUDIOWRT_DERIVED_STAMP:=$(AUDIOWRT_DERIVED_WORK)/prepared
 
+# The exact-release AudioWRT builder indexes the AudioWRT feed before it
+# selectively registers OpenWrt core package sources for SDK preparation. Some
+# SDKs already carry the canonical recipe under package/, so the old fallback
+# path never materialized feeds/base even though the later builder stage expects
+# those exact pinned sources there. Materialize the SDK-pinned base checkout
+# during AudioWRT's containerized feed scan without indexing or installing it.
+ifneq ($(AUDIOWRT_IN_CONTAINER),)
+ifneq ($(findstring $(TOPDIR)/feeds/base/,$(AUDIOWRT_CANONICAL_RECIPE)),)
+  $(shell python3 '$(TOPDIR)/feeds/audiowrt/scripts/materialize-openwrt-base.py' '$(TOPDIR)')
+endif
+endif
+
 # Core recipes can already be present in a full OpenWrt checkout or in some SDK
 # layouts under $(TOPDIR)/package. Prefer that tree when available.
 AUDIOWRT_CANONICAL_RECIPE_RESOLVED:=$(AUDIOWRT_CANONICAL_RECIPE)
