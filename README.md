@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="luci-theme-audiowrt/htdocs/luci-static/audiowrt/logo.svg" width="160" alt="AudioWRT">
+</p>
+
 # AudioWRT Packages
 
 Reusable OpenWrt packages and LuCI applications used by AudioWRT.
