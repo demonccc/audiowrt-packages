@@ -58,22 +58,18 @@ start_test() {
 	fi
 	printf 'media=%s\ntheme_existed=%s\n' "$old_media" "$theme_existed" > "$STATE"
 
-	# Build the test tree entirely in RAM. Dereference symlinks so LuCI modules
-	# remain available after /www/luci-static is overmounted.
 	cp -aL /www/luci-static/. "$STATIC/"
 	cp -aL /www/luci-static/resources/. "$RESOURCES/" 2>/dev/null || true
 	cp -aL /usr/share/ucode/luci/template/themes/. "$THEMES/"
 	mkdir -p "$STATIC/audiowrt" "$THEMES/audiowrt" "$RESOURCES/tools"
 
-	# Some minimal images expose Status -> Routing but do not carry the
-	# luci-mod-network helper required by routesj.js. Provide the exact 25.12
-	# helper in RAM for the test; nothing is written to overlay/flash.
 	if [ ! -s "$RESOURCES/tools/network.js" ]; then
 		uclient-fetch -O "$RESOURCES/tools/network.js" "$OPENWRT_LUCI/tools/network.js"
 	fi
 
 	uclient-fetch -O "$STATIC/audiowrt/cascade.css" "$RAW_STATIC/cascade.css"
 	uclient-fetch -O "$STATIC/audiowrt/override.css" "$RAW_STATIC/override.css"
+	uclient-fetch -O "$STATIC/audiowrt/fixes.css" "$RAW_STATIC/fixes.css"
 	uclient-fetch -O "$STATIC/audiowrt/mobile.css" "$RAW_STATIC/mobile.css"
 	uclient-fetch -O "$STATIC/audiowrt/logo.svg" "$RAW_STATIC/logo.svg"
 	uclient-fetch -O "$STATIC/audiowrt/logo-horizontal.svg" "$RAW_STATIC/logo-horizontal.svg"
