@@ -6,10 +6,10 @@
     <path d="M90 52A40 40 0 0 1 52 90"/>
   </g>
   <g fill="#000">
-    <rect x="30" y="43" width="8" height="18" rx="4"/>
-    <rect x="41" y="35" width="8" height="34" rx="4"/>
-    <rect x="52" y="27" width="8" height="50" rx="4"/>
-    <rect x="63" y="35" width="8" height="34" rx="4"/>
-    <rect x="74" y="43" width="8" height="18" rx="4"/>
+    <rect x="27" y="43" width="8" height="18" rx="4"/>
+    <rect x="39" y="35" width="8" height="34" rx="4"/>
+    <rect x="48" y="27" width="8" height="50" rx="4"/>
+    <rect x="60" y="35" width="8" height="34" rx="4"/>
+    <rect x="72" y="43" width="8" height="18" rx="4"/>
   </g>
 </svg>
