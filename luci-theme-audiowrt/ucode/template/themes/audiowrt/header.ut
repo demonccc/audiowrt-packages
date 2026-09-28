@@ -21,10 +21,10 @@
 		<title>{{ striptags(`${boardinfo.hostname ?? '?'}${dispatched?.title ? ` | ${_(dispatched.title)}` : ''}`) }}</title>
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<meta name="darkreader-lock">
-		<link rel="stylesheet" href="{{ media }}/cascade.css?v=11">
-		<link rel="stylesheet" href="{{ media }}/override.css?v=11">
-		<link rel="stylesheet" media="only screen and (max-device-width: 854px)" href="{{ media }}/mobile.css?v=11" />
-		<link rel="icon" type="image/svg+xml" href="{{ media }}/favicon.svg?v=11">
+		<link rel="stylesheet" href="{{ media }}/cascade.css?v=12">
+		<link rel="stylesheet" href="{{ media }}/override.css?v=12">
+		<link rel="stylesheet" media="only screen and (max-device-width: 854px)" href="{{ media }}/mobile.css?v=12" />
+		<link rel="icon" type="image/svg+xml" href="{{ media }}/favicon.svg?v=12">
 		{% if (node?.css): %}
 		<link rel="stylesheet" href="{{ resource }}/{{ node.css }}">
 		{% endif %}
@@ -40,7 +40,7 @@
 		{% if (!blank_page): %}
 		<header>
 			<a class="brand" href="/">
-				<img class="aw-brand-logo" src="{{ media }}/logo.svg?v=11" alt="AudioWRT">
+				<img class="aw-brand-logo" src="{{ media }}/logo.svg?v=12" alt="AudioWRT">
 				<span class="aw-router-name">{{ striptags(boardinfo.hostname ?? '?') }}</span>
 			</a>
 			<ul class="nav" id="topmenu" style="display:none"></ul>
