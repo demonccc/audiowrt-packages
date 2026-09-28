@@ -6,14 +6,20 @@ AUDIOWRT_DERIVED_NAME:=audiowrt-busybox
 AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/utils/busybox/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
+# Keep an AudioWRT release independent from the upstream BusyBox recipe so
+# image/package caches cannot silently reuse a binary built before our config
+# deltas were applied.
+PKG_RELEASE:=8
+
 PKG_MAINTAINER:=AudioWRT
 
 BUSYBOX_SYM=$(if $(CONFIG_BUSYBOX_CUSTOM),CONFIG,DEFAULT)
 BUSYBOX_IF_ENABLED=$(if $(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_$(1)),$(2))
 
 # Applets intentionally omitted from the AudioWRT build. None are required by
-# the current OpenWrt/AudioWRT runtime on the minimal image; diagnostic applets
-# that are useful on-device (notably vi, top and which) remain enabled.
+# the current OpenWrt/AudioWRT runtime on the minimal image; vi and which remain
+# available for on-device diagnostics. Runtime CPU/memory status is available
+# through ubus/LuCI, so the interactive top applet is omitted as well.
 AUDIOWRT_BUSYBOX_DISABLED_APPLETS:= \
 	BRCTL \
 	CLEAR \
@@ -28,6 +34,7 @@ AUDIOWRT_BUSYBOX_DISABLED_APPLETS:= \
 	SWAPOFF \
 	SWAPON \
 	TIME \
+	TOP \
 	TRACEROUTE \
 	TRACEROUTE6 \
 	YES
@@ -119,11 +126,25 @@ endif
 		$(PKG_BUILD_DIR)/.config
 	echo 'CONFIG_UDHCPD=y' >> $(PKG_BUILD_DIR)/.config
 	echo 'CONFIG_DHCPD_LEASES_FILE="/tmp/audiowrt-udhcpd.leases"' >> $(PKG_BUILD_DIR)/.config
+
+	# First normalize the inherited OpenWrt configuration. Then apply the
+	# AudioWRT pruning to the normalized config, normalize once more, and fail
+	# the build if Kconfig turns any requested applet back on. This makes the
+	# pruning observable and prevents a same-size stale binary from passing.
+	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
 	for applet in $(AUDIOWRT_BUSYBOX_DISABLED_APPLETS); do \
 		sed -i -e "/^CONFIG_$${applet}=/d" -e "/^# CONFIG_$${applet} is not set/d" $(PKG_BUILD_DIR)/.config; \
 		echo "# CONFIG_$${applet} is not set" >> $(PKG_BUILD_DIR)/.config; \
 	done
 	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
+	@echo 'AudioWRT BusyBox pruned applets:'
+	@for applet in $(AUDIOWRT_BUSYBOX_DISABLED_APPLETS); do \
+		if ! grep -qx "# CONFIG_$${applet} is not set" $(PKG_BUILD_DIR)/.config; then \
+			echo "ERROR: BusyBox applet $${applet} was not disabled" >&2; \
+			exit 1; \
+		fi; \
+		echo "  $${applet}=n"; \
+	done
 endef
 
 define Build/Compile
