@@ -48,10 +48,10 @@ header .brand .aw-router-name {
 	width:auto !important;
 	min-width:0 !important;
 	max-width:none !important;
-	margin:4px 0 8px 8px !important;
-	padding:8px 6px !important;
+	margin:6px 0 10px 8px !important;
+	padding:8px !important;
 	border:0 !important;
-	border-radius:9px !important;
+	border-radius:10px !important;
 	box-shadow:none !important;
 	background:var(--aw-surface-soft) !important;
 }
@@ -62,7 +62,7 @@ header .brand .aw-router-name {
 #topmenu .dropdown-menu > li,
 #topmenu li > ul > li {
 	width:100% !important;
-	margin:0 !important;
+	margin:2px 0 !important;
 }
 
 #topmenu .dropdown-menu > li > a,
@@ -70,9 +70,9 @@ header .brand .aw-router-name {
 	display:flex !important;
 	align-items:center !important;
 	width:100% !important;
-	min-height:38px !important;
+	min-height:40px !important;
 	box-sizing:border-box !important;
-	padding:9px 12px !important;
+	padding:10px 12px !important;
 	border-radius:8px !important;
 	background:transparent !important;
 	color:var(--aw-muted) !important;
@@ -84,11 +84,17 @@ header .brand .aw-router-name {
 }
 
 #topmenu .dropdown-menu > li > a:hover,
-#topmenu .dropdown-menu > li.active > a,
-#topmenu li > ul > li > a:hover,
-#topmenu li > ul > li.active > a {
-	background:#eef1f4 !important;
+#topmenu li > ul > li > a:hover {
+	background:#f0f2f4 !important;
 	color:var(--aw-text) !important;
+}
+
+#topmenu .dropdown-menu > li.active > a,
+#topmenu li > ul > li.active > a,
+#topmenu li > ul > li.aw-current > a {
+	background:#e9edf1 !important;
+	color:var(--aw-text) !important;
+	font-weight:600 !important;
 }
 
 /* Status indicators such as REFRESHING belong to the sidebar, centered below navigation. */
