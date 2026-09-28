@@ -9,7 +9,7 @@ include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 # Keep an AudioWRT release independent from the upstream BusyBox recipe so
 # image/package caches cannot silently reuse a binary built before our config
 # deltas were applied.
-PKG_RELEASE:=7
+PKG_RELEASE:=8
 
 PKG_MAINTAINER:=AudioWRT
 
@@ -17,8 +17,9 @@ BUSYBOX_SYM=$(if $(CONFIG_BUSYBOX_CUSTOM),CONFIG,DEFAULT)
 BUSYBOX_IF_ENABLED=$(if $(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_$(1)),$(2))
 
 # Applets intentionally omitted from the AudioWRT build. None are required by
-# the current OpenWrt/AudioWRT runtime on the minimal image; diagnostic applets
-# that are useful on-device (notably vi, top and which) remain enabled.
+# the current OpenWrt/AudioWRT runtime on the minimal image; vi and which remain
+# available for on-device diagnostics. Runtime CPU/memory status is available
+# through ubus/LuCI, so the interactive top applet is omitted as well.
 AUDIOWRT_BUSYBOX_DISABLED_APPLETS:= \
 	BRCTL \
 	CLEAR \
@@ -33,6 +34,7 @@ AUDIOWRT_BUSYBOX_DISABLED_APPLETS:= \
 	SWAPOFF \
 	SWAPON \
 	TIME \
+	TOP \
 	TRACEROUTE \
 	TRACEROUTE6 \
 	YES
