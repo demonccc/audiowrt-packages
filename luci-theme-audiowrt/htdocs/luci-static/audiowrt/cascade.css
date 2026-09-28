@@ -61,14 +61,11 @@ header {
 }
 
 header .brand {
-	background:url('/luci-static/audiowrt/logo-horizontal.svg') left center/contain no-repeat !important;
 	width:100%;
-	height:52px;
 	min-width:0;
 	padding:0;
 	margin:0;
-	font-size:0;
-	color:transparent !important;
+	color:var(--aw-text) !important;
 	text-shadow:none;
 }
 header .brand::before { display:none !important; }
@@ -186,6 +183,17 @@ input:focus,select:focus,textarea:focus { border-color:var(--aw-black); box-shad
 	color:#fff !important;
 }
 .cbi-button-positive:hover,.cbi-button-apply:hover,.cbi-button-save:hover,.btn.positive:hover,.btn.cbi-button-positive:hover,input[name*="save"]:hover,input[value="Save"]:hover,input[value="Save & Apply"]:hover { background:var(--aw-green-hover) !important; border-color:var(--aw-green-hover) !important; }
+
+/* Authentication is a normal action in AudioWRT, not a positive/save action. */
+.btn.cbi-button-positive.important {
+	background:var(--aw-black) !important;
+	border-color:var(--aw-black) !important;
+	color:#fff !important;
+}
+.btn.cbi-button-positive.important:hover {
+	background:var(--aw-black-hover) !important;
+	border-color:var(--aw-black-hover) !important;
+}
 
 .cbi-button-negative,.cbi-button-remove,.cbi-button-reset,.btn.negative,input[value="Reset"],input[value*="Remove"],input[value*="Delete"] {
 	background:var(--aw-red) !important;
