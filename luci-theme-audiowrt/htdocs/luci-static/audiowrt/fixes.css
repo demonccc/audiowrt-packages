@@ -38,3 +38,32 @@
 	padding:0 !important;
 	border-radius:0 8px 8px 0 !important;
 }
+
+/* Startup is a state/action table, so semantic colors are useful here. */
+#maincontent .cbi-section-actions .cbi-button-positive {
+	background:var(--aw-green) !important;
+	border-color:var(--aw-green) !important;
+	color:#fff !important;
+}
+#maincontent .cbi-section-actions .cbi-button-positive:hover {
+	background:var(--aw-green-hover) !important;
+	border-color:var(--aw-green-hover) !important;
+}
+#maincontent .cbi-section-actions .cbi-button-negative {
+	background:#98a2b3 !important;
+	border-color:#98a2b3 !important;
+	color:#fff !important;
+}
+#maincontent .cbi-section-actions .cbi-button-negative:hover {
+	background:#7f8a9a !important;
+	border-color:#7f8a9a !important;
+}
+#maincontent .cbi-section-actions button:last-child {
+	background:var(--aw-red) !important;
+	border-color:var(--aw-red) !important;
+	color:#fff !important;
+}
+#maincontent .cbi-section-actions button:last-child:hover {
+	background:var(--aw-red-hover) !important;
+	border-color:var(--aw-red-hover) !important;
+}
