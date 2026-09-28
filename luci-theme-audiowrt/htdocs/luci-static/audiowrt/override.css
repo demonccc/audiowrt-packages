@@ -1,0 +1,298 @@
+/* AudioWRT layout fixes layered after cascade.css. */
+
+/* Brand block: approved AudioWRT symbol plus current router hostname. */
+header .brand {
+	display:flex !important;
+	flex-direction:row !important;
+	align-items:center !important;
+	justify-content:flex-start !important;
+	gap:10px !important;
+	height:auto !important;
+	min-height:58px !important;
+	background:none !important;
+	font-size:0 !important;
+	color:var(--aw-text) !important;
+	overflow:visible !important;
+}
+header .brand .aw-brand-logo {
+	display:block;
+	width:54px;
+	height:54px;
+	flex:0 0 54px;
+	object-fit:contain;
+}
+header .brand .aw-router-name {
+	display:block;
+	min-width:0;
+	max-width:130px;
+	font-size:20px;
+	font-weight:700;
+	line-height:1.1;
+	letter-spacing:-.02em;
+	color:var(--aw-text);
+	white-space:nowrap;
+	overflow:hidden;
+	text-overflow:ellipsis;
+}
+
+/* Accordion sidebar. Child menus stay in normal document flow. */
+#topmenu li { position:static !important; }
+
+#topmenu .dropdown-menu,
+#topmenu li > ul {
+	display:none !important;
+	position:static !important;
+	inset:auto !important;
+	transform:none !important;
+	float:none !important;
+	width:auto !important;
+	min-width:0 !important;
+	max-width:none !important;
+	margin:6px 0 10px 8px !important;
+	padding:8px !important;
+	border:0 !important;
+	border-radius:10px !important;
+	box-shadow:none !important;
+	background:var(--aw-surface-soft) !important;
+}
+
+#topmenu li.aw-expanded > .dropdown-menu,
+#topmenu li.aw-expanded > ul { display:block !important; }
+
+#topmenu .dropdown-menu > li,
+#topmenu li > ul > li {
+	width:100% !important;
+	margin:2px 0 !important;
+}
+
+#topmenu .dropdown-menu > li > a,
+#topmenu li > ul > li > a {
+	display:flex !important;
+	align-items:center !important;
+	width:100% !important;
+	min-height:40px !important;
+	box-sizing:border-box !important;
+	padding:10px 12px !important;
+	border-radius:8px !important;
+	background:transparent !important;
+	color:var(--aw-muted) !important;
+	font-size:14px !important;
+	line-height:20px !important;
+	font-weight:500 !important;
+	letter-spacing:0 !important;
+	white-space:normal !important;
+}
+
+#topmenu .dropdown-menu > li > a:hover,
+#topmenu li > ul > li > a:hover {
+	background:#f0f2f4 !important;
+	color:var(--aw-text) !important;
+}
+
+#topmenu .dropdown-menu > li.active > a,
+#topmenu li > ul > li.active > a,
+#topmenu li > ul > li.aw-current > a {
+	background:#e9edf1 !important;
+	color:var(--aw-text) !important;
+	font-weight:600 !important;
+}
+
+/* Status indicators such as REFRESHING belong to the sidebar, centered below navigation. */
+header #indicators {
+	position:static !important;
+	float:none !important;
+	clear:both !important;
+	width:100% !important;
+	margin:10px 0 0 !important;
+	padding:0 !important;
+	text-align:center !important;
+	align-self:center !important;
+}
+header #indicators > * {
+	float:none !important;
+	margin-left:auto !important;
+	margin-right:auto !important;
+}
+
+/* AudioWRT action language: normal/positive actions are black, destructive actions red. */
+.cbi-button-positive,
+.cbi-button-apply,
+.cbi-button-save,
+.btn.positive,
+.btn.cbi-button-positive,
+input[name*="save"],
+input[value="Save"],
+input[value="Save & Apply"] {
+	background:var(--aw-black) !important;
+	border-color:var(--aw-black) !important;
+	color:#fff !important;
+}
+.cbi-button-positive:hover,
+.cbi-button-apply:hover,
+.cbi-button-save:hover,
+.btn.positive:hover,
+.btn.cbi-button-positive:hover,
+input[name*="save"]:hover,
+input[value="Save"]:hover,
+input[value="Save & Apply"]:hover {
+	background:var(--aw-black-hover) !important;
+	border-color:var(--aw-black-hover) !important;
+}
+
+/* Page actions use a consistent footprint. Reset is not a compact icon button. */
+.cbi-page-actions .btn,
+.cbi-page-actions .cbi-button,
+.cbi-page-actions button,
+.cbi-page-actions input[type="button"],
+.cbi-page-actions input[type="submit"] {
+	min-width:72px !important;
+	height:44px !important;
+	min-height:44px !important;
+	padding:0 16px !important;
+}
+.cbi-page-actions .cbi-button-apply,
+.cbi-page-actions input[value="Save & Apply"] {
+	min-width:132px !important;
+}
+.cbi-page-actions .cbi-button-reset,
+.cbi-page-actions input[value="Reset"] {
+	width:auto !important;
+	max-width:none !important;
+	min-width:72px !important;
+	padding:0 16px !important;
+}
+
+/* Field action buttons must never visually touch the field they act on. */
+.cbi-value-field .btn,
+.cbi-value-field .cbi-button,
+.cbi-value-field button,
+.cbi-value-field input[type="button"],
+.cbi-value-field input[type="submit"] {
+	margin-top:8px !important;
+}
+.cbi-value-field > input + .btn,
+.cbi-value-field > input + .cbi-button,
+.cbi-value-field > select + .btn,
+.cbi-value-field > select + .cbi-button,
+.cbi-value-field > textarea + .btn,
+.cbi-value-field > textarea + .cbi-button,
+.cbi-input-password + .btn,
+.cbi-input-password + .cbi-button {
+	margin-left:8px !important;
+}
+
+/* Dynamic lists are the exception: + belongs to the field, exactly like × belongs to each item. */
+.cbi-dynlist > .add-item {
+	dis:flex !important;
+	align-items:stretch !important;
+	gap:0 !important;
+	margin-top:6px !important;
+}
+.cbi-dynlist > .add-item > input,
+.cbi-dynlist > .add-item > .cbi-dropdown {
+	flex:1 1 auto !important;
+	min-width:0 !important;
+	border-radius:8px 0 0 8px !important;
+}
+.cbi-dynlist > .add-item > .cbi-button-add,
+.cbi-dynlist > .add-item > button.cbi-button-add {
+	flex:0 0 40px !important;
+	width:40px !important;
+	min-width:40px !important;
+	max-width:40px !important;
+	height:40px !important;
+	min-height:40px !important;
+	margin:0 0 0 -1px !important;
+	padding:0 !important;
+	border-radius:0 8px 8px 0 !important;
+	background:var(--aw-black) !important;
+	border-color:var(--aw-black) !important;
+	color:#fff !important;
+}
+
+/* Existing dynlist entries get the same 40px destructive control as other remove actions. */
+.cbi-dynlist > .item {
+	position:relative !important;
+	min-height:40px !important;
+	box-sizing:border-box !important;
+	margin:0 0 6px !important;
+	padding-right:48px !important;
+	border-radius:8px !important;
+	overflow:hidden !important;
+}
+.cbi-dynlist > .item::after {
+	content:"×" !important;
+	position:absolute !important;
+	top:0 !important;
+	right:0 !important;
+	display:inline-flex !important;
+	align-items:center !important;
+	justify-content:center !important;
+	width:40px !important;
+	height:40px !important;
+	min-width:40px !important;
+	padding:0 !important;
+	margin:0 !important;
+	box-sizing:border-box !important;
+	border:1px solid var(--aw-red) !important;
+	border-radius:0 8px 8px 0 !important;
+	background:var(--aw-red) !important;
+	color:#fff !important;
+	font-size:16px !important;
+	font-weight:600 !important;
+	line-height:1 !important;
+	text-shadow:none !important;
+}
+.cbi-dynlist > .item:hover::after {
+	background:var(--aw-red-hover) !important;
+	border-color:var(--aw-red-hover) !important;
+}
+
+/* Standalone icon add/remove buttons use the same square geometry, but Reset remains a full action button. */
+.cbi-button-add,
+.cbi-button-remove {
+	width:40px !important;
+	min-width:40px !important;
+	max-width:40px !important;
+	height:40px !important;
+	min-height:40px !important;
+	padding:0 !important;
+	border-radius:8px !important;
+	align-items:center !important;
+	justify-content:center !important;
+}
+.cbi-button-add {
+	background:var(--aw-black) !important;
+	border-color:var(--aw-black) !important;
+	color:#fff !important;
+}
+.cbi-button-remove {
+	background:var(--aw-red) !important;
+	border-color:var(--aw-red) !important;
+	color:#fff !important;
+}
+
+@media (max-width:854px) {
+	header .brand {
+		min-height:0 !important;
+		gap:8px !important;
+	}
+	header .brand .aw-brand-logo {
+		width:42px;
+		height:42px;
+		flex-basis:42px;
+	}
+	header .brand .aw-router-name {
+		font-size:16px;
+		max-width:100px;
+	}
+	#topmenu .dropdown-menu,
+	#topmenu li > ul {
+		position:absolute !important;
+		margin:0 !important;
+	}
+	header #indicators {
+		width:auto !important;
+		margin:0 0 0 auto !important;
+	}
+}

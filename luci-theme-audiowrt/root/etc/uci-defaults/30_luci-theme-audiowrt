@@ -1,0 +1,16 @@
+#!/bin/sh
+
+changed=0
+
+if ! uci -q get luci.themes.AudioWRT >/dev/null 2>&1; then
+	uci set luci.themes.AudioWRT='/luci-static/audiowrt'
+	changed=1
+fi
+
+if [ "$PKG_UPGRADE" != 1 ] && [ "$(uci -q get luci.main.mediaurlbase)" != '/luci-static/audiowrt' ]; then
+	uci set luci.main.mediaurlbase='/luci-static/audiowrt'
+	changed=1
+fi
+
+[ "$changed" = 0 ] || uci commit luci
+exit 0

@@ -1,0 +1,11 @@
+@import url('/luci-static/bootstrap/mobile.css');
+
+@media (max-width: 854px) {
+	body { background: #f6f7f8; }
+	header { border-bottom: 1px solid #eaecf0; }
+	#topmenu { gap: 2px; }
+	#topmenu > li > a { border-radius: 8px; }
+	.cbi-section { border-radius: 10px; }
+	.btn,.cbi-button,button { border-radius: 8px !important; }
+	.table .th,.table .td,th,td { padding: 8px 9px; }
+}

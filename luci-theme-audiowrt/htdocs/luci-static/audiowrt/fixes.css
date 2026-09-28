@@ -1,0 +1,69 @@
+/* Final AudioWRT control spacing overrides. Loaded after override.css. */
+
+/* Local Time in luci-mod-system renders input + <br> + span.control-group. */
+#maincontent #localtime + br + .control-group {
+	dis:inline-flex !important;
+	align-items:center !important;
+	gap:8px !important;
+	margin-top:8px !important;
+}
+#maincontent #localtime + br + .control-group > .cbi-button {
+	margin:0 !important;
+}
+
+/* Dynamic list add row is one joined control, mirroring the existing x rows. */
+#maincontent .cbi-dynlist > .add-item {
+	dis:flex !important;
+	align-items:stretch !important;
+	gap:0 !important;
+	margin-top:6px !important;
+}
+#maincontent .cbi-dynlist > .add-item > input,
+#maincontent .cbi-dynlist > .add-item > .cbi-dropdown {
+	flex:1 1 auto !important;
+	width:auto !important;
+	min-width:0 !important;
+	margin:0 !important;
+	border-radius:8px 0 0 8px !important;
+}
+#maincontent .cbi-dynlist > .add-item > .cbi-button-add,
+#maincontent .cbi-dynlist > .add-item > button.cbi-button-add {
+	flex:0 0 40px !important;
+	width:40px !important;
+	min-width:40px !important;
+	max-width:40px !important;
+	height:40px !important;
+	min-height:40px !important;
+	margin:0 0 0 -1px !important;
+	padding:0 !important;
+	border-radius:0 8px 8px 0 !important;
+}
+
+/* Startup is a state/action table, so semantic colors are useful here. */
+#maincontent .cbi-section-actions .cbi-button-positive {
+	background:var(--aw-green) !important;
+	border-color:var(--aw-green) !important;
+	color:#fff !important;
+}
+#maincontent .cbi-section-actions .cbi-button-positive:hover {
+	background:var(--aw-green-hover) !important;
+	border-color:var(--aw-green-hover) !important;
+}
+#maincontent .cbi-section-actions .cbi-button-negative {
+	background:#98a2b3 !important;
+	border-color:#98a2b3 !important;
+	color:#fff !important;
+}
+#maincontent .cbi-section-actions .cbi-button-negative:hover {
+	background:#7f8a9a !important;
+	border-color:#7f8a9a !important;
+}
+#maincontent .cbi-section-actions button:last-child {
+	background:var(--aw-red) !important;
+	border-color:var(--aw-red) !important;
+	color:#fff !important;
+}
+#maincontent .cbi-section-actions button:last-child:hover {
+	background:var(--aw-red-hover) !important;
+	border-color:var(--aw-red-hover) !important;
+}
