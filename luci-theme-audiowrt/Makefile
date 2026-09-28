@@ -2,12 +2,12 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-audiowrt
 PKG_VERSION:=0.1.10
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
 
 LUCI_BOOTSTRAP_DIR:=$(TOPDIR)/feeds/luci/themes/luci-theme-bootstrap
-AUDIOWRT_THEME_BUILD_DIR:=$(PKG_BUILD_DIR)/audiowrt-theme
+AUDIOWRT_THEME_BUILD_DIR=$(PKG_BUILD_DIR)/audiowrt-theme
 
 include $(INCLUDE_DIR)/package.mk
 
