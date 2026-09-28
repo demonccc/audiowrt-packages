@@ -114,6 +114,77 @@ header #indicators > * {
 	margin-right:auto !important;
 }
 
+/* AudioWRT action language: normal/positive actions are black, destructive actions red. */
+.cbi-button-positive,
+.cbi-button-apply,
+.cbi-button-save,
+.btn.positive,
+.btn.cbi-button-positive,
+input[name*="save"],
+input[value="Save"],
+input[value="Save & Apply"] {
+	background:var(--aw-black) !important;
+	border-color:var(--aw-black) !important;
+	color:#fff !important;
+}
+.cbi-button-positive:hover,
+.cbi-button-apply:hover,
+.cbi-button-save:hover,
+.btn.positive:hover,
+.btn.cbi-button-positive:hover,
+input[name*="save"]:hover,
+input[value="Save"]:hover,
+input[value="Save & Apply"]:hover {
+	background:var(--aw-black-hover) !important;
+	border-color:var(--aw-black-hover) !important;
+}
+
+/* Keep inline controls visually separated from their fields. */
+.cbi-value-field > input + .btn,
+.cbi-value-field > input + .cbi-button,
+.cbi-value-field > select + .btn,
+.cbi-value-field > select + .cbi-button,
+.cbi-value-field > .btn + input,
+.cbi-value-field > .cbi-button + input,
+.cbi-input-password + .btn,
+.cbi-input-password + .cbi-button {
+	margin-left:6px !important;
+}
+
+/* Add/remove controls use the same 40px square geometry. */
+.cbi-button-add,
+.cbi-button-remove,
+.cbi-button-reset {
+	width:40px !important;
+	min-width:40px !important;
+	max-width:40px !important;
+	height:40px !important;
+	min-height:40px !important;
+	padding:0 !important;
+	border-radius:8px !important;
+	align-items:center !important;
+	justify-content:center !important;
+}
+.cbi-button-add {
+	background:var(--aw-black) !important;
+	border-color:var(--aw-black) !important;
+	color:#fff !important;
+}
+.cbi-button-remove,
+.cbi-button-reset {
+	background:var(--aw-red) !important;
+	border-color:var(--aw-red) !important;
+	color:#fff !important;
+}
+
+/* LuCI sometimes renders compact list buttons directly beside editable rows. */
+.cbi-dynlist > .btn,
+.cbi-dynlist > .cbi-button,
+.cbi-input-dynlist + .btn,
+.cbi-input-dynlist + .cbi-button {
+	margin-left:6px !important;
+}
+
 @media (max-width:854px) {
 	header .brand {
 		min-height:0 !important;
