@@ -1,20 +1,16 @@
 (function() {
 	'use strict';
 
-	function topItemFromTarget(menu, target) {
-		var node = target;
-		while (node && node !== menu) {
-			if (node.tagName === 'LI' && node.parentNode === menu)
-				return node;
-			node = node.parentNode;
+	function directSubmenu(li) {
+		for (var i = 0; i < li.children.length; i++) {
+			if (li.children[i].tagName === 'UL') return li.children[i];
 		}
 		return null;
 	}
 
-	function directSubmenu(li) {
+	function directAnchor(li) {
 		for (var i = 0; i < li.children.length; i++) {
-			var el = li.children[i];
-			if (el.tagName === 'UL') return el;
+			if (li.children[i].tagName === 'A') return li.children[i];
 		}
 		return null;
 	}
@@ -24,23 +20,25 @@
 		if (!menu || menu.dataset.awAccordion === '1') return;
 		menu.dataset.awAccordion = '1';
 
-		/* Start collapsed regardless of whichever item LuCI marked active. */
 		for (var i = 0; i < menu.children.length; i++)
 			menu.children[i].classList.remove('aw-expanded');
 
-		/* Delegate clicks because LuCI builds/rebuilds menu entries dynamically. */
 		menu.addEventListener('click', function(ev) {
 			var anchor = ev.target.closest ? ev.target.closest('a') : null;
 			if (!anchor || !menu.contains(anchor)) return;
 
-			var item = topItemFromTarget(menu, anchor);
-			if (!item) return;
+			/* Only intercept the direct top-level group link. Submenu links must
+			 * retain their normal LuCI navigation behaviour. */
+			var item = anchor.parentNode;
+			if (!item || item.parentNode !== menu || directAnchor(item) !== anchor)
+				return;
+
 			var submenu = directSubmenu(item);
 			if (!submenu) return;
 
 			ev.preventDefault();
 
-			/* Clicking an already expanded group keeps it expanded. */
+			/* Clicking the already-open group keeps it open. */
 			if (item.classList.contains('aw-expanded')) return;
 
 			for (var j = 0; j < menu.children.length; j++)
