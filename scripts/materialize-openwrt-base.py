@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
-"""Materialize the SDK-pinned OpenWrt base source without indexing/installing it.
+"""Materialize the exact OpenWrt base package source for AudioWRT derived packages.
 
-Derived AudioWRT packages need the canonical OpenWrt recipe while the AudioWRT
-feed itself is being scanned. Calling `scripts/feeds update base` from a package
-Makefile is recursive and unsafe, so this helper performs only the source checkout
-specified by the selected SDK's feeds.conf and creates the same feeds/base link.
-It never creates feed metadata, installs packages, or invokes make.
+When AudioWRT runs inside its builder, the exact OpenWrt release tree has already
+been cloned next to the SDK work directory. Prefer that tree so feed scanning and
+later SDK source registration resolve the same package sources without cloning a
+second copy or depending on an SDK-specific synthetic `base` feed layout.
+
+Outside that builder layout, fall back to the SDK-pinned base feed configuration.
+The helper never creates feed metadata, installs packages, or invokes make.
 """
 
 from __future__ import annotations
@@ -31,6 +33,24 @@ def fail(message: str) -> None:
 
 def run(*args: str, cwd: Path | None = None) -> None:
     subprocess.run(args, cwd=cwd, check=True)
+
+
+def find_builder_source(topdir: Path) -> Path | None:
+    """Find the exact OpenWrt source tree already cloned by AudioWRT.
+
+    The builder layout is:
+      <work>/openwrt-source
+      <work>/sdk/extract/<sdk-root>
+
+    Walk upward from the SDK root and reuse the sibling openwrt-source/package
+    tree when present. This is the authoritative exact-release source selected
+    by the AudioWRT build itself.
+    """
+    for parent in (topdir, *topdir.parents):
+        candidate = parent / "openwrt-source" / "package"
+        if candidate.is_dir():
+            return candidate.resolve()
+    return None
 
 
 def read_base_source(topdir: Path) -> tuple[str, str]:
@@ -93,9 +113,6 @@ def ensure_checkout(target: Path, source: str) -> None:
             run("git", "clone", "--filter=blob:none", "--no-checkout", url, str(target))
 
     if mode == "commit":
-        # A --no-checkout clone can have HEAD pointing at the requested commit
-        # while the worktree is still empty. Always populate the worktree. Fetch
-        # only when the requested object is not already available locally.
         present = subprocess.run(
             ["git", "cat-file", "-e", f"{ref}^{{commit}}"],
             cwd=target,
@@ -115,16 +132,18 @@ def ensure_checkout(target: Path, source: str) -> None:
     stamp.write_text(expected, encoding="utf-8")
 
 
-def ensure_link(topdir: Path, root: str) -> None:
+def ensure_link_to(topdir: Path, target: Path) -> None:
     link = topdir / "feeds" / "base"
-    expected = Path("base_root") / root
     if link.is_symlink():
-        if Path(link.readlink()) == expected:
-            return
+        try:
+            if link.resolve() == target.resolve():
+                return
+        except FileNotFoundError:
+            pass
         link.unlink()
     elif link.exists():
         fail(f"refusing to replace non-symlink OpenWrt base feed path: {link}")
-    link.symlink_to(expected)
+    link.symlink_to(target)
 
 
 def main() -> int:
@@ -136,18 +155,22 @@ def main() -> int:
     feeds_dir = topdir / "feeds"
     feeds_dir.mkdir(parents=True, exist_ok=True)
 
-    # Feed scanning may evaluate several derived Makefiles concurrently. One
-    # process owns the checkout while the others wait and then reuse it.
     lock_path = feeds_dir / ".audiowrt-base-materialize.lock"
     with lock_path.open("w", encoding="utf-8") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+
+        builder_source = find_builder_source(topdir)
+        if builder_source is not None:
+            ensure_link_to(topdir, builder_source)
+            return 0
+
         source, root = read_base_source(topdir)
         target = feeds_dir / "base_root"
         ensure_checkout(target, source)
         canonical_root = target / root
         if not canonical_root.is_dir():
             fail(f"materialized OpenWrt base root is missing: {canonical_root}")
-        ensure_link(topdir, root)
+        ensure_link_to(topdir, canonical_root)
 
     return 0
 
