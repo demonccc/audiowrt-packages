@@ -47,8 +47,11 @@ start_test() {
 	fi
 	printf 'media=%s\ntheme_existed=%s\n' "$old_media" "$theme_existed" > "$STATE"
 
-	cp -a /www/luci-static/. "$STATIC/"
-	cp -a /usr/share/ucode/luci/template/themes/. "$THEMES/"
+	# Dereference any symlinks while copying LuCI static assets. This keeps
+	# /luci-static/resources complete after the bind mount and avoids 404s on
+	# views such as Status -> Routes.
+	cp -aL /www/luci-static/. "$STATIC/"
+	cp -aL /usr/share/ucode/luci/template/themes/. "$THEMES/"
 	mkdir -p "$STATIC/audiowrt" "$THEMES/audiowrt"
 
 	uclient-fetch -O "$STATIC/audiowrt/cascade.css" "$RAW/cascade.css"
@@ -56,7 +59,8 @@ start_test() {
 	uclient-fetch -O "$STATIC/audiowrt/logo.svg" "$RAW/logo.svg"
 	uclient-fetch -O "$STATIC/audiowrt/logo-horizontal.svg" "$RAW/logo-horizontal.svg"
 
-	ln -sf ../bootstrap/logo_48.png "$STATIC/audiowrt/logo_48.png"
+	# Keep the AudioWRT theme structurally compatible with bootstrap while
+	# serving our own CSS and branding from RAM.
 	ln -sf ../bootstrap/header.ut "$THEMES/audiowrt/header.ut"
 	ln -sf ../bootstrap/footer.ut "$THEMES/audiowrt/footer.ut"
 	ln -sf ../bootstrap/sysauth.ut "$THEMES/audiowrt/sysauth.ut"
