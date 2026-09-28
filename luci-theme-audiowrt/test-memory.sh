@@ -5,10 +5,12 @@ ROOT=/tmp/audiowrt-theme-test
 STATIC="$ROOT/luci-static"
 THEMES="$ROOT/themes"
 RESOURCES="$ROOT/resources"
+PROVISION_HTML="$ROOT/audiowrt.html"
 STATE="$ROOT/state"
 RAW_BASE='https://raw.githubusercontent.com/demonccc/audiowrt-packages/feat/luci-theme-audiowrt/luci-theme-audiowrt'
 RAW_STATIC="$RAW_BASE/htdocs/luci-static/audiowrt"
 RAW_HEADER="$RAW_BASE/ucode/template/themes/audiowrt/header.ut"
+RAW_PROVISION='https://raw.githubusercontent.com/demonccc/audiowrt-packages/feat/luci-theme-audiowrt/audiowrt-provisioning/files/audiowrt.html'
 OPENWRT_LUCI='https://raw.githubusercontent.com/openwrt/luci/openwrt-25.12/modules/luci-mod-network/htdocs/luci-static/resources'
 
 restart_luci() {
@@ -18,6 +20,7 @@ restart_luci() {
 }
 
 unmount_test() {
+	umount /www/audiowrt.html 2>/dev/null || true
 	umount /www/luci-static/resources 2>/dev/null || true
 	umount /usr/share/ucode/luci/template/themes 2>/dev/null || true
 	umount /www/luci-static 2>/dev/null || true
@@ -77,6 +80,7 @@ start_test() {
 	uclient-fetch -O "$STATIC/audiowrt/favicon.svg" "$RAW_STATIC/favicon.svg"
 	uclient-fetch -O "$STATIC/audiowrt/menu.js" "$RAW_STATIC/menu.js"
 	uclient-fetch -O "$THEMES/audiowrt/header.ut" "$RAW_HEADER"
+	uclient-fetch -O "$PROVISION_HTML" "$RAW_PROVISION"
 
 	ln -sf ../bootstrap/footer.ut "$THEMES/audiowrt/footer.ut"
 	ln -sf ../bootstrap/sysauth.ut "$THEMES/audiowrt/sysauth.ut"
@@ -84,12 +88,15 @@ start_test() {
 	mount --bind "$STATIC" /www/luci-static
 	mount --bind "$RESOURCES" /www/luci-static/resources
 	mount --bind "$THEMES" /usr/share/ucode/luci/template/themes
+	if [ -f /www/audiowrt.html ]; then
+		mount --bind "$PROVISION_HTML" /www/audiowrt.html
+	fi
 
 	uci set luci.themes.AudioWRT='/luci-static/audiowrt'
 	uci set luci.main.mediaurlbase='/luci-static/audiowrt'
 	restart_luci
 
-	echo 'AudioWRT theme mounted from RAM.'
+	echo 'AudioWRT theme and provisioning UI mounted from RAM.'
 	echo 'Open LuCI and hard-refresh the browser (Ctrl+F5).'
 	echo 'Nothing was committed to flash.'
 }
