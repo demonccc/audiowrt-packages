@@ -139,7 +139,39 @@ input[value="Save & Apply"]:hover {
 	border-color:var(--aw-black-hover) !important;
 }
 
-/* Keep inline controls visually separated from their fields. */
+/* Page actions use a consistent footprint. Reset is not a compact icon button. */
+.cbi-page-actions .btn,
+.cbi-page-actions .cbi-button,
+.cbi-page-actions button,
+.cbi-page-actions input[type="button"],
+.cbi-page-actions input[type="submit"] {
+	min-width:72px !important;
+	height:44px !important;
+	min-height:44px !important;
+	padding:0 16px !important;
+}
+.cbi-page-actions .cbi-button-apply,
+.cbi-page-actions input[value="Save & Apply"] {
+	min-width:132px !important;
+}
+.cbi-page-actions .cbi-button-reset,
+.cbi-page-actions input[value="Reset"] {
+	width:auto !important;
+	max-width:none !important;
+	min-width:72px !important;
+	padding:0 16px !important;
+}
+
+/* Controls rendered below a text field need breathing room. */
+.cbi-value-field > .btn,
+.cbi-value-field > .cbi-button,
+.cbi-value-field > button,
+.cbi-value-field > input[type="button"],
+.cbi-value-field > input[type="submit"] {
+	margin-top:8px !important;
+}
+
+/* Side-by-side field actions keep a real gap instead of touching the input. */
 .cbi-value-field > input + .btn,
 .cbi-value-field > input + .cbi-button,
 .cbi-value-field > select + .btn,
@@ -148,13 +180,78 @@ input[value="Save & Apply"]:hover {
 .cbi-value-field > .cbi-button + input,
 .cbi-input-password + .btn,
 .cbi-input-password + .cbi-button {
-	margin-left:6px !important;
+	margin-left:8px !important;
 }
 
-/* Add/remove controls use the same 40px square geometry. */
+/* Dynamic lists: field and + button use the same spacing and geometry everywhere. */
+.cbi-dynlist > .add-item {
+	dis:flex !important;
+	align-items:stretch !important;
+	gap:8px !important;
+	margin-top:6px !important;
+}
+.cbi-dynlist > .add-item > input,
+.cbi-dynlist > .add-item > .cbi-dropdown {
+	flex:1 1 auto !important;
+	min-width:0 !important;
+}
+.cbi-dynlist > .add-item > .cbi-button-add,
+.cbi-dynlist > .add-item > button.cbi-button-add {
+	flex:0 0 40px !important;
+	width:40px !important;
+	min-width:40px !important;
+	max-width:40px !important;
+	height:40px !important;
+	min-height:40px !important;
+	margin:0 !important;
+	padding:0 !important;
+	border-radius:8px !important;
+	background:var(--aw-black) !important;
+	border-color:var(--aw-black) !important;
+	color:#fff !important;
+}
+
+/* Existing dynlist entries get the same 40px destructive control as other remove actions. */
+.cbi-dynlist > .item {
+	position:relative !important;
+	min-height:40px !important;
+	box-sizing:border-box !important;
+	margin:0 0 6px !important;
+	padding-right:48px !important;
+	border-radius:8px !important;
+	overflow:hidden !important;
+}
+.cbi-dynlist > .item::after {
+	content:"×" !important;
+	position:absolute !important;
+	top:0 !important;
+	right:0 !important;
+	display:inline-flex !important;
+	align-items:center !important;
+	justify-content:center !important;
+	width:40px !important;
+	height:40px !important;
+	min-width:40px !important;
+	padding:0 !important;
+	margin:0 !important;
+	box-sizing:border-box !important;
+	border:1px solid var(--aw-red) !important;
+	border-radius:0 8px 8px 0 !important;
+	background:var(--aw-red) !important;
+	color:#fff !important;
+	font-size:16px !important;
+	font-weight:600 !important;
+	line-height:1 !important;
+	text-shadow:none !important;
+}
+.cbi-dynlist > .item:hover::after {
+	background:var(--aw-red-hover) !important;
+	border-color:var(--aw-red-hover) !important;
+}
+
+/* Standalone icon add/remove buttons use the same square geometry, but Reset remains a full action button. */
 .cbi-button-add,
-.cbi-button-remove,
-.cbi-button-reset {
+.cbi-button-remove {
 	width:40px !important;
 	min-width:40px !important;
 	max-width:40px !important;
@@ -170,19 +267,10 @@ input[value="Save & Apply"]:hover {
 	border-color:var(--aw-black) !important;
 	color:#fff !important;
 }
-.cbi-button-remove,
-.cbi-button-reset {
+.cbi-button-remove {
 	background:var(--aw-red) !important;
 	border-color:var(--aw-red) !important;
 	color:#fff !important;
-}
-
-/* LuCI sometimes renders compact list buttons directly beside editable rows. */
-.cbi-dynlist > .btn,
-.cbi-dynlist > .cbi-button,
-.cbi-input-dynlist + .btn,
-.cbi-input-dynlist + .cbi-button {
-	margin-left:6px !important;
 }
 
 @media (max-width:854px) {
