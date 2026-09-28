@@ -162,38 +162,37 @@ input[value="Save & Apply"]:hover {
 	padding:0 16px !important;
 }
 
-/* Controls rendered below a text field need breathing room. */
-.cbi-value-field > .btn,
-.cbi-value-field > .cbi-button,
-.cbi-value-field > button,
-.cbi-value-field > input[type="button"],
-.cbi-value-field > input[type="submit"] {
+/* Field action buttons must never visually touch the field they act on. */
+.cbi-value-field .btn,
+.cbi-value-field .cbi-button,
+.cbi-value-field button,
+.cbi-value-field input[type="button"],
+.cbi-value-field input[type="submit"] {
 	margin-top:8px !important;
 }
-
-/* Side-by-side field actions keep a real gap instead of touching the input. */
 .cbi-value-field > input + .btn,
 .cbi-value-field > input + .cbi-button,
 .cbi-value-field > select + .btn,
 .cbi-value-field > select + .cbi-button,
-.cbi-value-field > .btn + input,
-.cbi-value-field > .cbi-button + input,
+.cbi-value-field > textarea + .btn,
+.cbi-value-field > textarea + .cbi-button,
 .cbi-input-password + .btn,
 .cbi-input-password + .cbi-button {
 	margin-left:8px !important;
 }
 
-/* Dynamic lists: field and + button use the same spacing and geometry everywhere. */
+/* Dynamic lists are the exception: + belongs to the field, exactly like × belongs to each item. */
 .cbi-dynlist > .add-item {
 	dis:flex !important;
 	align-items:stretch !important;
-	gap:8px !important;
+	gap:0 !important;
 	margin-top:6px !important;
 }
 .cbi-dynlist > .add-item > input,
 .cbi-dynlist > .add-item > .cbi-dropdown {
 	flex:1 1 auto !important;
 	min-width:0 !important;
+	border-radius:8px 0 0 8px !important;
 }
 .cbi-dynlist > .add-item > .cbi-button-add,
 .cbi-dynlist > .add-item > button.cbi-button-add {
@@ -203,9 +202,9 @@ input[value="Save & Apply"]:hover {
 	max-width:40px !important;
 	height:40px !important;
 	min-height:40px !important;
-	margin:0 !important;
+	margin:0 0 0 -1px !important;
 	padding:0 !important;
-	border-radius:8px !important;
+	border-radius:0 8px 8px 0 !important;
 	background:var(--aw-black) !important;
 	border-color:var(--aw-black) !important;
 	color:#fff !important;
