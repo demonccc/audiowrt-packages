@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-audiowrt
 PKG_VERSION:=0.1.9
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
 
@@ -20,6 +20,10 @@ define Package/luci-theme-audiowrt/description
  Lightweight monochrome AudioWRT theme for LuCI. Bootstrap remains the
  structural compatibility layer while AudioWRT owns the branding, favicon,
  sidebar navigation and control styling.
+endef
+
+# Static LuCI theme: there is no source Makefile to compile in PKG_BUILD_DIR.
+define Build/Compile
 endef
 
 define Package/luci-theme-audiowrt/install
