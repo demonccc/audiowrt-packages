@@ -9,7 +9,7 @@ include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 # Keep an AudioWRT release independent from the upstream BusyBox recipe so
 # image/package caches cannot silently reuse a binary built before our config
 # deltas were applied.
-PKG_RELEASE:=8
+PKG_RELEASE:=9
 
 PKG_MAINTAINER:=AudioWRT
 
@@ -129,21 +129,22 @@ endif
 
 	# First normalize the inherited OpenWrt configuration. Then apply the
 	# AudioWRT pruning to the normalized config, normalize once more, and fail
-	# the build if Kconfig turns any requested applet back on. This makes the
-	# pruning observable and prevents a same-size stale binary from passing.
+	# the build if Kconfig turns any requested applet back on. The shell variable
+	# needs four dollars here because OpenWrt expands Build/Configure through an
+	# additional make/eval layer before the recipe reaches /bin/sh.
 	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
 	for applet in $(AUDIOWRT_BUSYBOX_DISABLED_APPLETS); do \
-		sed -i -e "/^CONFIG_$${applet}=/d" -e "/^# CONFIG_$${applet} is not set/d" $(PKG_BUILD_DIR)/.config; \
-		echo "# CONFIG_$${applet} is not set" >> $(PKG_BUILD_DIR)/.config; \
+		sed -i -e "/^CONFIG_$$$${applet}=/d" -e "/^# CONFIG_$$$${applet} is not set/d" $(PKG_BUILD_DIR)/.config; \
+		echo "# CONFIG_$$$${applet} is not set" >> $(PKG_BUILD_DIR)/.config; \
 	done
 	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
 	@echo 'AudioWRT BusyBox pruned applets:'
 	@for applet in $(AUDIOWRT_BUSYBOX_DISABLED_APPLETS); do \
-		if ! grep -qx "# CONFIG_$${applet} is not set" $(PKG_BUILD_DIR)/.config; then \
-			echo "ERROR: BusyBox applet $${applet} was not disabled" >&2; \
+		if ! grep -qx "# CONFIG_$$$${applet} is not set" $(PKG_BUILD_DIR)/.config; then \
+			echo "ERROR: BusyBox applet $$$${applet} was not disabled" >&2; \
 			exit 1; \
 		fi; \
-		echo "  $${applet}=n"; \
+		echo "  $$$${applet}=n"; \
 	done
 endef
 
