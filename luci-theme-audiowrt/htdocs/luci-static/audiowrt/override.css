@@ -1,32 +1,34 @@
 /* AudioWRT layout fixes layered after cascade.css. */
 
-/* Brand block: product logo plus current router hostname. */
+/* Brand block: simplified AudioWRT symbol plus current router hostname. */
 header .brand {
 	display:flex !important;
-	flex-direction:column !important;
-	align-items:flex-start !important;
+	flex-direction:row !important;
+	align-items:center !important;
 	justify-content:flex-start !important;
-	gap:6px !important;
+	gap:10px !important;
 	height:auto !important;
-	min-height:76px !important;
+	min-height:56px !important;
 	background:none !important;
-	font-size:0 !important;
+	font-size:inherit !important;
 	color:var(--aw-text) !important;
 	overflow:visible !important;
 }
 header .brand .aw-brand-logo {
 	display:block;
-	width:186px;
-	height:auto;
-	max-height:58px;
+	width:48px;
+	height:48px;
+	flex:0 0 48px;
+	object-fit:contain;
 }
 header .brand .aw-router-name {
 	display:block;
-	max-width:100%;
-	font-size:12px;
-	font-weight:600;
-	line-height:1.2;
-	color:var(--aw-muted);
+	min-width:0;
+	max-width:138px;
+	font-size:18px;
+	font-weight:700;
+	line-height:1.1;
+	color:var(--aw-text);
 	white-space:nowrap;
 	overflow:hidden;
 	text-overflow:ellipsis;
@@ -112,10 +114,14 @@ header #indicators > * {
 		gap:8px !important;
 	}
 	header .brand .aw-brand-logo {
-		width:140px;
-		max-height:46px;
+		width:40px;
+		height:40px;
+		flex-basis:40px;
 	}
-	header .brand .aw-router-name { display:none; }
+	header .brand .aw-router-name {
+		font-size:16px;
+		max-width:120px;
+	}
 	#topmenu .dropdown-menu,
 	#topmenu li > ul {
 		position:absolute !important;
