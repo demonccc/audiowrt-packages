@@ -7,7 +7,7 @@ later SDK source registration resolve the same package sources without cloning a
 second copy or depending on an SDK-specific synthetic `base` feed layout.
 
 Outside that builder layout, fall back to the SDK-pinned base feed configuration.
-The helper never creates feed metadata, installs packages, or invokes make.
+The helper never installs packages or invokes make.
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ BASE_RE = re.compile(
     r"\s+base\s+(?P<source>\S+)\s*$"
 )
 ROOT_RE = re.compile(r"(?:^|\s)--root=(\S+)(?:\s|$)")
+BASE_ANY_RE = re.compile(r"^\s*src-(?:git(?:-full)?|link|cpy)\b.*\sbase\s+\S+\s*$")
 
 
 def fail(message: str) -> None:
@@ -146,6 +147,38 @@ def ensure_link_to(topdir: Path, target: Path) -> None:
     link.symlink_to(target)
 
 
+def ensure_local_feed_config(topdir: Path, target: Path) -> None:
+    """Make later `scripts/feeds update base` use the local exact source tree.
+
+    The AudioWRT builder already cloned the selected OpenWrt release. Replacing
+    only the base feed entry with src-link prevents a later source-dependency
+    refresh from attempting a second network clone of git.openwrt.org while
+    preserving the normal feeds update/index flow against the exact same tree.
+    """
+    config = topdir / "feeds.conf"
+    if not config.is_file():
+        return
+
+    replacement = f"src-link base {target}\n"
+    lines = config.read_text(encoding="utf-8").splitlines(keepends=True)
+    updated: list[str] = []
+    replaced = False
+    for raw in lines:
+        line = raw.split("#", 1)[0].strip()
+        if line and BASE_ANY_RE.match(line):
+            if replaced:
+                continue
+            updated.append(replacement)
+            replaced = True
+        else:
+            updated.append(raw)
+
+    if not replaced:
+        updated.append(replacement)
+
+    config.write_text("".join(updated), encoding="utf-8")
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("usage: materialize-openwrt-base.py <openwrt-topdir>", file=sys.stderr)
@@ -162,6 +195,7 @@ def main() -> int:
         builder_source = find_builder_source(topdir)
         if builder_source is not None:
             ensure_link_to(topdir, builder_source)
+            ensure_local_feed_config(topdir, builder_source)
             return 0
 
         source, root = read_base_source(topdir)
