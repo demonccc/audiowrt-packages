@@ -27,6 +27,7 @@ define Package/audiowrt-dropbear/description
 endef
 
 define Package/audiowrt-dropbear/conffiles
+/etc/config/dropbear
 /etc/dropbear/authorized_keys
 /etc/dropbear/dropbear_ed25519_host_key
 endef
@@ -87,10 +88,11 @@ define Build/Compile
 endef
 
 define Package/audiowrt-dropbear/install
-	$(INSTALL_DIR) $(1)/usr/sbin $(1)/usr/bin $(1)/etc/init.d $(1)/etc/dropbear
+	$(INSTALL_DIR) $(1)/usr/sbin $(1)/usr/bin $(1)/etc/init.d $(1)/etc/dropbear $(1)/etc/config
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/dropbearmulti $(1)/usr/sbin/dropbear
 	$(LN) ../sbin/dropbear $(1)/usr/bin/dropbearkey
 	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/audiowrt-dropbear.init $(1)/etc/init.d/dropbear
+	$(INSTALL_CONF) ./files/dropbear.config $(1)/etc/config/dropbear
 endef
 
 $(eval $(call BuildPackage,audiowrt-dropbear))
