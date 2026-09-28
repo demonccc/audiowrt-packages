@@ -4,11 +4,12 @@ set -eu
 ROOT=/tmp/audiowrt-theme-test
 STATIC="$ROOT/luci-static"
 THEMES="$ROOT/themes"
-ORIGINAL_RES="$ROOT/original-resources"
+RESOURCES="$ROOT/resources"
 STATE="$ROOT/state"
 RAW_BASE='https://raw.githubusercontent.com/demonccc/audiowrt-packages/feat/luci-theme-audiowrt/luci-theme-audiowrt'
 RAW_STATIC="$RAW_BASE/htdocs/luci-static/audiowrt"
 RAW_HEADER="$RAW_BASE/ucode/template/themes/audiowrt/header.ut"
+OPENWRT_LUCI='https://raw.githubusercontent.com/openwrt/luci/openwrt-25.12/modules/luci-mod-network/htdocs/luci-static/resources'
 
 restart_luci() {
 	rm -f /tmp/luci-indexcache /tmp/luci-modulecache 2>/dev/null || true
@@ -20,7 +21,6 @@ unmount_test() {
 	umount /www/luci-static/resources 2>/dev/null || true
 	umount /usr/share/ucode/luci/template/themes 2>/dev/null || true
 	umount /www/luci-static 2>/dev/null || true
-	umount "$ORIGINAL_RES" 2>/dev/null || true
 }
 
 stop_test() {
@@ -45,7 +45,7 @@ stop_test() {
 start_test() {
 	unmount_test
 	rm -rf "$ROOT"
-	mkdir -p "$STATIC" "$THEMES" "$ORIGINAL_RES"
+	mkdir -p "$STATIC" "$THEMES" "$RESOURCES"
 
 	old_media=$(uci -q get luci.main.mediaurlbase 2>/dev/null || true)
 	if uci -q get luci.themes.AudioWRT >/dev/null 2>&1; then
@@ -55,30 +55,34 @@ start_test() {
 	fi
 	printf 'media=%s\ntheme_existed=%s\n' "$old_media" "$theme_existed" > "$STATE"
 
-	# Keep a live bind reference to the router's original LuCI resource tree.
-	# The parent /www/luci-static is overmounted later, so copying alone is not
-	# sufficient for symlinked modules such as resources/tools/network.js.
-	mount --bind /www/luci-static/resources "$ORIGINAL_RES"
-
+	# Build the test tree entirely in RAM. Dereference symlinks so LuCI modules
+	# remain available after /www/luci-static is overmounted.
 	cp -aL /www/luci-static/. "$STATIC/"
+	cp -aL /www/luci-static/resources/. "$RESOURCES/" 2>/dev/null || true
 	cp -aL /usr/share/ucode/luci/template/themes/. "$THEMES/"
-	mkdir -p "$STATIC/audiowrt" "$THEMES/audiowrt"
+	mkdir -p "$STATIC/audiowrt" "$THEMES/audiowrt" "$RESOURCES/tools"
+
+	# Some minimal images expose Status -> Routing but do not carry the
+	# luci-mod-network helper required by routesj.js. Provide the exact 25.12
+	# helper in RAM for the test; nothing is written to overlay/flash.
+	if [ ! -s "$RESOURCES/tools/network.js" ]; then
+		uclient-fetch -O "$RESOURCES/tools/network.js" "$OPENWRT_LUCI/tools/network.js"
+	fi
 
 	uclient-fetch -O "$STATIC/audiowrt/cascade.css" "$RAW_STATIC/cascade.css"
 	uclient-fetch -O "$STATIC/audiowrt/override.css" "$RAW_STATIC/override.css"
 	uclient-fetch -O "$STATIC/audiowrt/mobile.css" "$RAW_STATIC/mobile.css"
 	uclient-fetch -O "$STATIC/audiowrt/logo.svg" "$RAW_STATIC/logo.svg"
 	uclient-fetch -O "$STATIC/audiowrt/logo-horizontal.svg" "$RAW_STATIC/logo-horizontal.svg"
+	uclient-fetch -O "$STATIC/audiowrt/favicon.svg" "$RAW_STATIC/favicon.svg"
+	uclient-fetch -O "$STATIC/audiowrt/menu.js" "$RAW_STATIC/menu.js"
 	uclient-fetch -O "$THEMES/audiowrt/header.ut" "$RAW_HEADER"
 
 	ln -sf ../bootstrap/footer.ut "$THEMES/audiowrt/footer.ut"
 	ln -sf ../bootstrap/sysauth.ut "$THEMES/audiowrt/sysauth.ut"
 
 	mount --bind "$STATIC" /www/luci-static
-	# Re-expose the untouched original LuCI JS/resources tree inside the test
-	# mount. This prevents Status -> Routes and other stock views from losing
-	# modules that are outside the theme itself.
-	mount --bind "$ORIGINAL_RES" /www/luci-static/resources
+	mount --bind "$RESOURCES" /www/luci-static/resources
 	mount --bind "$THEMES" /usr/share/ucode/luci/template/themes
 
 	uci set luci.themes.AudioWRT='/luci-static/audiowrt'
