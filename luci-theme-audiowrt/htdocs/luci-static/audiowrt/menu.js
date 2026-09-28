@@ -1,6 +1,16 @@
 (function() {
 	'use strict';
 
+	function topItemFromTarget(menu, target) {
+		var node = target;
+		while (node && node !== menu) {
+			if (node.tagName === 'LI' && node.parentNode === menu)
+				return node;
+			node = node.parentNode;
+		}
+		return null;
+	}
+
 	function directSubmenu(li) {
 		for (var i = 0; i < li.children.length; i++) {
 			var el = li.children[i];
@@ -9,48 +19,34 @@
 		return null;
 	}
 
-	function setupAccordion() {
-		var menu = document.getElementById('topmenu');
-		if (!menu) return false;
-
-		var items = menu.children;
-		for (var i = 0; i < items.length; i++) {
-			var li = items[i];
-			if (li.tagName !== 'LI' || li.dataset.awAccordion === '1') continue;
-			var submenu = directSubmenu(li);
-			if (!submenu) continue;
-
-			li.dataset.awAccordion = '1';
-			li.classList.remove('open', 'active');
-			var trigger = li.querySelector(':scope > a');
-			if (!trigger) continue;
-
-			trigger.addEventListener('click', function(ev) {
-				var current = this.parentNode;
-				var parent = current.parentNode;
-				var siblings = parent.children;
-
-				if (current.classList.contains('aw-expanded')) {
-					ev.preventDefault();
-					return;
-				}
-
-				ev.preventDefault();
-				for (var j = 0; j < siblings.length; j++)
-					siblings[j].classList.remove('aw-expanded');
-				current.classList.add('aw-expanded');
-			});
-		}
-		return true;
-	}
-
 	function init() {
-		if (setupAccordion()) return;
-		var tries = 0;
-		var timer = setInterval(function() {
-			tries++;
-			if (setupAccordion() || tries > 40) clearInterval(timer);
-		}, 100);
+		var menu = document.getElementById('topmenu');
+		if (!menu || menu.dataset.awAccordion === '1') return;
+		menu.dataset.awAccordion = '1';
+
+		/* Start collapsed regardless of whichever item LuCI marked active. */
+		for (var i = 0; i < menu.children.length; i++)
+			menu.children[i].classList.remove('aw-expanded');
+
+		/* Delegate clicks because LuCI builds/rebuilds menu entries dynamically. */
+		menu.addEventListener('click', function(ev) {
+			var anchor = ev.target.closest ? ev.target.closest('a') : null;
+			if (!anchor || !menu.contains(anchor)) return;
+
+			var item = topItemFromTarget(menu, anchor);
+			if (!item) return;
+			var submenu = directSubmenu(item);
+			if (!submenu) return;
+
+			ev.preventDefault();
+
+			/* Clicking an already expanded group keeps it expanded. */
+			if (item.classList.contains('aw-expanded')) return;
+
+			for (var j = 0; j < menu.children.length; j++)
+				menu.children[j].classList.remove('aw-expanded');
+			item.classList.add('aw-expanded');
+		});
 	}
 
 	if (document.readyState === 'loading')
