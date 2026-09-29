@@ -21,7 +21,7 @@ set_error() {
 }
 
 stop_owned() {
-	name="$1"
+	local name="$1" pid tries
 	pid="$(cat "$STA_DIR/$name.pid" 2>/dev/null || true)"
 	case "$pid" in ''|*[!0-9]*) return 0 ;; esac
 	if [ -r "/proc/$pid/cmdline" ] && tr '\000' ' ' < "/proc/$pid/cmdline" | grep -Fq "$STA_DIR"; then
@@ -36,12 +36,13 @@ stop_owned() {
 }
 
 restore_radio() {
-	radio="$1"
+	local radio="$1"
 	[ -n "$radio" ] || return 0
 	ubus call network.wireless up "{\"device\":\"$radio\"}" >/dev/null 2>&1 || true
 }
 
 stop_temp_sta() {
+	local radio
 	radio="$(cat "$STA_DIR/radio" 2>/dev/null || true)"
 	stop_owned udhcpc
 	stop_owned wpa_supplicant
@@ -52,7 +53,7 @@ stop_temp_sta() {
 }
 
 resolve_phy() {
-	radio="$1"
+	local radio="$1" phy path candidate
 	phy="$(uci -q get wireless."$radio".phy 2>/dev/null || true)"
 	path="$(uci -q get wireless."$radio".path 2>/dev/null || true)"
 	if [ -z "$phy" ] && [ -n "$path" ]; then
@@ -70,7 +71,7 @@ resolve_phy() {
 }
 
 stage_candidate() {
-	radio="$1" ssid="$2" encryption="$3" key="$4" bssid="$5"
+	local radio="$1" ssid="$2" encryption="$3" key="$4" bssid="$5" candidate index
 	candidate="$RUNTIME_DIR/client.test.$$"
 	rm -rf "$candidate"
 	mkdir -p "$candidate"
@@ -86,7 +87,8 @@ stage_candidate() {
 }
 
 start_temp_sta() {
-	radio="$1" ssid="$2" encryption="$3" key="$4" bssid="$5"
+	local radio="$1" ssid="$2" encryption="$3" key="$4" bssid="$5"
+	local phy ssid_hex key_escaped elapsed
 	phy="$(resolve_phy "$radio")" || return 2
 
 	stop_temp_sta
