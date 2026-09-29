@@ -72,7 +72,13 @@ if [ "$action" = device ]; then
 fi
 
 if [ "$action" = save ]; then
-	[ -f /tmp/audiowrt/wifi.verified ] && [ -d "$request_dir" ] || reply '409 Conflict' 'Test Wi-Fi successfully before saving.'
+	[ -f /tmp/audiowrt/wifi.verified ] && [ -d "$request_dir" ] && [ -d /tmp/audiowrt/client ] || reply '409 Conflict' 'Test Wi-Fi successfully before saving.'
+	candidate_radio="$(cat /tmp/audiowrt/client/0 2>/dev/null || true)"
+	[ -n "$radio" ] || radio="$candidate_radio"
+	[ -n "$radio" ] && [ "$(uci -q get wireless."$radio" 2>/dev/null)" = wifi-device ] || reply '409 Conflict' 'The tested Wi-Fi radio is missing. Connect again before saving.'
+	[ -z "$candidate_radio" ] || [ "$candidate_radio" = "$radio" ] || reply '409 Conflict' 'The selected radio changed. Connect again before saving.'
+	# Keep the tested radio alongside the candidate so commit-client can validate it.
+	printf '%s' "$radio" > /tmp/audiowrt/client/0
 	/usr/sbin/audiowrt-wifi-client commit-client || reply '500 Internal Server Error' 'Could not save Wi-Fi.'
 	: > /tmp/audiowrt/provisioning.saved
 	rm -rf "$request_dir"
