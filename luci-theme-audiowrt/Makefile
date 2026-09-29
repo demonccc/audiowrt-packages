@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-audiowrt
 PKG_VERSION:=0.1.10
-PKG_RELEASE:=6
+PKG_RELEASE:=7
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
 
@@ -37,6 +37,8 @@ define Build/Compile
 		./htdocs/luci-static/audiowrt/mobile.css
 	python3 ./minify-assets.py js $(AUDIOWRT_THEME_BUILD_DIR)/menu.js \
 		./htdocs/luci-static/audiowrt/menu.js
+	python3 ./minify-assets.py js $(AUDIOWRT_THEME_BUILD_DIR)/menu-bootstrap.js \
+		$(LUCI_BOOTSTRAP_DIR)/htdocs/luci-static/resources/menu-bootstrap.js
 	$(CP) $(LUCI_BOOTSTRAP_DIR)/ucode/template/themes/bootstrap/footer.ut $(AUDIOWRT_THEME_BUILD_DIR)/footer.ut
 endef
 
@@ -47,6 +49,9 @@ define Package/luci-theme-audiowrt/install
 	$(INSTALL_DATA) $(AUDIOWRT_THEME_BUILD_DIR)/menu.js $(1)/www/luci-static/audiowrt/menu.js
 	$(INSTALL_DATA) ./htdocs/luci-static/audiowrt/logo.svg $(1)/www/luci-static/audiowrt/logo.svg
 	ln -s logo.svg $(1)/www/luci-static/audiowrt/favicon.svg
+
+	$(INSTALL_DIR) $(1)/www/luci-static/resources
+	$(INSTALL_DATA) $(AUDIOWRT_THEME_BUILD_DIR)/menu-bootstrap.js $(1)/www/luci-static/resources/menu-bootstrap.js
 
 	$(INSTALL_DIR) $(1)/usr/share/ucode/luci/template/themes/audiowrt
 	$(INSTALL_DATA) ./ucode/template/themes/audiowrt/header.ut $(1)/usr/share/ucode/luci/template/themes/audiowrt/header.ut
