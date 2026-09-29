@@ -32,17 +32,10 @@
     <p id="open-network" class="muted hidden">This network does not require a password.</p>
     <p id="wifi-result" class="muted"></p>
   </div>
-  <div class="actions"><button id="wifi-next" disabled>Continue</button></div>
+  <div class="actions"><button id="save-wifi" disabled>Save</button></div>
 </section>
 
 <section id="step-3" class="hidden">
-  <h2>Save Wi-Fi</h2>
-  <p class="muted">The connection test succeeded. Save it as the persistent AudioWRT Wi-Fi client configuration.</p>
-  <div id="save-summary" class="summary"></div>
-  <div class="actions"><button id="back-wifi" class="secondary">Back</button><button id="save-wifi">Save Wi-Fi</button></div>
-</section>
-
-<section id="step-4" class="hidden">
   <h2>Done</h2>
   <p class="ok">AudioWRT is configured and reconnecting to your network.</p>
   <div id="done-summary" class="summary"></div>
@@ -52,7 +45,7 @@
 
 <script>
 const wizard={step:1,status:null,network:null,verified:false};
-const $=id=>document.getElementById(id),steps=[1,2,3,4];
+const $=id=>document.getElementById(id),steps=[1,2,3];
 const bandLabel=v=>v==='2g'?'2.4 GHz':v==='5g'?'5 GHz':v==='6g'?'6 GHz':(v||'-');
 const scanBand=(n,fallback='')=>{const b=String(n?.band??'').toLowerCase(),mhz=Number(n?.mhz||0);if(b==='2'||b==='2g'||b==='2.4')return'2g';if(b==='5'||b==='5g')return'5g';if(b==='6'||b==='6g')return'6g';if(mhz>=5925)return'6g';if(mhz>=4900)return'5g';if(mhz>=2400)return'2g';return fallback};
 function showStep(n){wizard.step=n;steps.forEach(i=>$('step-'+i).classList.toggle('hidden',i!==n));$('progress').innerHTML=steps.map(i=>`<span class="dot ${i<=n?'active':''}"></span>`).join('')}
@@ -65,18 +58,16 @@ function grouped(items){const ssids={};items.forEach(n=>{const s=ssids[n.ssid]||
 async function post(data){const r=await fetch('/cgi-bin/audiowrt-provision',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams(data)});let j={message:await r.text()};try{j=JSON.parse(j.message)}catch(e){}if(!r.ok)throw new Error(j.message||`HTTP ${r.status}`);return j}
 async function status(){const r=await fetch('/cgi-bin/audiowrt-status',{cache:'no-store'});if(!r.ok)throw new Error('Could not read device status.');return r.json()}
 function validateDevice(){const pass=$('admin-password').value,confirm=$('admin-confirm').value;const match=pass&&confirm&&pass===confirm;$('password-match').textContent=!confirm?'':match?'Passwords match.':'Passwords do not match.';$('password-match').className=match?'ok':'muted';$('save-device').disabled=!validHostname($('hostname').value.trim())||pass.length<8||!match}
-function selectNetwork(n,row){wizard.network={...n,encryptionMode:encryptionFor(n.encryption)};const open=wizard.network.encryptionMode==='none';$('wifi-password-field').classList.toggle('hidden',open);$('open-network').classList.toggle('hidden',!open);if(open)$('wifi-key').value='';$('wifi-result').textContent='';$('wifi-panel').classList.remove('hidden');row.after($('wifi-panel'));$('wifi-next').disabled=true;wizard.verified=false}
+function selectNetwork(n,row){wizard.network={...n,encryptionMode:encryptionFor(n.encryption)};const open=wizard.network.encryptionMode==='none';$('wifi-password-field').classList.toggle('hidden',open);$('open-network').classList.toggle('hidden',!open);if(open)$('wifi-key').value='';$('wifi-result').textContent='';$('wifi-panel').classList.remove('hidden');row.after($('wifi-panel'));$('save-wifi').disabled=true;wizard.verified=false}
 function renderNetworks(groups){const box=$('networks');box.innerHTML='';if(!groups.length){box.innerHTML='<p class="muted">No networks were found on the available client radios.</p>';return}groups.forEach(g=>{const card=document.createElement('div');card.className='network';const title=document.createElement('div');title.className='network-title';title.textContent=g.ssid;card.appendChild(title);g.rows.forEach(n=>{const row=document.createElement('div');row.className='band-row';const meta=document.createElement('div');meta.innerHTML=`<strong>${bandLabel(n.band)}</strong><div class="band-meta">${n.signal} dBm · channel ${n.channel||'-'} · ${securityLabel(n.encryption)}</div>`;const btn=document.createElement('button');btn.textContent='Select';btn.onclick=()=>selectNetwork(n,row);row.append(meta,btn);card.appendChild(row)});box.appendChild(card)})}
 async function scan(){const box=$('networks');box.innerHTML='<p class="muted"><span class="spinner"></span>Scanning available radios…</p>';try{const r=await fetch('/cgi-bin/audiowrt-scan',{cache:'no-store'});renderNetworks(grouped(parseScan(await r.text())))}catch(e){box.innerHTML=`<p class="error">${e.message}</p>`}}
-async function waitForVerified(){for(let i=0;i<25;i++){await new Promise(r=>setTimeout(r,2000));const s=await status();wizard.status=s;if(s.last_error)throw new Error(s.last_error);if(s.verified){wizard.verified=true;$('wifi-result').className='ok';$('wifi-result').textContent=`Connected${s.ip_address?' · '+s.ip_address:''}`;$('wifi-next').disabled=false;return}}throw new Error('Wi-Fi connection timed out.')}
+async function waitForVerified(){for(let i=0;i<25;i++){await new Promise(r=>setTimeout(r,2000));const s=await status();wizard.status=s;if(s.last_error)throw new Error(s.last_error);if(s.verified){wizard.verified=true;$('wifi-result').className='ok';$('wifi-result').textContent=`Connected${s.ip_address?' · '+s.ip_address:''}`;$('save-wifi').disabled=false;return}}throw new Error('Wi-Fi connection timed out.')}
 $('hostname').addEventListener('input',validateDevice);$('admin-password').addEventListener('input',validateDevice);$('admin-confirm').addEventListener('input',validateDevice);
 document.querySelectorAll('[data-toggle]').forEach(b=>b.onclick=()=>{const i=$(b.dataset.toggle);i.type=i.type==='password'?'text':'password';b.textContent=i.type==='password'?'Show':'Hide'});
 $('save-device').onclick=async()=>{const b=$('save-device');b.disabled=true;setMessage('Saving device settings…');try{await post({action:'device',hostname:$('hostname').value.trim(),admin_password:$('admin-password').value,admin_confirm:$('admin-confirm').value});wizard.status=await status();$('admin-password').value='';$('admin-confirm').value='';validateDevice();setMessage('Device settings saved.','ok');showStep(2);await scan()}catch(e){setMessage(e.message,'error');validateDevice()}};
 $('scan').onclick=scan;
 $('connect').onclick=async()=>{if(!wizard.network)return;const key=$('wifi-key').value;if(wizard.network.encryptionMode!=='none'&&(key.length<8||key.length>63)){$('wifi-result').className='error';$('wifi-result').textContent='Wi-Fi password must contain between 8 and 63 characters.';return}$('connect').disabled=true;$('wifi-result').className='muted';$('wifi-result').innerHTML='<span class="spinner"></span>Connecting…';try{await post({action:'connect',radio:wizard.network.radio,ssid:wizard.network.ssid,bssid:'',encryption:wizard.network.encryptionMode,wifi_key:key});await waitForVerified()}catch(e){$('wifi-result').className='error';$('wifi-result').textContent=e.message}finally{$('connect').disabled=false}};
-$('wifi-next').onclick=()=>{if(!wizard.verified)return;$('save-summary').innerHTML=`<div><strong>Wi-Fi:</strong> ${wizard.network.ssid}</div><div><strong>Band:</strong> ${bandLabel(wizard.network.band)}</div>${wizard.status?.ip_address?`<div><strong>Test IP:</strong> ${wizard.status.ip_address}</div>`:''}`;showStep(3)};
-$('back-wifi').onclick=()=>showStep(2);
-$('save-wifi').onclick=async()=>{const b=$('save-wifi');b.disabled=true;setMessage('Saving Wi-Fi…');try{await post({action:'save'});const name=wizard.status?.device_name||$('hostname').value.trim()||'AudioWRT';$('done-summary').innerHTML=`<div><strong>Device:</strong> ${name}</div><div><strong>Wi-Fi:</strong> ${wizard.network.ssid}</div>${wizard.status?.ip_address?`<div><strong>IP:</strong> ${wizard.status.ip_address}</div>`:''}<div><strong>Local name:</strong> ${name}.local</div>`;$('admin-link').href=`http://${name}.local/cgi-bin/luci/`;setMessage('Configuration saved.','ok');showStep(4)}catch(e){setMessage(e.message,'error');b.disabled=false}};
+$('save-wifi').onclick=async()=>{if(!wizard.verified||!wizard.network)return;const b=$('save-wifi');b.disabled=true;setMessage('Saving Wi-Fi…');try{await post({action:'save',radio:wizard.network.radio});const name=wizard.status?.device_name||$('hostname').value.trim()||'AudioWRT';$('done-summary').innerHTML=`<div><strong>Device:</strong> ${name}</div><div><strong>Wi-Fi:</strong> ${wizard.network.ssid}</div>${wizard.status?.ip_address?`<div><strong>IP:</strong> ${wizard.status.ip_address}</div>`:''}<div><strong>Local name:</strong> ${name}.local</div>`;$('admin-link').href=`http://${name}.local/cgi-bin/luci/`;$('wifi-result').className='ok';$('wifi-result').textContent='Configuration saved.';setMessage('Configuration saved.','ok');showStep(3)}catch(e){setMessage(e.message,'error');$('wifi-result').className='error';$('wifi-result').textContent=e.message;b.disabled=false}};
 (async()=>{try{wizard.status=await status();$('hostname').value=wizard.status.device_name||'AudioWRT';setMessage('Ready.');showStep(1);validateDevice()}catch(e){setMessage(e.message,'error');showStep(1)}})();
 </script>
 </body>
