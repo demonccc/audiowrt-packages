@@ -70,6 +70,24 @@ resolve_phy() {
 	printf '%s\n' "$phy"
 }
 
+wait_radio_released() {
+	local phy="$1" elapsed netdev busy
+	elapsed=0
+	while [ "$elapsed" -lt 10 ]; do
+		busy=0
+		for netdev in /sys/class/net/*; do
+			[ -L "$netdev/phy80211" ] || continue
+			[ "$(readlink -f "$netdev/phy80211")" = "/sys/class/ieee80211/$phy" ] || continue
+			busy=1
+			break
+		done
+		[ "$busy" -eq 0 ] && return 0
+		sleep 1
+		elapsed=$((elapsed + 1))
+	done
+	return 1
+}
+
 stage_candidate() {
 	local radio="$1" ssid="$2" encryption="$3" key="$4" bssid="$5" candidate index
 	candidate="$RUNTIME_DIR/client.test.$$"
@@ -96,9 +114,10 @@ start_temp_sta() {
 	mkdir -p "$STA_DIR"
 	printf '%s\n' "$radio" > "$STA_DIR/radio"
 
-	# Release only the candidate radio. Do not reload networking: the setup AP
-	# lives on a different PHY and must remain untouched during the test.
+	# Release only the candidate radio. netifd tears the PHY down asynchronously,
+	# so wait until its interfaces are gone before creating the temporary STA.
 	ubus call network.wireless down "{\"device\":\"$radio\"}" >/dev/null 2>&1 || true
+	wait_radio_released "$phy" || return 8
 	iw phy "$phy" interface add "$STA_IF" type station || return 3
 	ip link set "$STA_IF" up || return 3
 
