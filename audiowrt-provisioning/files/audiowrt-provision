@@ -103,7 +103,9 @@ start_temp_sta() {
 	ssid_hex="$(printf '%s' "$ssid" | hexdump -v -e '1/1 "%02x"')"
 	key_escaped="$(printf '%s' "$key" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 	{
-		printf 'ctrl_interface=%s/ctrl\nupdate_config=0\nnetwork={\n' "$STA_DIR"
+		# AudioWRT's minimal wpa_supplicant is client-only and intentionally omits
+		# CONFIG_UPDATE_CONFIG, so keep this temporary config to supported fields.
+		printf 'ctrl_interface=%s/ctrl\nnetwork={\n' "$STA_DIR"
 		printf '\tssid=%s\n\tscan_ssid=1\n' "$ssid_hex"
 		[ -z "$bssid" ] || printf '\tbssid=%s\n' "$bssid"
 		case "$encryption" in
