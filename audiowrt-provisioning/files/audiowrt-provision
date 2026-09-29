@@ -7,6 +7,8 @@ set -eu
 RUNTIME_DIR=/tmp/audiowrt
 ERROR_FILE="$RUNTIME_DIR/provisioning.error"
 DONE_FILE="$RUNTIME_DIR/provisioning.done"
+STA_DIR="$RUNTIME_DIR/provision-sta"
+STA_IF=awsta
 
 clear_error() {
 	mkdir -p "$RUNTIME_DIR"
@@ -17,6 +19,166 @@ set_error() {
 	mkdir -p "$RUNTIME_DIR"
 	printf '%s\n' "$1" > "$ERROR_FILE"
 }
+
+stop_owned() {
+	name="$1"
+	pid="$(cat "$STA_DIR/$name.pid" 2>/dev/null || true)"
+	case "$pid" in ''|*[!0-9]*) return 0 ;; esac
+	if [ -r "/proc/$pid/cmdline" ] && tr '\000' ' ' < "/proc/$pid/cmdline" | grep -Fq "$STA_DIR"; then
+		kill "$pid" 2>/dev/null || true
+		tries=0
+		while kill -0 "$pid" 2>/dev/null && [ "$tries" -lt 5 ]; do
+			sleep 1
+			tries=$((tries + 1))
+		done
+		kill -9 "$pid" 2>/dev/null || true
+	fi
+}
+
+restore_radio() {
+	radio="$1"
+	[ -n "$radio" ] || return 0
+	ubus call network.wireless up "{\"device\":\"$radio\"}" >/dev/null 2>&1 || true
+}
+
+stop_temp_sta() {
+	radio="$(cat "$STA_DIR/radio" 2>/dev/null || true)"
+	stop_owned udhcpc
+	stop_owned wpa_supplicant
+	ip link set "$STA_IF" down 2>/dev/null || true
+	iw dev "$STA_IF" del 2>/dev/null || true
+	rm -rf "$STA_DIR"
+	restore_radio "$radio"
+}
+
+resolve_phy() {
+	radio="$1"
+	phy="$(uci -q get wireless."$radio".phy 2>/dev/null || true)"
+	path="$(uci -q get wireless."$radio".path 2>/dev/null || true)"
+	if [ -z "$phy" ] && [ -n "$path" ]; then
+		for candidate in /sys/class/ieee80211/*; do
+			case "$(readlink -f "$candidate/device")" in
+				*"/$path"|*"/$path/"*)
+					phy=${candidate##*/}
+					break
+					;;
+			esac
+		done
+	fi
+	[ -n "$phy" ] && [ -d "/sys/class/ieee80211/$phy" ] || return 1
+	printf '%s\n' "$phy"
+}
+
+stage_candidate() {
+	radio="$1" ssid="$2" encryption="$3" key="$4" bssid="$5"
+	candidate="$RUNTIME_DIR/client.test.$$"
+	rm -rf "$candidate"
+	mkdir -p "$candidate"
+	printf '%s' "$radio" > "$candidate/0"
+	printf '%s' "$ssid" > "$candidate/1"
+	printf '%s' "$encryption" > "$candidate/2"
+	printf '%s' "$key" > "$candidate/3"
+	printf '%s' "$bssid" > "$candidate/4"
+	printf '%s' dhcp > "$candidate/5"
+	for index in 6 7 8 9 10; do : > "$candidate/$index"; done
+	rm -rf "$RUNTIME_DIR/client"
+	mv "$candidate" "$RUNTIME_DIR/client"
+}
+
+start_temp_sta() {
+	radio="$1" ssid="$2" encryption="$3" key="$4" bssid="$5"
+	phy="$(resolve_phy "$radio")" || return 2
+
+	stop_temp_sta
+	umask 077
+	mkdir -p "$STA_DIR"
+	printf '%s\n' "$radio" > "$STA_DIR/radio"
+
+	# Release only the candidate radio. Do not reload networking: the setup AP
+	# lives on a different PHY and must remain untouched during the test.
+	ubus call network.wireless down "{\"device\":\"$radio\"}" >/dev/null 2>&1 || true
+	iw phy "$phy" interface add "$STA_IF" type station || return 3
+	ip link set "$STA_IF" up || return 3
+
+	ssid_hex="$(printf '%s' "$ssid" | hexdump -v -e '1/1 "%02x"')"
+	key_escaped="$(printf '%s' "$key" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+	{
+		printf 'ctrl_interface=%s/ctrl\nupdate_config=0\nnetwork={\n' "$STA_DIR"
+		printf '\tssid=%s\n\tscan_ssid=1\n' "$ssid_hex"
+		[ -z "$bssid" ] || printf '\tbssid=%s\n' "$bssid"
+		case "$encryption" in
+			none)
+				printf '\tkey_mgmt=NONE\n'
+				;;
+			psk2)
+				printf '\tkey_mgmt=WPA-PSK\n\tpsk="%s"\n' "$key_escaped"
+				;;
+			sae)
+				printf '\tkey_mgmt=SAE\n\tieee80211w=2\n\tsae_password="%s"\n' "$key_escaped"
+				;;
+			sae-mixed)
+				printf '\tkey_mgmt=WPA-PSK SAE\n\tieee80211w=1\n\tpsk="%s"\n\tsae_password="%s"\n' "$key_escaped" "$key_escaped"
+				;;
+			*) return 4 ;;
+		esac
+		printf '}\n'
+	} > "$STA_DIR/wpa.conf"
+
+	wpa_supplicant -i "$STA_IF" -D nl80211 -c "$STA_DIR/wpa.conf" </dev/null \
+		>"$STA_DIR/wpa.log" 2>&1 &
+	printf '%s\n' "$!" > "$STA_DIR/wpa_supplicant.pid"
+
+	elapsed=0
+	while [ "$elapsed" -lt "$AUDIOWRT_SETUP_TIMEOUT" ]; do
+		if iw dev "$STA_IF" link 2>/dev/null | grep -q '^Connected to '; then
+			break
+		fi
+		kill -0 "$(cat "$STA_DIR/wpa_supplicant.pid")" 2>/dev/null || return 5
+		sleep 1
+		elapsed=$((elapsed + 1))
+	done
+	iw dev "$STA_IF" link 2>/dev/null | grep -q '^Connected to ' || return 6
+
+	cat > "$STA_DIR/udhcpc.sh" <<-EOF
+	#!/bin/sh
+	case "\$1" in
+		bound|renew)
+			ip addr flush dev "\$interface" scope global 2>/dev/null || true
+			ip addr add "\$ip/32" dev "\$interface" || exit 1
+			gateway="\${router%% *}"
+			if [ -n "\$gateway" ]; then
+				ip route replace "\$gateway/32" dev "\$interface" scope link 2>/dev/null || true
+				printf '%s\\n' "\$gateway" > "$STA_DIR/gateway"
+			fi
+			printf '%s\\n' "\$ip" > "$STA_DIR/ip"
+			;;
+		deconfig)
+			ip addr flush dev "\$interface" scope global 2>/dev/null || true
+			;;
+	esac
+	exit 0
+	EOF
+	chmod 700 "$STA_DIR/udhcpc.sh"
+
+	udhcpc -f -q -n -t 5 -T 2 -i "$STA_IF" -p "$STA_DIR/udhcpc.pid" -s "$STA_DIR/udhcpc.sh" </dev/null \
+		>"$STA_DIR/udhcpc.log" 2>&1 &
+	printf '%s\n' "$!" > "$STA_DIR/udhcpc.pid"
+
+	elapsed=0
+	while [ "$elapsed" -lt 15 ]; do
+		[ -s "$STA_DIR/ip" ] && return 0
+		sleep 1
+		elapsed=$((elapsed + 1))
+	done
+	return 7
+}
+
+case "${1:-}" in
+	stop)
+		stop_temp_sta
+		exit 0
+		;;
+esac
 
 request_dir="${1:-}"
 [ -n "$request_dir" ] && [ -d "$request_dir" ] || exit 2
@@ -31,67 +193,25 @@ key="$(cat "$request_dir/wifi_key" 2>/dev/null || true)"
 [ -n "$radio" ] || exit 2
 [ -n "$ssid" ] || exit 3
 audiowrt_setup_active || exit 4
-timeout="$AUDIOWRT_SETUP_TIMEOUT"
 setup_radio="$(cat "$AUDIOWRT_SETUP_DIR/radio")"
-setup_ssid="$(cat "$AUDIOWRT_SETUP_DIR/ssid")"
-active_setup_radio="$setup_radio"
+[ "$radio" != "$setup_radio" ] || exit 5
 
 clear_error
-rm -f "$DONE_FILE"
+rm -f "$DONE_FILE" "$RUNTIME_DIR/wifi.verified"
 
-# Provisioning must not depend on AP+STA support on the same PHY. If the
-# target STA uses the setup radio, move the setup AP to another radio when one
-# exists; otherwise close the setup AP before switching the only radio to STA.
-if [ "$radio" = "$setup_radio" ]; then
-	alternate_radio="$(/usr/sbin/audiowrt-wifi-client radios 2>/dev/null | cut -d '|' -f 1 | grep -Fvx "$radio" | head -n 1 || true)"
-	if [ -n "$alternate_radio" ]; then
-		if /usr/sbin/audiowrt-wifi-client setup-start "$alternate_radio" "$setup_ssid"; then
-			active_setup_radio="$alternate_radio"
-		else
-			active_setup_radio=''
-		fi
-		logger -t audiowrt "Moved setup AP from $setup_radio to $alternate_radio before STA handoff"
-	else
-		/usr/sbin/audiowrt-wifi-client setup-stop >/dev/null 2>&1 || true
-		active_setup_radio=''
-		logger -t audiowrt "Single-radio provisioning: setup AP stopped before STA handoff"
-	fi
-fi
-
-if ! /usr/sbin/audiowrt-wifi-client connect "$radio" "$ssid" "$encryption" "$key" "$bssid"; then
-	/usr/sbin/audiowrt-wifi-client rollback-client >/dev/null 2>&1 || true
-	[ -n "$active_setup_radio" ] || /usr/sbin/audiowrt-wifi-client setup-start "$setup_radio" "$setup_ssid" >/dev/null 2>&1 || true
-	set_error 'Could not apply the selected Wi-Fi configuration.'
-	exit 5
-fi
-
-elapsed=0
-connected=0
-while [ "$elapsed" -lt "$timeout" ]; do
-	if audiowrt_client_up; then
-		connected=1
-		break
-	fi
-	sleep 2
-	elapsed=$((elapsed + 2))
-done
-
-if [ "$connected" -eq 1 ]; then
-	: > /tmp/audiowrt/wifi.verified
+if start_temp_sta "$radio" "$ssid" "$encryption" "$key" "$bssid"; then
+	stage_candidate "$radio" "$ssid" "$encryption" "$key" "$bssid"
+	: > "$RUNTIME_DIR/wifi.verified"
 	clear_error
-	# With one PHY, restore the setup AP so the user can explicitly Save.
-	# The tested candidate remains private in RAM; no connection auto-saves.
-	if [ -z "$active_setup_radio" ]; then
-		/usr/sbin/audiowrt-wifi-client rollback-client
-		/usr/sbin/audiowrt-wifi-client setup-start "$setup_radio" "$setup_ssid"
-	elif ! audiowrt_setup_active; then
-		/usr/sbin/audiowrt-wifi-client setup-start "$active_setup_radio" "$setup_ssid"
-	fi
-	logger -t audiowrt 'Wi-Fi test succeeded; waiting for explicit Save'
+	logger -t audiowrt "Provisioning Wi-Fi test succeeded on $radio using $STA_IF; setup AP remains active"
 	exit 0
 fi
 
-/usr/sbin/audiowrt-wifi-client rollback-client >/dev/null 2>&1 || true
-/usr/sbin/audiowrt-wifi-client setup-start "$setup_radio" "$setup_ssid" >/dev/null 2>&1 || true
-set_error 'Could not connect to the selected Wi-Fi network. The setup network has been restored; check the network and password.'
-exit 7
+result=$?
+cp "$STA_DIR/wpa.log" "$RUNTIME_DIR/provision-wpa-failure.log" 2>/dev/null || true
+cp "$STA_DIR/udhcpc.log" "$RUNTIME_DIR/provision-dhcp-failure.log" 2>/dev/null || true
+stop_temp_sta
+rm -rf "$RUNTIME_DIR/client"
+set_error 'Could not connect to the selected Wi-Fi network. Check the network and password.'
+logger -t audiowrt "Provisioning Wi-Fi test failed (rc=$result)"
+exit "$result"
