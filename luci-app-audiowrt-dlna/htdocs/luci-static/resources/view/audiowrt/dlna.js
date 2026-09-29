@@ -66,7 +66,7 @@ return view.extend({
 			if (value !== String(uci.get('audiowrt-dlna', 'main', option.option) || ''))
 				args.push(option.option, value);
 		});
-		return fs.exec('/usr/libexec/audiowrt-save-renderer', args).then(function(result) {
+		return fs.exec('/usr/libexec/audiowrt-save-dlna-renderer', args).then(function(result) {
 			if (result.code) throw new Error(result.stderr || _('Could not save DLNA Renderer settings.'));
 			window.location.reload();
 		});
@@ -79,8 +79,8 @@ return view.extend({
 			uci.load('audiowrt-dlna'),
 			uci.load('audiowrt-runtime-codecs'),
 			uci.load('audiowrt-runtime-players'),
-			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'status' ]), { stdout: '{}' }),
-			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'players' ]), { stdout: '[]' })
+			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-dlna-renderer', [ 'status' ]), { stdout: '{}' }),
+			L.resolveDefault(fs.exec('/usr/libexec/audiowrt-dlna-renderer', [ 'players' ]), { stdout: '[]' })
 		]);
 	},
 
@@ -144,7 +144,7 @@ return view.extend({
 		});
 
 		poll.add(function() {
-			return L.resolveDefault(fs.exec('/usr/libexec/audiowrt-renderer', [ 'status' ]), { stdout: '{}' }).then(function(res) {
+			return L.resolveDefault(fs.exec('/usr/libexec/audiowrt-dlna-renderer', [ 'status' ]), { stdout: '{}' }).then(function(res) {
 				var st = parseJSON(res.stdout, {}), fields = {
 					'dlna-state': st.state || '-',
 					'dlna-controller': st.controller || '-',
