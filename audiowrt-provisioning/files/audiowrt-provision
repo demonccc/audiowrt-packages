@@ -205,9 +205,10 @@ if start_temp_sta "$radio" "$ssid" "$encryption" "$key" "$bssid"; then
 	clear_error
 	logger -t audiowrt "Provisioning Wi-Fi test succeeded on $radio using $STA_IF; setup AP remains active"
 	exit 0
+else
+	result=$?
 fi
 
-result=$?
 cp "$STA_DIR/wpa.log" "$RUNTIME_DIR/provision-wpa-failure.log" 2>/dev/null || true
 cp "$STA_DIR/udhcpc.log" "$RUNTIME_DIR/provision-dhcp-failure.log" 2>/dev/null || true
 stop_temp_sta
