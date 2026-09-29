@@ -12,7 +12,7 @@
 			<span style="font-size:2rem;font-weight:700;line-height:1;color:#000">AudioWRT</span>
 		</div>
 
-		<form method="post">
+		<form method="post" style="width:min(100%,560px);margin:0 auto">
 			<div class="cbi-section">
 				<div class="cbi-section-node">
 					<div class="cbi-value">
