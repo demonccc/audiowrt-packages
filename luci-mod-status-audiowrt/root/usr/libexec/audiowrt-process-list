@@ -1,0 +1,43 @@
+#!/bin/sh
+
+mem_total_kb="$(awk '/^MemTotal:/ { print $2; exit }' /proc/meminfo 2>/dev/null)"
+uptime_s="$(cut -d. -f1 /proc/uptime 2>/dev/null)"
+[ -n "$mem_total_kb" ] || mem_total_kb=1
+[ -n "$uptime_s" ] || uptime_s=0
+hz=100
+
+for proc in /proc/[0-9]*; do
+	[ -r "$proc/stat" ] || continue
+	pid="${proc##*/}"
+	stat="$(cat "$proc/stat" 2>/dev/null)" || continue
+	rest="${stat#*) }"
+	[ "$rest" != "$stat" ] || continue
+
+	set -- $rest
+	utime="${12:-0}"
+	stime="${13:-0}"
+	start_ticks="${20:-0}"
+	ticks=$((utime + stime))
+	start_s=$((start_ticks / hz))
+	elapsed=$((uptime_s - start_s))
+	[ "$elapsed" -gt 0 ] || elapsed=1
+	cpu=$((ticks * 100 / (hz * elapsed)))
+
+	uid="$(awk '/^Uid:/ { print $2; exit }' "$proc/status" 2>/dev/null)"
+	[ -n "$uid" ] || uid=0
+	owner="$(awk -F: -v uid="$uid" '$3 == uid { print $1; exit }' /etc/passwd 2>/dev/null)"
+	[ -n "$owner" ] || owner="$uid"
+
+	rss_kb="$(awk '/^VmRSS:/ { print $2; exit }' "$proc/status" 2>/dev/null)"
+	[ -n "$rss_kb" ] || rss_kb=0
+	mem=$((rss_kb * 100 / mem_total_kb))
+
+	command="$(tr '\000' ' ' < "$proc/cmdline" 2>/dev/null)"
+	command="${command% }"
+	if [ -z "$command" ]; then
+		command="[$(cat "$proc/comm" 2>/dev/null)]"
+	fi
+	command="$(printf '%s' "$command" | tr '\t\r\n' '   ')"
+
+	printf '%s\t%s\t%s\t%s\t%s\n' "$pid" "$owner" "$command" "$cpu" "$mem"
+done
