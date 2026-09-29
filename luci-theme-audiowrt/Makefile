@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-audiowrt
 PKG_VERSION:=0.1.10
-PKG_RELEASE:=4
+PKG_RELEASE:=5
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
 
@@ -38,7 +38,6 @@ define Build/Compile
 	python3 ./minify-assets.py js $(AUDIOWRT_THEME_BUILD_DIR)/menu.js \
 		./htdocs/luci-static/audiowrt/menu.js
 	$(CP) $(LUCI_BOOTSTRAP_DIR)/ucode/template/themes/bootstrap/footer.ut $(AUDIOWRT_THEME_BUILD_DIR)/footer.ut
-	$(CP) $(LUCI_BOOTSTRAP_DIR)/ucode/template/themes/bootstrap/sysauth.ut $(AUDIOWRT_THEME_BUILD_DIR)/sysauth.ut
 endef
 
 define Package/luci-theme-audiowrt/install
@@ -52,7 +51,7 @@ define Package/luci-theme-audiowrt/install
 	$(INSTALL_DIR) $(1)/usr/share/ucode/luci/template/themes/audiowrt
 	$(INSTALL_DATA) ./ucode/template/themes/audiowrt/header.ut $(1)/usr/share/ucode/luci/template/themes/audiowrt/header.ut
 	$(INSTALL_DATA) $(AUDIOWRT_THEME_BUILD_DIR)/footer.ut $(1)/usr/share/ucode/luci/template/themes/audiowrt/footer.ut
-	$(INSTALL_DATA) $(AUDIOWRT_THEME_BUILD_DIR)/sysauth.ut $(1)/usr/share/ucode/luci/template/themes/audiowrt/sysauth.ut
+	$(INSTALL_DATA) ./ucode/template/themes/audiowrt/sysauth.ut $(1)/usr/share/ucode/luci/template/themes/audiowrt/sysauth.ut
 
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./root/etc/uci-defaults/30_luci-theme-audiowrt $(1)/etc/uci-defaults/30_luci-theme-audiowrt
