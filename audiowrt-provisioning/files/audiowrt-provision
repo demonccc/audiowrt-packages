@@ -42,14 +42,14 @@ restore_radio() {
 }
 
 stop_temp_sta() {
-	local radio
+	local restore="${1:-1}" radio
 	radio="$(cat "$STA_DIR/radio" 2>/dev/null || true)"
 	stop_owned udhcpc
 	stop_owned wpa_supplicant
 	ip link set "$STA_IF" down 2>/dev/null || true
 	iw dev "$STA_IF" del 2>/dev/null || true
 	rm -rf "$STA_DIR"
-	restore_radio "$radio"
+	[ "$restore" = '1' ] && restore_radio "$radio"
 }
 
 resolve_phy() {
@@ -71,9 +71,10 @@ resolve_phy() {
 }
 
 wait_radio_released() {
-	local phy="$1" elapsed netdev busy
+	local phy="$1" elapsed stable netdev busy
 	elapsed=0
-	while [ "$elapsed" -lt 10 ]; do
+	stable=0
+	while [ "$elapsed" -lt 15 ]; do
 		busy=0
 		for netdev in /sys/class/net/*; do
 			[ -L "$netdev/phy80211" ] || continue
@@ -81,7 +82,12 @@ wait_radio_released() {
 			busy=1
 			break
 		done
-		[ "$busy" -eq 0 ] && return 0
+		if [ "$busy" -eq 0 ]; then
+			stable=$((stable + 1))
+			[ "$stable" -ge 2 ] && return 0
+		else
+			stable=0
+		fi
 		sleep 1
 		elapsed=$((elapsed + 1))
 	done
@@ -109,13 +115,16 @@ start_temp_sta() {
 	local phy ssid_hex key_escaped elapsed
 	phy="$(resolve_phy "$radio")" || return 2
 
-	stop_temp_sta
+	# A previous temporary STA must be removed without bringing its radio back up.
+	# Restoring it here races netifd against the new direct STA on repeated runs.
+	stop_temp_sta 0
 	umask 077
 	mkdir -p "$STA_DIR"
 	printf '%s\n' "$radio" > "$STA_DIR/radio"
 
-	# Release only the candidate radio. netifd tears the PHY down asynchronously,
-	# so wait until its interfaces are gone before creating the temporary STA.
+	# Release only the candidate radio. Require the PHY to remain empty for two
+	# consecutive checks before creating awsta so asynchronous netifd teardown or
+	# a late radio-up from a previous run cannot race the direct supplicant.
 	ubus call network.wireless down "{\"device\":\"$radio\"}" >/dev/null 2>&1 || true
 	wait_radio_released "$phy" || return 8
 	iw phy "$phy" interface add "$STA_IF" type station || return 3
@@ -198,7 +207,7 @@ start_temp_sta() {
 
 case "${1:-}" in
 	stop)
-		stop_temp_sta
+		stop_temp_sta 1
 		exit 0
 		;;
 esac
@@ -234,7 +243,7 @@ fi
 
 cp "$STA_DIR/wpa.log" "$RUNTIME_DIR/provision-wpa-failure.log" 2>/dev/null || true
 cp "$STA_DIR/udhcpc.log" "$RUNTIME_DIR/provision-dhcp-failure.log" 2>/dev/null || true
-stop_temp_sta
+stop_temp_sta 1
 rm -rf "$RUNTIME_DIR/client"
 set_error 'Could not connect to the selected Wi-Fi network. Check the network and password.'
 logger -t audiowrt "Provisioning Wi-Fi test failed (rc=$result)"
