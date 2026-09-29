@@ -101,6 +101,20 @@
 	line-height:1.35 !important;
 }
 
+/* Sidebar submenus are deliberately quieter than top-level navigation. */
+#topmenu .dropdown-menu > li > a,
+#topmenu li > ul > li > a {
+	font-size:14px !important;
+	font-weight:400 !important;
+	letter-spacing:0 !important;
+	line-height:20px !important;
+}
+#topmenu .dropdown-menu > li.active > a,
+#topmenu li > ul > li.active > a,
+#topmenu li > ul > li.aw-current > a {
+	font-weight:600 !important;
+}
+
 /* Startup is a state/action table, so semantic colors are useful here. */
 #maincontent .cbi-section-actions .cbi-button-positive {
 	background:var(--aw-green) !important;
@@ -128,4 +142,5 @@
 #maincontent .cbi-section-actions button:last-child:hover {
 	background:var(--aw-red-hover) !important;
 	border-color:var(--aw-red-hover) !important;
+	color:#fff !important;
 }
