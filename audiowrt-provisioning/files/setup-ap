@@ -28,7 +28,9 @@ stop_ap() {
 		iw dev "$AUDIOWRT_SETUP_IF" del 2>/dev/null || true
 	fi
 	rm -rf "$AUDIOWRT_SETUP_DIR"
-	[ -z "$old_radio" ] || wifi up "$old_radio"
+	# Do not use `wifi up`: OpenWrt implements it with a global network reload.
+	# Restore only the PHY owned by the temporary setup AP.
+	[ -z "$old_radio" ] || ubus call network.wireless up "{\"device\":\"$old_radio\"}" >/dev/null 2>&1 || true
 	/usr/sbin/audiowrt-wifi-client mdns-sync
 }
 
