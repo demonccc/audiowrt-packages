@@ -7,9 +7,9 @@
 
 <div class="container">
 	<section class="cbi-map">
-		<div class="brand" style="margin:1rem 0 1.5rem">
-			<img class="aw-brand-logo" src="{{ media }}/logo.svg?v=14" alt="AudioWRT">
-			<span class="aw-router-name">AudioWRT</span>
+		<div class="brand" style="display:flex;align-items:center;gap:.75rem;margin:1rem 0 1.5rem">
+			<img src="{{ media }}/logo.svg?v=14" alt="AudioWRT" style="display:block;width:72px;height:72px;max-width:72px;max-height:72px;object-fit:contain;flex:0 0 72px">
+			<span style="font-size:2rem;font-weight:700;line-height:1;color:#000">AudioWRT</span>
 		</div>
 
 		<form method="post">
