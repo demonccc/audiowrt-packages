@@ -13,13 +13,13 @@ define Package/audiowrt-bluetooth
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT Bluetooth output integration
-  DEPENDS:=+audiowrt-config +audiowrt-audio +audiowrt-bluez +audiowrt-btctl +bluez-alsa
+  DEPENDS:=+audiowrt-config +audiowrt-audio +bluez-trimmed +audiowrt-btctl +bluez-alsa
   EXTRA_DEPENDS:=kmod-bluetooth (>=0), kmod-btusb (>=0)
 endef
 
 define Package/audiowrt-bluetooth/description
  Adds Bluetooth speaker/headset pairing and A2DP Source output selection through
- the minimal AudioWRT BlueZ/BlueALSA stack.
+ the trimmed BlueZ and ported BlueALSA stack.
 endef
 
 define Package/audiowrt-bluetooth/conffiles
