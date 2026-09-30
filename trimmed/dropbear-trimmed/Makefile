@@ -2,31 +2,30 @@
 
 include $(TOPDIR)/rules.mk
 
-AUDIOWRT_DERIVED_NAME:=audiowrt-dropbear
+AUDIOWRT_DERIVED_NAME:=dropbear-trimmed
 AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/dropbear/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
-# Upstream Dropbear is target-local (nonshared), but this replacement must be
-# emitted into the reusable AudioWRT feed so the orchestrator can collect it.
 PKG_FLAGS:=
 PKG_MAINTAINER:=AudioWRT
 
 include $(INCLUDE_DIR)/package.mk
 
-define Package/audiowrt-dropbear
+define Package/dropbear-trimmed
   SECTION:=net
   CATEGORY:=AudioWRT
-  TITLE:=AudioWRT minimal SSH server
+  TITLE:=Trimmed SSH server
   PROVIDES:=dropbear
+  CONFLICTS:=dropbear
 endef
 
-define Package/audiowrt-dropbear/description
+define Package/dropbear-trimmed/description
  Server-only Dropbear derived from the selected OpenWrt release. The exact
  release source version, hardening/build flags and OpenWrt patches are inherited;
- AudioWRT only disables client-side and unrelated server features.
+ this package only disables client-side and unrelated server features.
 endef
 
-define Package/audiowrt-dropbear/conffiles
+define Package/dropbear-trimmed/conffiles
 /etc/config/dropbear
 /etc/dropbear/authorized_keys
 /etc/dropbear/dropbear_ed25519_host_key
@@ -87,7 +86,7 @@ define Build/Compile
 		PROGRAMS="dropbear dropbearkey" MULTI=1 SCPPROGRESS=0
 endef
 
-define Package/audiowrt-dropbear/install
+define Package/dropbear-trimmed/install
 	$(INSTALL_DIR) $(1)/usr/sbin $(1)/usr/bin $(1)/etc/init.d $(1)/etc/dropbear $(1)/etc/config
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/dropbearmulti $(1)/usr/sbin/dropbear
 	$(LN) ../sbin/dropbear $(1)/usr/bin/dropbearkey
@@ -95,4 +94,4 @@ define Package/audiowrt-dropbear/install
 	$(INSTALL_CONF) ./files/dropbear.config $(1)/etc/config/dropbear
 endef
 
-$(eval $(call BuildPackage,audiowrt-dropbear))
+$(eval $(call BuildPackage,dropbear-trimmed))
