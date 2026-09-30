@@ -36,17 +36,16 @@ define Package/bluez-alsa
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=BlueALSA Bluetooth audio backend
-  DEPENDS:=+alsa-lib +audiowrt-bluez +bluez-libs +glib2 +audiowrt-sbc +dbus
+  DEPENDS:=+alsa-lib +bluez-trimmed +bluez-libs +glib2 +sbc-trimmed +dbus
   URL:=https://github.com/arkq/bluez-alsa
 endef
 
 define Package/bluez-alsa/description
- Minimal BlueZ-to-ALSA bridge for AudioWRT Bluetooth A2DP Source output.
+ BlueALSA packaged from its official upstream source for OpenWrt. This port keeps
+ the A2DP Source daemon, ALSA plugin and mandatory SBC codec path used by
+ AudioWRT while omitting unrelated profiles and utilities.
 endef
 
-# AudioWRT sends audio to Bluetooth speakers/headsets. Keep only the daemon,
-# ALSA plugins and mandatory SBC codec path; receiver-side utilities and
-# unrelated profiles/codecs are intentionally disabled for the 8 MB baseline.
 CONFIGURE_ARGS += \
 	--disable-aac \
 	--disable-a2dpconf \
