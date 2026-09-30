@@ -1,6 +1,6 @@
 include $(TOPDIR)/rules.mk
 
-AUDIOWRT_DERIVED_NAME:=audiowrt-wpad
+AUDIOWRT_DERIVED_NAME:=hostapd-wpa-supplicant-tailored
 AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/network/services/hostapd/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
@@ -11,32 +11,28 @@ PKG_BUILD_FLAGS:=gc-sections lto
 
 include $(INCLUDE_DIR)/package.mk
 
-# Match OpenWrt's hostapd/wpad link split: helper binaries use the base linker
-# flags, while the multicall hostapd/wpa_supplicant targets receive the runtime
-# libraries added below.
 TARGET_LDFLAGS_C:=$(TARGET_LDFLAGS)
 
 define Build/Prepare
 	$(Build/Prepare/AudioWRTDerived)
 endef
 
-define Package/audiowrt-wpad
+define Package/hostapd-wpa-supplicant-tailored
   SECTION:=net
   CATEGORY:=AudioWRT
-  TITLE:=AudioWRT minimal WPA2/WPA3 client + open setup AP
+  TITLE:=Tailored hostapd + wpa_supplicant multicall
   URL:=https://w1.fi/
   DEPENDS:=+libnl-tiny +libubox +ucode +libucode +ucode-mod-fs +ucode-mod-nl80211 +ucode-mod-rtnl +ucode-mod-ubus +ucode-mod-uloop +libubus +libblobmsg-json +libudebug +libmbedtls
   PROVIDES:=hostapd wpa-supplicant
   USERID:=network=101:network=101
 endef
 
-define Package/audiowrt-wpad/description
- One multicall hostap binary for AudioWRT. The wpa_supplicant entry point is
- client-only and keeps WPA2-PSK, WPA3-SAE, PMF, nl80211 and OpenWrt UBus/UCode
- integration. The hostapd entry point exists only for the temporary open
- provisioning AP and omits enterprise authentication, RADIUS, VLAN, WPS,
- VHT/HE/EHT and EAP/TLS server methods. Automatic channel selection remains
- enabled because OpenWrt radios may request channel 0.
+define Package/hostapd-wpa-supplicant-tailored/description
+ One multicall hostap binary. The wpa_supplicant entry point is client-only and
+ keeps WPA2-PSK, WPA3-SAE, PMF, nl80211 and OpenWrt UBus/UCode integration.
+ The hostapd entry point exists for the temporary open provisioning AP and omits
+ enterprise authentication, RADIUS, VLAN, WPS, VHT/HE/EHT and EAP/TLS server
+ methods. Automatic channel selection remains enabled for channel 0 requests.
 endef
 
 TARGET_CPPFLAGS := \
@@ -51,10 +47,6 @@ TARGET_LDFLAGS += \
 	-lubox -lubus -lblobmsg_json -lucode -lm -lnl-tiny -ludebug \
 	-lmbedcrypto -lmbedx509 -lmbedtls
 
-# Keep the build-time driver switches aligned with OpenWrt's wpad variants.
-# TLS selection is a make-time option in the canonical OpenWrt recipe rather
-# than a side-specific .config setting; this is important for the multicall
-# crypto/link path.
 DRIVER_MAKEOPTS := \
 	CONFIG_ACS=y \
 	CONFIG_DRIVER_NL80211=y \
@@ -107,7 +99,7 @@ define Build/Compile
 		$(TARGET_LDFLAGS)
 endef
 
-define Package/audiowrt-wpad/install
+define Package/hostapd-wpa-supplicant-tailored/install
 	$(INSTALL_DIR) $(1)/usr/sbin $(1)/usr/share/hostap
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wpad $(1)/usr/sbin/
 	$(LN) wpad $(1)/usr/sbin/hostapd
@@ -116,4 +108,4 @@ define Package/audiowrt-wpad/install
 	$(INSTALL_DATA) $(AUDIOWRT_DERIVED_FILES_DIR)/wpa_supplicant.uc $(1)/usr/share/hostap/
 endef
 
-$(eval $(call BuildPackage,audiowrt-wpad))
+$(eval $(call BuildPackage,hostapd-wpa-supplicant-tailored))
