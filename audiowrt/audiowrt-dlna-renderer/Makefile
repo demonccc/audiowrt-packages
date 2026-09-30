@@ -12,9 +12,9 @@ define Package/audiowrt-dlna-renderer
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT DLNA Renderer and discovery service
-  DEPENDS:=+audiowrt-config +libaudiowrt-player +audiowrt-identity
+  DEPENDS:=+audiowrt-config +libaudiowrt-player +audiowrt-core
   PROVIDES:=audiowrt-dlna
-  CONFLICTS:=umdns audiowrt-umdns
+  CONFLICTS:=umdns umdns-trimmed
 endef
 
 define Package/audiowrt-dlna-renderer/description
