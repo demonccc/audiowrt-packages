@@ -1,6 +1,6 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=audiowrt-kmod-bluetooth
+PKG_NAME:=kmod-bluetooth-trimmed
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -8,17 +8,13 @@ PKG_MAINTAINER:=AudioWRT
 include $(INCLUDE_DIR)/kernel.mk
 include $(INCLUDE_DIR)/package.mk
 
-# The flavor selects this package explicitly. Exposing cross-source kmod
-# providers while OpenWrt generates Kconfig makes every official consumer a
-# provider alternative and can create self-referential dependency conditions.
-# Keep the replacement contract in the generated APK, but out of DUMP metadata.
 ifneq ($(DUMP),1)
 AUDIOWRT_BLUETOOTH_PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk
 endif
 
-define KernelPackage/audiowrt-bluetooth
+define KernelPackage/bluetooth-trimmed
   SUBMENU:=Bluetooth Support
-  TITLE:=AudioWRT minimal Bluetooth core and USB HCI support
+  TITLE:=Trimmed Bluetooth core and USB HCI support
   PROVIDES:=$(AUDIOWRT_BLUETOOTH_PROVIDES)
   DEPENDS:=@USB_SUPPORT +kmod-usb-core +kmod-crypto-hash +kmod-crypto-ecb \
 	+kmod-lib-crc16 +kmod-crypto-cmac +kmod-regmap-core +kmod-crypto-ecdh \
@@ -36,17 +32,13 @@ define KernelPackage/audiowrt-bluetooth
   AUTOLOAD:=$(call AutoProbe,bluetooth btmtk btintel btrtl btusb)
 endef
 
-define KernelPackage/audiowrt-bluetooth/description
+define KernelPackage/bluetooth-trimmed/description
  Repackages the exact-release OpenWrt Bluetooth core and USB HCI modules used
- by AudioWRT. RFCOMM, BNEP and HIDP are omitted; A2DP uses the retained
- Bluetooth core and HCI transport.
+ by the constrained Bluetooth profile. RFCOMM, BNEP and HIDP are omitted; A2DP
+ uses the retained Bluetooth core and HCI transport.
 endef
 
-# The distribution packages this prebuilt exact-release module set with
-# NO_DEPS=1. Model the provides closure of its declared official kmod
-# dependencies so OpenWrt can verify the imported modules without rebuilding
-# the release kernel. These names come from the modules' direct modinfo deps.
-define Package/kmod-audiowrt-bluetooth/extra_provides
+define Package/kmod-bluetooth-trimmed/extra_provides
 	printf '%s\n' crc16.ko ecdh_generic.ko kpp.ko usbcore.ko
 endef
 
@@ -61,4 +53,4 @@ endef
 define Build/Compile
 endef
 
-$(eval $(call KernelPackage,audiowrt-bluetooth))
+$(eval $(call KernelPackage,bluetooth-trimmed))
