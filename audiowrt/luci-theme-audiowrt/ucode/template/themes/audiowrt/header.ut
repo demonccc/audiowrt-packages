@@ -7,9 +7,11 @@
 
 {%
 	import { getuid, getspnam } from 'luci.core';
+	import { access } from 'fs';
 
 	const boardinfo = ubus.call('system', 'board');
 	const darkpref = null;
+	const distro_branding = access('/www/luci-static/audiowrt-distro/logo.svg');
 
 	http.prepare_content('text/html; charset=UTF-8');
 -%}
@@ -21,9 +23,9 @@
 		<title>{{ striptags(`${boardinfo.hostname ?? '?'}${dispatched?.title ? ` | ${_(dispatched.title)}` : ''}`) }}</title>
 		<meta name="viewport" content="width=device-width, initial-scale=1">
 		<meta name="darkreader-lock">
-		<link rel="stylesheet" href="{{ media }}/cascade.css?v=14">
-		<link rel="stylesheet" media="only screen and (max-device-width: 854px)" href="{{ media }}/mobile.css?v=14" />
-		<link rel="icon" type="image/svg+xml" href="{{ media }}/favicon.svg?v=14">
+		<link rel="stylesheet" href="{{ media }}/cascade.css?v=15">
+		<link rel="stylesheet" media="only screen and (max-device-width: 854px)" href="{{ media }}/mobile.css?v=15" />
+		{% if (distro_branding): %}<link rel="icon" type="image/svg+xml" href="/luci-static/audiowrt-distro/favicon.svg?v=1">{% endif %}
 		{% if (node?.css): %}
 		<link rel="stylesheet" href="{{ resource }}/{{ node.css }}">
 		{% endif %}
@@ -32,14 +34,18 @@
 		{% endif %}
 		<script src="{{ dispatcher.build_url('admin/translations', dispatcher.lang) }}"></script>
 		<script src="{{ resource }}/cbi.js"></script>
-		<script defer src="{{ media }}/menu.js?v=7"></script>
+		<script defer src="{{ media }}/menu.js?v=8"></script>
 	</head>
 
 	<body class="lang_{{ dispatcher.lang }} {{ entityencode(striptags(node?.title ?? ''), true) }}" data-page="{{ entityencode(join('-', ctx.request_path), true) }}">
 		{% if (!blank_page): %}
 		<header>
 			<a class="brand" href="/">
-				<img class="aw-brand-logo" src="{{ media }}/logo.svg?v=14" alt="AudioWRT">
+				{% if (distro_branding): %}
+					<img class="aw-brand-logo" src="/luci-static/audiowrt-distro/logo.svg?v=1" alt="AudioWRT">
+				{% else: %}
+					<span class="aw-router-name">OpenWrt</span>
+				{% endif %}
 				<span class="aw-router-name">{{ striptags(boardinfo.hostname ?? '?') }}</span>
 			</a>
 			<ul class="nav" id="topmenu" style="display:none"></ul>
