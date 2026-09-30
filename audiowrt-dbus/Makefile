@@ -8,7 +8,7 @@ PKG_LICENSE:=AFL-2.1
 PKG_MAINTAINER:=AudioWRT
 
 ifeq ($(strip $(PKG_VERSION)),)
-  $$(error AudioWRT requires the selected OpenWrt packages-feed D-Bus recipe at $(AUDIOWRT_DBUS_RECIPE))
+  $(error AudioWRT requires the selected OpenWrt packages-feed D-Bus recipe at $(AUDIOWRT_DBUS_RECIPE))
 endif
 
 include $(INCLUDE_DIR)/package.mk
