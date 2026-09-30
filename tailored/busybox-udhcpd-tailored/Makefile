@@ -2,24 +2,16 @@
 
 include $(TOPDIR)/rules.mk
 
-AUDIOWRT_DERIVED_NAME:=audiowrt-busybox
+AUDIOWRT_DERIVED_NAME:=busybox-udhcpd-tailored
 AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/utils/busybox/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
-# Keep an AudioWRT release independent from the upstream BusyBox recipe so
-# image/package caches cannot silently reuse a binary built before our config
-# deltas were applied.
 PKG_RELEASE:=9
-
 PKG_MAINTAINER:=AudioWRT
 
 BUSYBOX_SYM=$(if $(CONFIG_BUSYBOX_CUSTOM),CONFIG,DEFAULT)
 BUSYBOX_IF_ENABLED=$(if $(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_$(1)),$(2))
 
-# Applets intentionally omitted from the AudioWRT build. None are required by
-# the current OpenWrt/AudioWRT runtime on the minimal image; vi and which remain
-# available for on-device diagnostics. Runtime CPU/memory status is available
-# through ubus/LuCI, so the interactive top applet is omitted as well.
 AUDIOWRT_BUSYBOX_DISABLED_APPLETS:= \
 	BRCTL \
 	CLEAR \
@@ -49,38 +41,39 @@ ifeq ($(DUMP),)
   STAMP_CONFIGURED:=$(strip $(STAMP_CONFIGURED))_$(shell grep '^CONFIG_BUSYBOX_' $(TOPDIR)/.config | $(MKHASH) md5)
 endif
 
-define Package/audiowrt-busybox
+define Package/busybox-udhcpd-tailored
   SECTION:=base
   CATEGORY:=Base system
-  TITLE:=AudioWRT BusyBox replacement
+  TITLE:=Tailored BusyBox with udhcpd
   URL:=https://busybox.net/
   DEPENDS:= +USE_GLIBC:libcrypt-compat +BUSYBOX_CONFIG_PAM:libpam +BUSYBOX_CONFIG_NTPD:jsonfilter +(USE_GLIBC&&BUSYBOX_CONFIG_FEATURE_MOUNT_NFS)||(USE_GLIBC&&BUSYBOX_CONFIG_FEATURE_INETD_RPC):libtirpc
   USERID:=ntp=123:ntp=123
-  PROVIDES:=busybox
+  PROVIDES:=busybox udhcpd
   CONFLICTS:=busybox busybox-selinux
 endef
 
-define Package/audiowrt-busybox/description
- Drop-in replacement for the BusyBox from the selected OpenWrt release. It
+define Package/busybox-udhcpd-tailored/description
+ Tailored replacement for the BusyBox from the selected OpenWrt release. It
  inherits that release's source version, build flags, files and complete patch
- set, then additionally enables the udhcpd applet required by AudioWRT.
+ set, enables the udhcpd capability required by provisioning, and removes
+ applets that are not needed by the constrained AudioWRT runtime.
 endef
 
 ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SYSLOG)$(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SYSLOGD_CFG),)
-define Package/audiowrt-busybox/conffiles/syslog
+define Package/busybox-udhcpd-tailored/conffiles/syslog
 /etc/syslog.conf
 endef
 endif
 
 ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_CROND),)
-define Package/audiowrt-busybox/conffiles/crond
+define Package/busybox-udhcpd-tailored/conffiles/crond
 /etc/crontabs/
 endef
 endif
 
-define Package/audiowrt-busybox/conffiles
-$(Package/audiowrt-busybox/conffiles/syslog)
-$(Package/audiowrt-busybox/conffiles/crond)
+define Package/busybox-udhcpd-tailored/conffiles
+$(Package/busybox-udhcpd-tailored/conffiles/syslog)
+$(Package/busybox-udhcpd-tailored/conffiles/crond)
 endef
 
 ifndef CONFIG_USE_MUSL
@@ -127,18 +120,13 @@ endif
 	echo 'CONFIG_UDHCPD=y' >> $(PKG_BUILD_DIR)/.config
 	echo 'CONFIG_DHCPD_LEASES_FILE="/tmp/audiowrt-udhcpd.leases"' >> $(PKG_BUILD_DIR)/.config
 
-	# First normalize the inherited OpenWrt configuration. Then apply the
-	# AudioWRT pruning to the normalized config, normalize once more, and fail
-	# the build if Kconfig turns any requested applet back on. The shell variable
-	# needs four dollars here because OpenWrt expands Build/Configure through an
-	# additional make/eval layer before the recipe reaches /bin/sh.
 	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
 	for applet in $(AUDIOWRT_BUSYBOX_DISABLED_APPLETS); do \
 		sed -i -e "/^CONFIG_$$$${applet}=/d" -e "/^# CONFIG_$$$${applet} is not set/d" $(PKG_BUILD_DIR)/.config; \
 		echo "# CONFIG_$$$${applet} is not set" >> $(PKG_BUILD_DIR)/.config; \
 	done
 	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
-	@echo 'AudioWRT BusyBox pruned applets:'
+	@echo 'Tailored BusyBox pruned applets:'
 	@for applet in $(AUDIOWRT_BUSYBOX_DISABLED_APPLETS); do \
 		if ! grep -qx "# CONFIG_$$$${applet} is not set" $(PKG_BUILD_DIR)/.config; then \
 			echo "ERROR: BusyBox applet $$$${applet} was not disabled" >&2; \
@@ -155,7 +143,7 @@ define Build/Compile
 	)
 endef
 
-define Package/audiowrt-busybox/install
+define Package/busybox-udhcpd-tailored/install
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(CP) $(PKG_INSTALL_DIR)/* $(1)/
@@ -178,4 +166,4 @@ endif
 	-rm -rf $(1)/lib64
 endef
 
-$(eval $(call BuildPackage,audiowrt-busybox))
+$(eval $(call BuildPackage,busybox-udhcpd-tailored))
