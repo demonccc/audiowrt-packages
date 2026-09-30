@@ -23,8 +23,28 @@ raw_tmp="$(mktemp /tmp/audiowrt-mpd-decoders.XXXXXX)"
 caps_tmp="$(mktemp /tmp/audiowrt-mpd-codecs.XXXXXX)"
 trap 'rm -f "$raw_tmp" "$caps_tmp"' EXIT INT TERM HUP
 
-if ! /usr/bin/audiowrt-player-mpd decoders > "$raw_tmp"; then
-	echo "audiowrt-player-mpd: unable to query MPD decoders" >&2
+# Prefer the running daemon because the MPD protocol `decoders` command reports
+# enabled decoder plugins, suffixes and MIME types. If MPD is installed but not
+# running yet, fall back to `mpd --version`, which reports the compiled decoder
+# plugins and suffixes. This keeps install-time detection useful without
+# starting or restarting a user-managed MPD daemon.
+if ! /usr/bin/audiowrt-player-mpd decoders > "$raw_tmp" 2>/dev/null; then
+	/usr/bin/mpd --version 2>/dev/null | awk '
+		/^Decoder plugins:/ { indecoders=1; next }
+		/^Filters:/ { indecoders=0 }
+		indecoders && $1 ~ /^\[/ {
+			plugin=$1
+			gsub(/^\[/, "", plugin)
+			gsub(/\]$/, "", plugin)
+			print "plugin: " plugin
+			for (i=2; i<=NF; i++)
+				print "suffix: " $i
+		}
+	' > "$raw_tmp"
+fi
+
+if [ ! -s "$raw_tmp" ]; then
+	echo "audiowrt-player-mpd: unable to detect MPD decoders" >&2
 	exit 1
 fi
 
