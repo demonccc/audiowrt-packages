@@ -33,7 +33,7 @@ define Build/Configure
 endef
 
 define Build/Compile
-	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_CPPFLAGS) \
+	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_CPPFLAGS) -D_GNU_SOURCE \
 		-o $(PKG_BUILD_DIR)/audiowrt-player-mpd \
 		$(PKG_BUILD_DIR)/audiowrt-player-mpd.c \
 		$(TARGET_LDFLAGS)
@@ -70,11 +70,7 @@ define Package/audiowrt-player-mpd/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
 /usr/libexec/audiowrt/mpd-configure || true
-if /usr/bin/audiowrt-player-mpd ping >/dev/null 2>&1; then
-	/usr/bin/audiowrt-mpd-refresh-codecs refresh || true
-else
-	/usr/libexec/audiowrt-playback-registry rebuild
-fi
+/usr/bin/audiowrt-mpd-refresh-codecs refresh || /usr/libexec/audiowrt-playback-registry rebuild
 exit 0
 endef
 
