@@ -1,0 +1,23 @@
+{
+	"audiowrt-player-mpd": {
+		"description": "Grant access to the AudioWRT MPD player adapter",
+		"read": {
+			"uci": [
+				"audiowrt_mpd"
+			],
+			"file": {
+				"/usr/bin/audiowrt-player-mpd": [ "exec" ],
+				"/usr/bin/audiowrt-mpd-refresh-codecs": [ "exec" ]
+			}
+		},
+		"write": {
+			"uci": [
+				"audiowrt_mpd"
+			],
+			"file": {
+				"/usr/bin/audiowrt-mpd-refresh-codecs": [ "exec" ],
+				"/usr/libexec/audiowrt/mpd-configure": [ "exec" ]
+			}
+		}
+	}
+}

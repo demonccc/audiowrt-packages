@@ -1,0 +1,116 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+
+CAPS=/etc/audiowrt/mpd-codecs.conf
+RAW=/etc/audiowrt/mpd-decoders.txt
+mkdir -p /etc/audiowrt
+
+case "${1:-refresh}" in
+	list)
+		[ -r "$CAPS" ] && cat "$CAPS"
+		exit 0
+		;;
+	raw)
+		[ -r "$RAW" ] && cat "$RAW"
+		exit 0
+		;;
+	refresh) ;;
+	*) echo "Usage: $0 {refresh|list|raw}" >&2; exit 2 ;;
+esac
+
+raw_tmp="$(mktemp /tmp/audiowrt-mpd-decoders.XXXXXX)"
+caps_tmp="$(mktemp /tmp/audiowrt-mpd-codecs.XXXXXX)"
+trap 'rm -f "$raw_tmp" "$caps_tmp"' EXIT INT TERM HUP
+
+# Prefer the running daemon because the MPD protocol `decoders` command reports
+# enabled decoder plugins, suffixes and MIME types. If MPD is installed but not
+# running yet, fall back to `mpd --version`, which reports the compiled decoder
+# plugins and suffixes. This keeps install-time detection useful without
+# starting or restarting a user-managed MPD daemon.
+if ! /usr/bin/audiowrt-player-mpd decoders > "$raw_tmp" 2>/dev/null; then
+	/usr/bin/mpd --version 2>/dev/null | awk '
+		/^Decoder plugins:/ { indecoders=1; next }
+		/^Filters:/ { indecoders=0 }
+		indecoders && $1 ~ /^\[/ {
+			plugin=$1
+			gsub(/^\[/, "", plugin)
+			gsub(/\]$/, "", plugin)
+			print "plugin: " plugin
+			for (i=2; i<=NF; i++)
+				print "suffix: " $i
+		}
+	' > "$raw_tmp"
+fi
+
+if [ ! -s "$raw_tmp" ]; then
+	echo "audiowrt-player-mpd: unable to detect MPD decoders" >&2
+	exit 1
+fi
+
+add_cap() {
+	id="$1"; mimes="$2"; exts="$3"
+	grep -q "^${id}|" "$caps_tmp" 2>/dev/null || printf '%s|%s|%s\n' "$id" "$mimes" "$exts" >> "$caps_tmp"
+}
+
+plugin=''
+while IFS= read -r line; do
+	case "$line" in
+		plugin:\ *)
+			plugin="${line#plugin: }"
+			case "$plugin" in
+				flac) add_cap flac 'audio/flac audio/x-flac' 'flac' ;;
+				mad|mpg123) add_cap mp3 'audio/mpeg' 'mp3' ;;
+				vorbis|tremor) add_cap vorbis 'audio/ogg application/ogg audio/vorbis' 'ogg oga' ;;
+				opus) add_cap opus 'audio/opus audio/ogg application/ogg' 'opus ogg' ;;
+			esac
+			;;
+		suffix:\ *)
+			suffix="${line#suffix: }"
+			case "$suffix" in
+				flac) add_cap flac 'audio/flac audio/x-flac' 'flac' ;;
+				mp3) add_cap mp3 'audio/mpeg' 'mp3' ;;
+				aac) add_cap aac 'audio/aac audio/aacp' 'aac' ;;
+				m4a|m4b|mp4) add_cap m4a 'audio/mp4 audio/x-m4a audio/m4a' 'm4a m4b mp4' ;;
+				wav|wave) add_cap wav 'audio/wav audio/x-wav audio/wave' 'wav' ;;
+				aif|aiff) add_cap aiff 'audio/aiff audio/x-aiff' 'aif aiff' ;;
+				opus) add_cap opus 'audio/opus audio/ogg application/ogg' 'opus ogg' ;;
+				ogg|oga)
+					case "$plugin" in
+						opus) add_cap opus 'audio/opus audio/ogg application/ogg' 'opus ogg' ;;
+						vorbis|tremor) add_cap vorbis 'audio/ogg application/ogg audio/vorbis' 'ogg oga' ;;
+					esac
+					;;
+			esac
+			;;
+		mime_type:\ *)
+			mime="${line#mime_type: }"
+			case "$mime" in
+				audio/flac|audio/x-flac) add_cap flac 'audio/flac audio/x-flac' 'flac' ;;
+				audio/mpeg) add_cap mp3 'audio/mpeg' 'mp3' ;;
+				audio/aac|audio/aacp) add_cap aac 'audio/aac audio/aacp' 'aac' ;;
+				audio/mp4|audio/x-m4a|audio/m4a) add_cap m4a 'audio/mp4 audio/x-m4a audio/m4a' 'm4a m4b mp4' ;;
+				audio/opus) add_cap opus 'audio/opus audio/ogg application/ogg' 'opus ogg' ;;
+				audio/vorbis) add_cap vorbis 'audio/ogg application/ogg audio/vorbis' 'ogg oga' ;;
+				audio/wav|audio/x-wav|audio/wave) add_cap wav 'audio/wav audio/x-wav audio/wave' 'wav' ;;
+				audio/aiff|audio/x-aiff) add_cap aiff 'audio/aiff audio/x-aiff' 'aif aiff' ;;
+			esac
+			;;
+	esac
+done < "$raw_tmp"
+
+if [ ! -s "$caps_tmp" ]; then
+	echo "audiowrt-player-mpd: MPD returned no AudioWRT-supported codecs" >&2
+	exit 1
+fi
+
+mv "$raw_tmp" "$RAW"
+mv "$caps_tmp" "$CAPS"
+chmod 0644 "$RAW" "$CAPS"
+trap - EXIT INT TERM HUP
+
+uci -q set audiowrt_mpd.main.last_codec_refresh="$(date +%s)"
+uci -q commit audiowrt_mpd
+/usr/libexec/audiowrt-playback-registry rebuild
+
+cat "$CAPS"
