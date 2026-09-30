@@ -1,6 +1,6 @@
 include $(TOPDIR)/rules.mk
 
-AUDIOWRT_DERIVED_NAME:=audiowrt-bluez
+AUDIOWRT_DERIVED_NAME:=bluez-trimmed
 AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/utils/bluez/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
@@ -9,21 +9,21 @@ PKG_RELEASE:=1
 
 include $(INCLUDE_DIR)/package.mk
 
-define Package/audiowrt-bluez
+define Package/bluez-trimmed
   SECTION:=utils
   CATEGORY:=Utilities
-  TITLE:=AudioWRT minimal BlueZ audio daemon
+  TITLE:=Trimmed BlueZ audio daemon
   DEPENDS:=+bluez-libs +glib2 +dbus
   URL:=https://www.bluez.org/
 endef
 
-define Package/audiowrt-bluez/description
- Minimal BlueZ daemon for AudioWRT A2DP Source output. The source version and
- all OpenWrt patches come from the selected release; AudioWRT only applies the
- profile/feature delta needed for audio output.
+define Package/bluez-trimmed/description
+ BlueZ daemon derived from the selected OpenWrt release and trimmed for A2DP
+ Source output. The source version and complete OpenWrt patch set are inherited;
+ this package only applies the constrained runtime feature selection.
 endef
 
-define Package/audiowrt-bluez/conffiles
+define Package/bluez-trimmed/conffiles
 /etc/bluetooth/main.conf
 endef
 
@@ -65,7 +65,7 @@ CONFIGURE_ARGS += \
 	--disable-vcp \
 	--enable-threads
 
-define Package/audiowrt-bluez/install
+define Package/bluez-trimmed/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/lib/bluetooth/bluetoothd $(1)/usr/sbin/bluetoothd
 	$(INSTALL_DIR) $(1)/etc/dbus-1/system.d
@@ -76,4 +76,4 @@ define Package/audiowrt-bluez/install
 	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/bluetoothd.init $(1)/etc/init.d/bluetoothd
 endef
 
-$(eval $(call BuildPackage,audiowrt-bluez))
+$(eval $(call BuildPackage,bluez-trimmed))
