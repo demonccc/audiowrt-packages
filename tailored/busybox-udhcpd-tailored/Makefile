@@ -1,0 +1,169 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+include $(TOPDIR)/rules.mk
+
+AUDIOWRT_DERIVED_NAME:=busybox-udhcpd-tailored
+AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/base/utils/busybox/Makefile
+include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
+
+PKG_RELEASE:=9
+PKG_MAINTAINER:=AudioWRT
+
+BUSYBOX_SYM=$(if $(CONFIG_BUSYBOX_CUSTOM),CONFIG,DEFAULT)
+BUSYBOX_IF_ENABLED=$(if $(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_$(1)),$(2))
+
+AUDIOWRT_BUSYBOX_DISABLED_APPLETS:= \
+	BRCTL \
+	CLEAR \
+	FREE \
+	IFCONFIG \
+	LESS \
+	MKSWAP \
+	NETMSG \
+	RESET \
+	RESIZE \
+	ROUTE \
+	SWAPOFF \
+	SWAPON \
+	TIME \
+	TOP \
+	TRACEROUTE \
+	TRACEROUTE6 \
+	YES
+
+ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SUID),)
+  PKG_FILE_MODES:=/bin/busybox:root:root:4755
+endif
+
+include $(INCLUDE_DIR)/package.mk
+
+ifeq ($(DUMP),)
+  STAMP_CONFIGURED:=$(strip $(STAMP_CONFIGURED))_$(shell grep '^CONFIG_BUSYBOX_' $(TOPDIR)/.config | $(MKHASH) md5)
+endif
+
+define Package/busybox-udhcpd-tailored
+  SECTION:=base
+  CATEGORY:=Base system
+  TITLE:=Tailored BusyBox with udhcpd
+  URL:=https://busybox.net/
+  DEPENDS:= +USE_GLIBC:libcrypt-compat +BUSYBOX_CONFIG_PAM:libpam +BUSYBOX_CONFIG_NTPD:jsonfilter +(USE_GLIBC&&BUSYBOX_CONFIG_FEATURE_MOUNT_NFS)||(USE_GLIBC&&BUSYBOX_CONFIG_FEATURE_INETD_RPC):libtirpc
+  USERID:=ntp=123:ntp=123
+  PROVIDES:=busybox udhcpd
+  CONFLICTS:=busybox busybox-selinux
+endef
+
+define Package/busybox-udhcpd-tailored/description
+ Tailored replacement for the BusyBox from the selected OpenWrt release. It
+ inherits that release's source version, build flags, files and complete patch
+ set, enables the udhcpd capability required by provisioning, and removes
+ applets that are not needed by the constrained AudioWRT runtime.
+endef
+
+ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SYSLOG)$(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SYSLOGD_CFG),)
+define Package/busybox-udhcpd-tailored/conffiles/syslog
+/etc/syslog.conf
+endef
+endif
+
+ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_CROND),)
+define Package/busybox-udhcpd-tailored/conffiles/crond
+/etc/crontabs/
+endef
+endif
+
+define Package/busybox-udhcpd-tailored/conffiles
+$(Package/busybox-udhcpd-tailored/conffiles/syslog)
+$(Package/busybox-udhcpd-tailored/conffiles/crond)
+endef
+
+ifndef CONFIG_USE_MUSL
+LDLIBS:=m crypt
+endif
+
+LDLIBS += $(call BUSYBOX_IF_ENABLED,PAM,pam pam_misc pthread)
+
+ifeq ($(CONFIG_USE_GLIBC),y)
+  LDLIBS += $(call BUSYBOX_IF_ENABLED,NSLOOKUP,resolv)
+endif
+
+ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_MOUNT_NFS)$(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_INETD_RPC),)
+ifndef CONFIG_USE_MUSL
+  TARGET_CFLAGS += -I$(STAGING_DIR)/usr/include/tirpc
+  LDLIBS += tirpc
+endif
+endif
+
+MAKE_VARS :=
+MAKE_FLAGS += \
+	EXTRA_CFLAGS="$(TARGET_CFLAGS) $(TARGET_CPPFLAGS)" \
+	EXTRA_LDFLAGS="$(TARGET_LDFLAGS) $(TARGET_CFLAGS)" \
+	LDLIBS="$(LDLIBS)" \
+	LD="$(TARGET_CC)" \
+	SKIP_STRIP=y
+ifneq ($(findstring c,$(OPENWRT_VERBOSE)),)
+  MAKE_FLAGS += V=1
+endif
+
+define Build/Configure
+	rm -f $(PKG_BUILD_DIR)/.config
+	touch $(PKG_BUILD_DIR)/.config
+ifeq ($(DEVICE_TYPE),nas)
+	echo "CONFIG_HDPARM=y" >> $(PKG_BUILD_DIR)/.config
+endif
+	grep 'CONFIG_BUSYBOX_$(BUSYBOX_SYM)' $(TOPDIR)/.config | sed -e "s,\\(# \\)\\?CONFIG_BUSYBOX_$(BUSYBOX_SYM)_\\(.*\\),\\1CONFIG_\\2,g" >> $(PKG_BUILD_DIR)/.config
+	sed -i \
+		-e '/^CONFIG_UDHCPD=/d' \
+		-e '/^# CONFIG_UDHCPD is not set/d' \
+		-e '/^CONFIG_DHCPD_LEASES_FILE=/d' \
+		-e '/^# CONFIG_DHCPD_LEASES_FILE is not set/d' \
+		$(PKG_BUILD_DIR)/.config
+	echo 'CONFIG_UDHCPD=y' >> $(PKG_BUILD_DIR)/.config
+	echo 'CONFIG_DHCPD_LEASES_FILE="/tmp/audiowrt-udhcpd.leases"' >> $(PKG_BUILD_DIR)/.config
+
+	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
+	for applet in $(AUDIOWRT_BUSYBOX_DISABLED_APPLETS); do \
+		sed -i -e "/^CONFIG_$$$${applet}=/d" -e "/^# CONFIG_$$$${applet} is not set/d" $(PKG_BUILD_DIR)/.config; \
+		echo "# CONFIG_$$$${applet} is not set" >> $(PKG_BUILD_DIR)/.config; \
+	done
+	yes 'n' | $(MAKE) -C $(PKG_BUILD_DIR) $(MAKE_FLAGS) oldconfig
+	@echo 'Tailored BusyBox pruned applets:'
+	@for applet in $(AUDIOWRT_BUSYBOX_DISABLED_APPLETS); do \
+		if ! grep -qx "# CONFIG_$$$${applet} is not set" $(PKG_BUILD_DIR)/.config; then \
+			echo "ERROR: BusyBox applet $$$${applet} was not disabled" >&2; \
+			exit 1; \
+		fi; \
+		echo "  $$$${applet}=n"; \
+	done
+endef
+
+define Build/Compile
+	$(call Build/Compile/Default, \
+		CONFIG_PREFIX="$(PKG_INSTALL_DIR)" \
+		all install \
+	)
+endef
+
+define Package/busybox-udhcpd-tailored/install
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_DIR) $(1)/usr/sbin
+	$(CP) $(PKG_INSTALL_DIR)/* $(1)/
+	$(INSTALL_DIR) $(1)/etc/profile.d
+	$(INSTALL_DATA) $(AUDIOWRT_DERIVED_FILES_DIR)/busybox-history-file.sh $(1)/etc/profile.d/
+ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SYSLOG)$(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_FEATURE_SYSLOGD_CFG),)
+	touch $(1)/etc/syslog.conf
+endif
+ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_CROND),)
+	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/cron $(1)/etc/init.d/cron
+	$(INSTALL_DIR) $(1)/etc/crontabs
+endif
+ifneq ($(CONFIG_BUSYBOX_$(BUSYBOX_SYM)_NTPD),)
+	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/sysntpd $(1)/etc/init.d/sysntpd
+	$(INSTALL_BIN) $(AUDIOWRT_DERIVED_FILES_DIR)/ntpd-hotplug $(1)/usr/sbin/ntpd-hotplug
+	$(INSTALL_DIR) $(1)/etc/capabilities $(1)/usr/share/acl.d
+	$(INSTALL_DATA) $(AUDIOWRT_DERIVED_FILES_DIR)/ntpd.capabilities $(1)/etc/capabilities/ntpd.json
+	$(INSTALL_DATA) $(AUDIOWRT_DERIVED_FILES_DIR)/ntpd_acl.json $(1)/usr/share/acl.d/ntpd.json
+endif
+	-rm -rf $(1)/lib64
+endef
+
+$(eval $(call BuildPackage,busybox-udhcpd-tailored))

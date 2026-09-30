@@ -2,7 +2,6 @@
 """Fast behavioral checks: real UCI, fake hardware, no router or flash access."""
 import os
 from pathlib import Path
-import shlex
 import shutil
 import subprocess
 import tempfile
@@ -23,7 +22,7 @@ class RuntimeTests(unittest.TestCase):
         self.env["PATH"] = str(self.root / "bin") + ":" + self.env["PATH"]
         if UCI:
             (self.root / "bin/uci").symlink_to(Path(UCI).resolve())
-        self.helper = self.copy("audiowrt-config/files/config-save", "config-save")
+        self.helper = self.copy("audiowrt/audiowrt-config/files/config-save", "config-save")
 
     def copy(self, source, dest):
         text = (REPO / source).read_text().replace("/tmp/audiowrt", str(self.root / "run"))
@@ -44,13 +43,12 @@ class RuntimeTests(unittest.TestCase):
 
     @unittest.skipUnless(UCI, "UCI_BIN is required for real UCI tests")
     def test_save_ignores_foreign_deltas_and_repeated_save_is_noop(self):
-        # Unique package permits testing UCI's REAL default /tmp/.uci safely.
         package = "awtest_" + str(os.getpid())
         config = self.root / "config" / package
         config.write_text("config test 'main'\n option own 'old'\n option other 'saved'\n")
         pending = Path("/tmp/.uci") / package
         self.addCleanup(lambda: pending.unlink(missing_ok=True))
-        self.shell(f"uci -c '$ROOT/config' get x", success=False)  # sanity: errors propagate
+        self.shell(f"uci -c '$ROOT/config' get x", success=False)
         self.shell(f'uci -c "$ROOT/config" set {package}.main.other=temporary')
         action = f'. "{self.helper}"; save_begin {package}; save_uci set {package}.main.own=new; save_finish'
         self.shell(action)
@@ -72,8 +70,8 @@ class RuntimeTests(unittest.TestCase):
 
     @unittest.skipUnless(UCI, "UCI_BIN is required for real UCI tests")
     def test_connect_does_not_save_and_save_only_persists_client(self):
-        self.copy("audiowrt-wifi-client/files/audiowrt-wifi-runtime", "wifi-runtime")
-        wifi = self.copy("audiowrt-wifi-client/files/audiowrt-wifi-client", "wifi")
+        self.copy("audiowrt/audiowrt-wifi-client/files/audiowrt-wifi-runtime", "wifi-runtime")
+        wifi = self.copy("audiowrt/audiowrt-wifi-client/files/audiowrt-wifi-client", "wifi")
         wifi.write_text(wifi.read_text().split('\ncase "${1:-}"')[0])
         (self.root / "config/wireless").write_text("config wifi-device 'radio0'\n option disabled '1'\n option channel 'auto'\n")
         (self.root / "config/network").write_text("config interface 'lan'\n option proto 'dhcp'\n")
@@ -95,8 +93,8 @@ class RuntimeTests(unittest.TestCase):
 
     @unittest.skipUnless(UCI, "UCI_BIN is required for real UCI tests")
     def test_invalid_static_ip_does_not_change_live_deltas(self):
-        self.copy("audiowrt-wifi-client/files/audiowrt-wifi-runtime", "wifi-runtime")
-        wifi = self.copy("audiowrt-wifi-client/files/audiowrt-wifi-client", "wifi")
+        self.copy("audiowrt/audiowrt-wifi-client/files/audiowrt-wifi-runtime", "wifi-runtime")
+        wifi = self.copy("audiowrt/audiowrt-wifi-client/files/audiowrt-wifi-client", "wifi")
         wifi.write_text(wifi.read_text().split('\ncase "${1:-}"')[0])
         (self.root / "config/wireless").write_text("config wifi-device 'radio0'\n option disabled '1'\n")
         (self.root / "config/network").write_text("config interface 'lan'\n option proto 'dhcp'\n")
@@ -105,7 +103,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(list((self.root / "delta").iterdir()), [])
 
     def test_audio_repeated_selection_preserves_runtime_files(self):
-        helper = self.copy("audiowrt-audio/files/audio-runtime", "audio-runtime")
+        helper = self.copy("audiowrt/audiowrt-audio/files/audio-runtime", "audio-runtime")
         action = f'. "{helper}"; audio_state usb 1 0 0 "" "" ""; printf "pcm.test {{ type hw }}\\n" | audio_asound; restart_engines'
         self.shell(action)
         state = self.root / "run/audio.state"
@@ -116,7 +114,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(list((self.root / "config").iterdir()), [])
 
     def test_audio_does_not_start_disabled_engine(self):
-        helper = self.copy("audiowrt-audio/files/audio-runtime", "audio-runtime")
+        helper = self.copy("audiowrt/audiowrt-audio/files/audio-runtime", "audio-runtime")
         services = self.root / "services"
         services.mkdir()
         mpd = services / "mpd"
@@ -128,7 +126,7 @@ class RuntimeTests(unittest.TestCase):
 
     @unittest.skipUnless(UCI, "UCI_BIN is required for real UCI tests")
     def test_renderer_save_validates_before_writing(self):
-        script = self.copy("audiowrt-dlna/files/save-renderer", "save-renderer")
+        script = self.copy("audiowrt/audiowrt-dlna-renderer/files/save-renderer", "save-renderer")
         script.write_text(script.read_text().replace("/etc/init.d/audiowrt-dlna-renderer", "true"))
         config = self.root / "config/audiowrt-dlna"
         original = "config renderer 'main'\n option port '49152'\n option volume '100'\n"
@@ -143,10 +141,10 @@ class RuntimeTests(unittest.TestCase):
 
     @unittest.skipUnless(UCI, "UCI_BIN is required for real UCI tests")
     def test_module_defaults_preserve_explicit_name_and_skip_rewrite(self):
-        script = self.copy("audiowrt-config/files/configure-settings", "configure-settings")
+        script = self.copy("audiowrt/audiowrt-config/files/configure-settings", "configure-settings")
         config = self.root / "config/shairport-sync"
         config.write_text("config shairport-sync 'shairport_sync'\n option name 'Living Room'\n option enabled '0'\n")
-        template = REPO / "audiowrt-airplay/files/airplay.settings"
+        template = REPO / "audiowrt/audiowrt-airplay/files/airplay.settings"
         action = f'sh "{script}" shairport-sync shairport_sync "{template}"'
         self.shell(action)
         self.assertIn("'Living Room'", config.read_text())
@@ -156,7 +154,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(before, config.stat().st_mtime_ns)
 
     def test_connectivity_requires_link_and_ip_and_excludes_access_points(self):
-        runtime = self.copy("audiowrt-wifi-client/files/audiowrt-wifi-runtime", "wifi-runtime")
+        runtime = self.copy("audiowrt/audiowrt-wifi-client/files/audiowrt-wifi-runtime", "wifi-runtime")
         net = self.root / "net"
         for name in ("eth0", "wlan0"):
             (net / name).mkdir(parents=True)
@@ -179,9 +177,9 @@ class RuntimeTests(unittest.TestCase):
         self.shell(prefix + 'DEV=wlan0; HAS_IP=1; MODE=managed; audiowrt_connected')
 
     def test_failed_hostapd_is_reported_and_owned_interface_is_cleaned(self):
-        runtime = self.copy("audiowrt-wifi-client/files/audiowrt-wifi-runtime", "wifi-runtime")
+        runtime = self.copy("audiowrt/audiowrt-wifi-client/files/audiowrt-wifi-runtime", "wifi-runtime")
         (self.root / "phy/phy0").mkdir(parents=True)
-        ap = self.copy("audiowrt-provisioning/files/setup-ap", "setup-ap")
+        ap = self.copy("audiowrt/audiowrt-provisioning/files/setup-ap", "setup-ap")
         ap.write_text(ap.read_text().replace("/sys/class/ieee80211", str(self.root / "phy"))
                       .replace("/usr/sbin/audiowrt-wifi-client mdns-sync", ":"))
         for command, body in {
@@ -205,11 +203,11 @@ class RuntimeTests(unittest.TestCase):
 
     @unittest.skipUnless(UCI, "UCI_BIN is required for real UCI tests")
     def test_registry_merges_shared_codec_and_handles_removal_in_ram(self):
-        registry = self.copy("libaudiowrt-player/files/audiowrt-playback-registry", "registry")
+        registry = self.copy("audiowrt/libaudiowrt-player/files/audiowrt-playback-registry", "registry")
         manifests = self.root / "manifests"
         manifests.mkdir()
         for codec in ("m4a", "ffmpeg"):
-            shutil.copy(REPO / f"audiowrt-player-{codec}/files/{codec}.manifest", manifests)
+            shutil.copy(REPO / f"audiowrt/audiowrt-player-{codec}/files/{codec}.manifest", manifests)
         registry.write_text(registry.read_text().replace("/usr/share/audiowrt/players", str(manifests)))
         self.shell(f'sh "{registry}" rebuild')
         players = self.root / "run/registry/audiowrt-players"

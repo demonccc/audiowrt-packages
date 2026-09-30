@@ -7,7 +7,6 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/src/utils"
 
-# This is the exact upstream wpa_debug.h section targeted by the package patch.
 cat > "$work/src/utils/wpa_debug.h" <<'HEADER'
 enum hostapd_logger_level {
 	HOSTAPD_LEVEL_DEBUG_VERBOSE = 0,
@@ -37,7 +36,7 @@ static inline void wpa_debug_close_syslog(void)
 HEADER
 
 patch --batch --fuzz=0 -p1 -d "$work" \
-    -i "$repo_root/audiowrt-wpad/patches/900-noop-syslog-without-debug.patch"
+    -i "$repo_root/tailored/hostapd-wpa-supplicant-tailored/patches/900-noop-syslog-without-debug.patch"
 
 cat > "$work/check.c" <<'SOURCE'
 #include "src/utils/wpa_debug.h"
