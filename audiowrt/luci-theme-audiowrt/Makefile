@@ -1,8 +1,8 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-theme-audiowrt
-PKG_VERSION:=0.1.10
-PKG_RELEASE:=10
+PKG_VERSION:=0.2.0
+PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
 PKGARCH:=all
 
@@ -20,9 +20,9 @@ define Package/luci-theme-audiowrt
 endef
 
 define Package/luci-theme-audiowrt/description
- Lightweight standalone monochrome AudioWRT theme for LuCI. The package embeds
- the LuCI structural CSS/templates it needs at build time and does not require
- luci-theme-bootstrap at runtime.
+ Reusable standalone monochrome LuCI theme maintained by AudioWRT. Installing
+ the theme alone keeps OpenWrt identity; AudioWRT logo/favicon assets are
+ provided only by the optional audiowrt-distro-branding package.
 endef
 
 define Build/Compile
@@ -44,8 +44,6 @@ define Package/luci-theme-audiowrt/install
 	$(INSTALL_DATA) $(AUDIOWRT_THEME_BUILD_DIR)/cascade.css $(1)/www/luci-static/audiowrt/cascade.css
 	$(INSTALL_DATA) $(AUDIOWRT_THEME_BUILD_DIR)/mobile.css $(1)/www/luci-static/audiowrt/mobile.css
 	$(INSTALL_DATA) $(AUDIOWRT_THEME_BUILD_DIR)/menu.js $(1)/www/luci-static/audiowrt/menu.js
-	$(INSTALL_DATA) ./htdocs/luci-static/audiowrt/logo.svg $(1)/www/luci-static/audiowrt/logo.svg
-	ln -s logo.svg $(1)/www/luci-static/audiowrt/favicon.svg
 
 	$(INSTALL_DIR) $(1)/usr/share/ucode/luci/template/themes/audiowrt
 	$(INSTALL_DATA) ./ucode/template/themes/audiowrt/header.ut $(1)/usr/share/ucode/luci/template/themes/audiowrt/header.ut
