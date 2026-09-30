@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+
+caps=/etc/audiowrt/mpd-codecs.conf
+[ -r "$caps" ] || return 0
+
+while IFS='|' read -r codec mimes extensions; do
+	[ -n "$codec" ] || continue
+	register_player \
+		"$codec" mpd \
+		'MPD' \
+		/usr/bin/audiowrt-player-mpd \
+		"$mimes" \
+		"$extensions"
+done < "$caps"
