@@ -93,48 +93,48 @@ jobs:
           make -s prepare-tmpinfo
 
           for package in \
-            audiowrt-busybox \
-            libaudiowrt-alsa-minimal \
-            audiowrt-minimal-upmpdcli \
-            audiowrt-umdns \
-            audiowrt-wpad \
-            audiowrt-audio \
-            audiowrt-core \
-            audiowrt-config \
-            audiowrt-identity \
-            audiowrt-provisioning \
-            audiowrt-usb-audio \
-            audiowrt-mpd \
-            audiowrt-renderer \
-            libaudiowrt-player \
-            audiowrt-player-flac \
-            audiowrt-player-mp3 \
-            audiowrt-player-aac \
-            audiowrt-player-m4a \
-            audiowrt-player-lpcm \
-            audiowrt-player-wav \
-            audiowrt-player-vorbis \
-            audiowrt-player-aiff \
-            audiowrt-player-opus \
-            audiowrt-player-ffmpeg \
-            luci-app-audiowrt-renderer \
             audiowrt-airplay \
-            librespot \
-            audiowrt-spotify \
-            audiowrt-bluez \
-            audiowrt-sbc \
-            audiowrt-btctl \
-            bluez-alsa \
+            audiowrt-audio \
             audiowrt-bluetooth \
+            audiowrt-distro-branding \
+            audiowrt-btctl \
+            audiowrt-config \
+            audiowrt-core \
+            audiowrt-dlna-renderer \
             audiowrt-network-client \
+            audiowrt-player-mpd \
+            audiowrt-player-aac \
+            audiowrt-player-aiff \
+            audiowrt-player-ffmpeg \
+            audiowrt-player-flac \
+            audiowrt-player-lpcm \
+            audiowrt-player-m4a \
+            audiowrt-player-mp3 \
+            audiowrt-player-opus \
+            audiowrt-player-vorbis \
+            audiowrt-player-wav \
+            audiowrt-provisioning \
+            audiowrt-spotify \
+            audiowrt-usb-audio \
             audiowrt-wifi-client \
+            libaudiowrt-player \
             luci-app-audiowrt \
-            luci-app-audiowrt-network-client \
-            luci-app-audiowrt-wifi-client \
             luci-app-audiowrt-core \
-            kmod-audiowrt-bluetooth \
-            kmod-audiowrt-sound-core \
-            kmod-audiowrt-usb-audio; do
+            luci-app-audiowrt-dlna \
+            luci-app-audiowrt-network-client \
+            luci-theme-audiowrt \
+            bluez-alsa \
+            librespot \
+            alsa-lib-trimmed \
+            bluez-trimmed \
+            dbus-trimmed \
+            dropbear-trimmed \
+            kmod-bluetooth-trimmed \
+            sbc-trimmed \
+            umdns-trimmed \
+            busybox-udhcpd-tailored \
+            hostapd-wpa-supplicant-tailored \
+            luci-mod-status-tailored; do
             grep -q "^Package: $package$" tmp/.packageinfo || {
               echo "Package metadata missing: $package" >&2
               exit 1
