@@ -1,0 +1,96 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+
+MPD_CONF=/etc/mpd.conf
+AUDIOWRT_PORT=16600
+
+[ -r "$MPD_CONF" ] || {
+	echo "audiowrt-player-mpd: $MPD_CONF not found" >&2
+	exit 1
+}
+
+strip_quotes() {
+	printf '%s' "$1" | sed 's/^"//; s/"$//'
+}
+
+global_port="$(awk '
+	$1 == "port" {
+		v=$2; gsub(/^"|"$/, "", v); print v; exit
+	}
+' "$MPD_CONF")"
+[ -n "$global_port" ] || global_port=6600
+
+bind_count="$(awk '$1 == "bind_to_address" { n++ } END { print n+0 }' "$MPD_CONF")"
+listener="$(awk '
+	$1 == "bind_to_address" {
+		v=$2; gsub(/^"|"$/, "", v)
+		if (v == "any" || v == "0.0.0.0" || v == "127.0.0.1" || v == "localhost" ||
+		    v == "::" || v == "[::]" || v == "::1" || v == "[::1]" ||
+		    v ~ /^0\.0\.0\.0:/ || v ~ /^127\.0\.0\.1:/ || v ~ /^localhost:/ ||
+		    v ~ /^\[::\]:/ || v ~ /^\[::1\]:/) {
+			print v; exit
+		}
+	}
+' "$MPD_CONF")"
+
+host=127.0.0.1
+port="$global_port"
+managed=0
+pending=0
+
+if [ "$bind_count" -eq 0 ]; then
+	# MPD defaults to "any" when bind_to_address is absent.
+	:
+elif [ -n "$listener" ]; then
+	case "$listener" in
+		\[::\]:*|\[::1\]:*)
+			host=::1
+			port="${listener##*:}"
+			;;
+		::*|\[::\]|::1|\[::1\])
+			host=::1
+			;;
+		*:* )
+			port="${listener##*:}"
+			;;
+	esac
+else
+	cat >> "$MPD_CONF" <<EOF
+
+# Added by audiowrt-player-mpd for local AudioWRT control only.
+bind_to_address "127.0.0.1:${AUDIOWRT_PORT}"
+EOF
+	host=127.0.0.1
+	port="$AUDIOWRT_PORT"
+	managed=1
+	pending=1
+
+	# Reload is intentionally non-disruptive. If MPD requires a full restart to
+	# activate the new listener, the UI reports that state instead of forcing a
+	# restart of a user-managed MPD session.
+	if /etc/init.d/mpd running >/dev/null 2>&1; then
+		/etc/init.d/mpd reload >/dev/null 2>&1 || true
+		sleep 1
+	fi
+fi
+
+uci -q batch <<EOF
+set audiowrt_mpd.main=mpd
+set audiowrt_mpd.main.host='$host'
+set audiowrt_mpd.main.port='$port'
+set audiowrt_mpd.main.managed_listener='$managed'
+set audiowrt_mpd.main.listener_pending_restart='$pending'
+commit audiowrt_mpd
+EOF
+
+if /usr/bin/audiowrt-player-mpd ping >/dev/null 2>&1; then
+	uci -q set audiowrt_mpd.main.listener_pending_restart='0'
+	uci -q commit audiowrt_mpd
+	pending=0
+fi
+
+echo "host=$host"
+echo "port=$port"
+echo "managed_listener=$managed"
+echo "listener_pending_restart=$pending"
