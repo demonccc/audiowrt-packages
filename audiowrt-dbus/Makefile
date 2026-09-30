@@ -1,10 +1,15 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-dbus
-PKG_VERSION:=1.0.0
+AUDIOWRT_DBUS_RECIPE:=$(TOPDIR)/feeds/packages/utils/dbus/Makefile
+PKG_VERSION:=$(shell sed -n 's/^PKG_VERSION:=//p' $(AUDIOWRT_DBUS_RECIPE) 2>/dev/null | head -n1)
 PKG_RELEASE:=1
 PKG_LICENSE:=AFL-2.1
 PKG_MAINTAINER:=AudioWRT
+
+ifeq ($(strip $(PKG_VERSION)),)
+  $$(error AudioWRT requires the selected OpenWrt packages-feed D-Bus recipe at $(AUDIOWRT_DBUS_RECIPE))
+endif
 
 include $(INCLUDE_DIR)/package.mk
 
