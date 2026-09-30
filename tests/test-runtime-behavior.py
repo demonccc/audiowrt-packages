@@ -129,7 +129,7 @@ class RuntimeTests(unittest.TestCase):
     @unittest.skipUnless(UCI, "UCI_BIN is required for real UCI tests")
     def test_renderer_save_validates_before_writing(self):
         script = self.copy("audiowrt-dlna/files/save-renderer", "save-renderer")
-        script.write_text(script.read_text().replace("/etc/init.d/audiowrt-renderer", "true"))
+        script.write_text(script.read_text().replace("/etc/init.d/audiowrt-dlna-renderer", "true"))
         config = self.root / "config/audiowrt-dlna"
         original = "config renderer 'main'\n option port '49152'\n option volume '100'\n"
         config.write_text(original)

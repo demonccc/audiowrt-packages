@@ -1,6 +1,6 @@
 {
-  "luci-app-audiowrt-renderer": {
-    "description": "Grant access to AudioWRT renderer configuration, playback registries and status",
+  "luci-app-audiowrt-dlna-renderer": {
+    "description": "Grant access to AudioWRT DLNA Renderer configuration, playback registries and status",
     "read": {
       "uci": [
         "audiowrt-dlna",
@@ -8,14 +8,14 @@
         "audiowrt-runtime-players"
       ],
       "file": {
-        "/usr/libexec/audiowrt-renderer": [
+        "/usr/libexec/audiowrt-dlna-renderer": [
           "exec"
         ]
       }
     },
     "write": {
       "file": {
-        "/usr/libexec/audiowrt-save-renderer": [
+        "/usr/libexec/audiowrt-save-dlna-renderer": [
           "exec"
         ]
       },

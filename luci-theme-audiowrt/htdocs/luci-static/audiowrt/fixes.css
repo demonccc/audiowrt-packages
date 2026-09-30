@@ -2,7 +2,7 @@
 
 /* Local Time in luci-mod-system renders input + <br> + span.control-group. */
 #maincontent #localtime + br + .control-group {
-	dis:inline-flex !important;
+	display:inline-flex !important;
 	align-items:center !important;
 	gap:8px !important;
 	margin-top:8px !important;
@@ -11,9 +11,39 @@
 	margin:0 !important;
 }
 
+/* Keep field controls aligned vertically. Do not push inline action buttons down. */
+#maincontent .cbi-value-field > .btn,
+#maincontent .cbi-value-field > .cbi-button,
+#maincontent .cbi-value-field > button {
+	margin-top:0 !important;
+	vertical-align:middle !important;
+}
+#maincontent .cbi-value-field > input,
+#maincontent .cbi-value-field > select,
+#maincontent .cbi-value-field > button,
+#maincontent .cbi-value-field > .btn,
+#maincontent .cbi-value-field > .cbi-button {
+	vertical-align:middle !important;
+}
+
+/* File/key inputs need enough width for their placeholder/help text. */
+#maincontent input[type="file"],
+#maincontent .cbi-input-file {
+	width:min(100%,520px) !important;
+	max-width:520px !important;
+}
+
+/* Textarea actions such as Repository Public Keys sit beside the field when space allows. */
+#maincontent .cbi-value-field > textarea + .btn,
+#maincontent .cbi-value-field > textarea + .cbi-button,
+#maincontent .cbi-value-field > textarea + button {
+	margin:0 0 0 10px !important;
+	vertical-align:bottom !important;
+}
+
 /* Dynamic list add row is one joined control, mirroring the existing x rows. */
 #maincontent .cbi-dynlist > .add-item {
-	dis:flex !important;
+	display:flex !important;
 	align-items:stretch !important;
 	gap:0 !important;
 	margin-top:6px !important;
@@ -37,6 +67,52 @@
 	margin:0 0 0 -1px !important;
 	padding:0 !important;
 	border-radius:0 8px 8px 0 !important;
+}
+
+/* Text-labelled add/remove actions must not inherit compact icon geometry. */
+#maincontent .cbi-section-create > .cbi-button-add,
+#maincontent .cbi-section-create > button.cbi-button-add {
+	width:auto !important;
+	max-width:none !important;
+	min-width:112px !important;
+	padding:0 16px !important;
+	white-space:nowrap !important;
+}
+
+/* Row actions use equal footprints, including Edit/Delete pairs. */
+#maincontent .cbi-section-actions > .btn,
+#maincontent .cbi-section-actions > .cbi-button,
+#maincontent .cbi-section-actions > button {
+	width:auto !important;
+	max-width:none !important;
+	min-width:68px !important;
+	height:40px !important;
+	padding:0 12px !important;
+	white-space:nowrap !important;
+}
+
+/* Alerts and notices keep text vertically centered. */
+#maincontent .alert-message,
+.alert-message {
+	display:flex !important;
+	align-items:center !important;
+	min-height:34px !important;
+	box-sizing:border-box !important;
+	line-height:1.35 !important;
+}
+
+/* Sidebar submenus are deliberately quieter than top-level navigation. */
+#topmenu .dropdown-menu > li > a,
+#topmenu li > ul > li > a {
+	font-size:14px !important;
+	font-weight:400 !important;
+	letter-spacing:0 !important;
+	line-height:20px !important;
+}
+#topmenu .dropdown-menu > li.active > a,
+#topmenu li > ul > li.active > a,
+#topmenu li > ul > li.aw-current > a {
+	font-weight:600 !important;
 }
 
 /* Startup is a state/action table, so semantic colors are useful here. */
@@ -66,4 +142,5 @@
 #maincontent .cbi-section-actions button:last-child:hover {
 	background:var(--aw-red-hover) !important;
 	border-color:var(--aw-red-hover) !important;
+	color:#fff !important;
 }

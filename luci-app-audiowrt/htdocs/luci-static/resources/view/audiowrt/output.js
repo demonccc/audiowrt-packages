@@ -146,6 +146,13 @@ function actionButton(label, handler) {
 	}, label);
 }
 
+function statusBanner(kind, text) {
+	return E('div', {
+		'class': 'alert-message ' + kind,
+		'style': 'margin:12px 0'
+	}, text);
+}
+
 function yesNo(value) {
 	return value ? _('Yes') : _('No');
 }
@@ -361,18 +368,18 @@ return view.extend({
 
 	renderBluetoothEmpty: function() {
 		if (!this.btPackageAvailable) {
-			return E('p', {}, _(
+			return statusBanner('warning', _(
 				'Bluetooth audio support is not included in this firmware build.'
 			));
 		}
 
 		if (this.btKernelDetected) {
-			return E('p', {}, _(
+			return statusBanner('error', _(
 				'Bluetooth adapter detected, but it could not be initialized. Check system logs for details.'
 			));
 		}
 
-		return E('p', {}, _('No Bluetooth adapter detected.'));
+		return statusBanner('warning', _('No Bluetooth adapter detected.'));
 	},
 
 	renderUsbContent: function(card, audioState) {
@@ -396,7 +403,7 @@ return view.extend({
 	},
 
 	renderUsbEmpty: function() {
-		return E('p', {}, _('No USB audio device detected.'));
+		return statusBanner('warning', _('No USB audio device detected.'));
 	},
 
 	setTab: function(tabId) {

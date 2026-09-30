@@ -3,13 +3,20 @@
 set -eu
 . /usr/libexec/audiowrt/wifi-runtime
 mkdir -p /tmp/audiowrt
-trap '/usr/libexec/audiowrt/setup-ap stop' EXIT
+cleanup() {
+	/usr/libexec/audiowrt/provision-wifi stop >/dev/null 2>&1 || true
+	/usr/libexec/audiowrt/setup-ap stop >/dev/null 2>&1 || true
+}
+trap 'cleanup' EXIT
 trap 'exit 0' INT TERM HUP
 /usr/sbin/audiowrtctl provisioning auto || logger -t audiowrt "Initial provisioning check failed"
 while :; do
 	sleep 3
 	if [ -f /tmp/audiowrt/provisioning.saved ]; then
 		rm -f /tmp/audiowrt/provisioning.saved
+		# The test STA is a direct, tmpfs-only interface. Remove it before
+		# handing the selected radio back to netifd for the saved client.
+		/usr/libexec/audiowrt/provision-wifi stop >/dev/null 2>&1 || true
 		/usr/libexec/audiowrt/setup-ap stop
 		if ! /usr/sbin/audiowrt-wifi-client apply-candidate; then
 			/usr/sbin/audiowrtctl provisioning start || true

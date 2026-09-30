@@ -1,6 +1,6 @@
-# AudioWRT native renderer and discovery service
+# AudioWRT DLNA Renderer and discovery service
 
-`audiowrt-renderer` is the native AudioWRT network renderer. One daemon owns:
+`audiowrt-dlna-renderer` is the native AudioWRT DLNA Renderer. One daemon owns:
 
 - SSDP discovery and DLNA/UPnP MediaRenderer control;
 - minimal authoritative mDNS/DNS-SD for the AudioWRT hostname and LuCI HTTP service;
@@ -12,7 +12,7 @@ It intentionally does not depend on MPD, upmpdcli or a separate umdns daemon.
 
 ## Codec and player registry
 
-The canonical registry lives in `/etc/config/audiowrt`. The renderer does not
+The canonical registry lives in `/etc/config/audiowrt`. The DLNA Renderer does not
 hard-code FLAC, MP3, AAC, WAV, Vorbis or any other codec.
 
 A codec declares how incoming media is recognized and which compatible player is
@@ -47,7 +47,7 @@ Player packages register themselves idempotently with
 - creates a missing player but preserves an existing player configuration;
 - attaches the codec to the player if needed;
 - sets `default_player` only when the codec has no default yet;
-- hot-reloads the running renderer after committing UCI.
+- hot-reloads the running DLNA Renderer after committing UCI.
 
 Other available players for the same codec are automatic fallbacks. The configured
 default is tried first; remaining compatible players are tried in UCI section order.
@@ -63,7 +63,7 @@ Every player uses the same contract:
 The URL is the only command-line argument. The process must remain in the foreground
 for the lifetime of playback and exit zero when playback finishes normally.
 
-The renderer also exports:
+The DLNA Renderer also exports:
 
 ```text
 AUDIOWRT_URI
@@ -73,7 +73,7 @@ AUDIOWRT_ALSA_DEVICE
 AUDIOWRT_VOLUME_FILE
 ```
 
-The renderer creates a process group for the player. Pause and resume use
+The DLNA Renderer creates a process group for the player. Pause and resume use
 `SIGSTOP`/`SIGCONT`; stop uses `SIGTERM` followed by `SIGKILL` if necessary.
 A wrapper is responsible for adapting VLC, MPD or another engine to this contract.
 
@@ -82,9 +82,9 @@ directly to ALSA; they must not exec wget, uclient-fetch or curl.
 
 ## Hot reload
 
-A `SIGHUP` reloads only the codec/player registry. It does not replace the renderer
+A `SIGHUP` reloads only the codec/player registry. It does not replace the DLNA Renderer
 process, subscribers, UUID or active player process. After a successful reload the
-renderer emits a ConnectionManager event so controllers can refresh
+DLNA Renderer emits a ConnectionManager event so controllers can refresh
 `SinkProtocolInfo`.
 
 ## mDNS scope

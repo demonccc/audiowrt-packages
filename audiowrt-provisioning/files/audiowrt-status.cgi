@@ -4,7 +4,7 @@
 
 json_escape() { printf '%s' "$1" | tr '\r\n' '  ' | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 name="$(uci -q get system.@system[0].hostname || echo AudioWRT)"
-wifi_ssid="$(uci -q get wireless.audiowrt_client.ssid || true)"
+wifi_ssid="$(cat /tmp/audiowrt/client/1 2>/dev/null || uci -q get wireless.audiowrt_client.ssid || true)"
 last_error="$(cat /tmp/audiowrt/provisioning.error 2>/dev/null || true)"
 setup_ip="$AUDIOWRT_SETUP_IP"
 done_file=/tmp/audiowrt/provisioning.done
@@ -24,7 +24,12 @@ fi
 verified=false
 [ ! -f /tmp/audiowrt/wifi.verified ] || verified=true
 
-ip_address="$(printf '%s\n' "$wifi_status" | sed -n '/"ipv4-address"/,/]/ s/.*"address":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+# During provisioning the verified connection is a direct tmpfs-only STA, so
+# report that DHCP address before falling back to the persistent client or LAN.
+ip_address="$(cat /tmp/audiowrt/provision-sta/ip 2>/dev/null || true)"
+if [ -z "$ip_address" ]; then
+	ip_address="$(printf '%s\n' "$wifi_status" | sed -n '/"ipv4-address"/,/]/ s/.*"address":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+fi
 if [ -z "$ip_address" ]; then
 	lan_status="$(ubus call network.interface.lan status 2>/dev/null || true)"
 	ip_address="$(printf '%s\n' "$lan_status" | sed -n '/"ipv4-address"/,/]/ s/.*"address":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"

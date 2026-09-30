@@ -28,21 +28,33 @@ stop_ap() {
 		iw dev "$AUDIOWRT_SETUP_IF" del 2>/dev/null || true
 	fi
 	rm -rf "$AUDIOWRT_SETUP_DIR"
-	[ -z "$old_radio" ] || wifi up "$old_radio"
+	# Do not use `wifi up`: OpenWrt implements it with a global network reload.
+	# Restore only the PHY owned by the temporary setup AP.
+	[ -z "$old_radio" ] || ubus call network.wireless up "{\"device\":\"$old_radio\"}" >/dev/null 2>&1 || true
 	/usr/sbin/audiowrt-wifi-client mdns-sync
 }
 
 start_ap() {
 	local radio="${1:-}" ssid="${2:-$AUDIOWRT_SETUP_SSID}"
-	local phy path candidate band country pool_start pool_end
+	local phy path candidate band country pool_start pool_end hw_mode channel
 
 	[ "$(uci -q get wireless."$radio" 2>/dev/null)" = wifi-device ] || return 2
 
 	band=$(uci -q get wireless."$radio".band 2>/dev/null || echo 2g)
-	[ "$band" = 2g ] || {
-		echo "Setup AP requires the 2.4 GHz radio; got '$band' on $radio." >&2
-		return 5
-	}
+	case "$band" in
+		2g)
+			hw_mode=g
+			channel=1
+			;;
+		5g)
+			hw_mode=a
+			channel=36
+			;;
+		*)
+			echo "Setup AP does not support band '$band' on $radio." >&2
+			return 5
+			;;
+	esac
 
 	stop_ap
 	umask 077
@@ -65,7 +77,7 @@ start_ap() {
 		return 3
 	}
 
-	# Release this PHY from netifd for the lifetime of the setup AP.
+	# Release only the profile-selected provisioning PHY from netifd.
 	# The radio's stored disabled flag is never changed.
 	wifi down "$radio" || return 4
 	printf '%s\n' "$radio" > "$AUDIOWRT_SETUP_DIR/radio"
@@ -78,7 +90,7 @@ start_ap() {
 	{
 		printf 'interface=%s\ndriver=nl80211\n' "$AUDIOWRT_SETUP_IF"
 		printf 'ssid2=%s\n' "$(printf '%s' "$ssid" | hexdump -v -e '1/1 "%02x"')"
-		printf 'hw_mode=g\nchannel=1\nap_isolate=1\nauth_algs=1\nwpa=0\n'
+		printf 'hw_mode=%s\nchannel=%s\nap_isolate=1\nauth_algs=1\nwpa=0\n' "$hw_mode" "$channel"
 		[ -z "$country" ] || printf 'country_code=%s\nieee80211d=1\n' "$country"
 	} > "$AUDIOWRT_SETUP_DIR/hostapd.conf"
 
@@ -100,6 +112,7 @@ start_ap() {
 	pool_start=$(audiowrt_setup_dhcp_pool)
 	pool_end=${pool_start#* }
 	pool_start=${pool_start%% *}
+	: > "$AUDIOWRT_SETUP_DIR/leases"
 	cat > "$AUDIOWRT_SETUP_DIR/udhcpd.conf" <<-EOF
 	start $pool_start
 	end $pool_end

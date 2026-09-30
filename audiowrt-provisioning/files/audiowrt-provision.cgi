@@ -20,7 +20,7 @@ case "$length" in ''|*[!0-9]*) reply '400 Bad Request' 'Invalid request length.'
 [ "$length" -le 8192 ] || reply '413 Payload Too Large' 'Request is too large.'
 body="$(dd bs=1 count="$length" 2>/dev/null)"
 
-action=connect; hostname_value=''; radio=''; ssid=''; bssid=''; encryption='sae-mixed'; wifi_key=''; admin_password=''; admin_confirm=''
+action=''; hostname_value=''; radio=''; ssid=''; bssid=''; encryption='sae-mixed'; wifi_key=''; admin_password=''; admin_confirm=''
 old_ifs="$IFS"; IFS='&'
 for pair in $body; do
 	field="${pair%%=*}"
@@ -44,30 +44,52 @@ mkdir -p /tmp/audiowrt
 mkdir /tmp/audiowrt/provision.lock 2>/dev/null || reply '409 Conflict' 'A provisioning action is already running.'
 trap 'rmdir /tmp/audiowrt/provision.lock 2>/dev/null || true' EXIT
 request_dir=/tmp/audiowrt/provision-request
-if [ "$action" = save ]; then
-	[ -f /tmp/audiowrt/wifi.verified ] && [ -d "$request_dir" ] || reply '409 Conflict' 'Test Wi-Fi successfully before saving.'
-	/usr/sbin/audiowrt-wifi-client commit-client || reply '500 Internal Server Error' 'Could not save Wi-Fi.'
-	hostname_value=$(cat "$request_dir/hostname")
-	if ! (
-		. /usr/libexec/audiowrt/config-save
-		save_begin system || exit 1
-		save_uci set "system.@system[0].hostname=$hostname_value" || exit 1
-		save_finish
-	); then reply '500 Internal Server Error' 'Could not save the device name.'; fi
-	admin_password=$(cat "$request_dir/admin_password")
+
+if [ "$action" = device ]; then
+	[ -n "$hostname_value" ] || reply '400 Bad Request' 'Device name is required.'
+	printf '%s\n' "$hostname_value" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$' || reply '400 Bad Request' 'Device name may contain letters, numbers and hyphens only.'
+	[ "${#admin_password}" -ge 8 ] || reply '400 Bad Request' 'Administrator password must contain at least 8 characters.'
+	[ "$(printf '%s' "$admin_password" | tr -d '\r\n')" = "$admin_password" ] || reply '400 Bad Request' 'Administrator password must not contain line breaks.'
+	[ "$admin_password" = "$admin_confirm" ] || reply '400 Bad Request' 'Administrator passwords do not match.'
+
+	current_hostname="$(uci -q get system.@system[0].hostname || echo AudioWRT)"
+	if [ "$hostname_value" != "$current_hostname" ]; then
+		if ! (
+			. /usr/libexec/audiowrt/config-save
+			save_begin system || exit 1
+			save_uci set "system.@system[0].hostname=$hostname_value" || exit 1
+			save_finish
+		); then
+			reply '500 Internal Server Error' 'Could not save the device name.'
+		fi
+		hostname "$hostname_value" 2>/dev/null || true
+	fi
+
 	if ! { printf '%s\n' "$admin_password"; printf '%s\n' "$admin_password"; } | /bin/busybox passwd root >/dev/null 2>&1; then
 		reply '500 Internal Server Error' 'Could not set the administrator password.'
 	fi
-	hostname "$hostname_value" 2>/dev/null || true
+	reply '200 OK' 'Device settings saved.'
+fi
+
+if [ "$action" = save ]; then
+	[ -f /tmp/audiowrt/wifi.verified ] && [ -d "$request_dir" ] && [ -d /tmp/audiowrt/client ] || reply '409 Conflict' 'Test Wi-Fi successfully before saving.'
+	candidate_radio="$(cat /tmp/audiowrt/client/0 2>/dev/null || true)"
+	[ -n "$radio" ] || radio="$candidate_radio"
+	[ -n "$radio" ] && [ "$(uci -q get wireless."$radio" 2>/dev/null)" = wifi-device ] || reply '409 Conflict' 'The tested Wi-Fi radio is missing. Connect again before saving.'
+	[ -z "$candidate_radio" ] || [ "$candidate_radio" = "$radio" ] || reply '409 Conflict' 'The selected radio changed. Connect again before saving.'
+	# Keep the tested radio alongside the candidate so commit-client can validate it.
+	printf '%s' "$radio" > /tmp/audiowrt/client/0
+	/usr/sbin/audiowrt-wifi-client commit-client || reply '500 Internal Server Error' 'Could not save Wi-Fi.'
 	: > /tmp/audiowrt/provisioning.saved
 	rm -rf "$request_dir"
-	reply '200 OK' 'Configuration saved. AudioWRT is joining your network.'
+	reply '200 OK' 'Wi-Fi saved. AudioWRT is joining your network.'
 fi
-[ "$action" = connect ] || reply '400 Bad Request' 'Unknown action.'
 
-[ -n "$hostname_value" ] || reply '400 Bad Request' 'Device name is required.'
-printf '%s\n' "$hostname_value" | grep -Eq '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$' || reply '400 Bad Request' 'Device name may contain letters, numbers and hyphens only.'
-[ -n "$radio" ] && uci -q get wireless."$radio" >/dev/null 2>&1 || reply '400 Bad Request' 'A valid Wi-Fi radio is required.'
+[ "$action" = connect ] || reply '400 Bad Request' 'Unknown action.'
+[ -n "$radio" ] && [ "$(uci -q get wireless."$radio" 2>/dev/null)" = wifi-device ] || reply '400 Bad Request' 'A valid Wi-Fi radio is required.'
+setup_radio="$(cat "$AUDIOWRT_SETUP_DIR/radio" 2>/dev/null || true)"
+[ -n "$setup_radio" ] || reply '409 Conflict' 'The setup radio is not active.'
+[ "$radio" != "$setup_radio" ] || reply '409 Conflict' 'Select a network available on a radio not used by the setup access point.'
 [ -n "$ssid" ] || reply '400 Bad Request' 'SSID is required.'
 [ "${#ssid}" -le 32 ] || reply '400 Bad Request' 'SSID must not exceed 32 characters.'
 [ "$(printf '%s' "$ssid" | tr -d '\r\n')" = "$ssid" ] || reply '400 Bad Request' 'SSID must not contain line breaks.'
@@ -79,15 +101,10 @@ if [ "$encryption" != 'none' ]; then
 	[ "${#wifi_key}" -ge 8 ] && [ "${#wifi_key}" -le 63 ] || reply '400 Bad Request' 'Wi-Fi password must contain between 8 and 63 characters.'
 	[ "$(printf '%s' "$wifi_key" | tr -d '\r\n')" = "$wifi_key" ] || reply '400 Bad Request' 'Wi-Fi password must not contain line breaks.'
 fi
-[ "${#admin_password}" -ge 8 ] || reply '400 Bad Request' 'Admin password must contain at least 8 characters.'
-[ "$(printf '%s' "$admin_password" | tr -d '\r\n')" = "$admin_password" ] || reply '400 Bad Request' 'Admin password must not contain line breaks.'
-[ "$admin_password" = "$admin_confirm" ] || reply '400 Bad Request' 'Admin passwords do not match.'
 
 umask 077
 rm -rf "$request_dir"
 mkdir -p "$request_dir" || reply '500 Internal Server Error' 'Could not stage provisioning data.'
-printf '%s' "$hostname_value" > "$request_dir/hostname"
-printf '%s' "$admin_password" > "$request_dir/admin_password"
 rm -f /tmp/audiowrt/provisioning.error /tmp/audiowrt/wifi.verified
 printf '%s' "$radio" > "$request_dir/radio"
 printf '%s' "$ssid" > "$request_dir/ssid"
