@@ -4,8 +4,7 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-# Run the actual init functions against a fake sysfs and volatile directory.
-. "$repo_root/audiowrt-identity/files/audiowrt-identity.init"
+. "$repo_root/audiowrt/audiowrt-core/files/audiowrt-identity.init"
 IDENTITY_NET_DIR="$tmp/net"
 IDENTITY_PHY_DIR="$tmp/phy"
 IDENTITY_DIR="$tmp/runtime"
@@ -20,7 +19,6 @@ expected=a0d10a57-0000-8000-8000-001122334455
 inode="$(stat -c %i "$IDENTITY_DIR/uuid")"
 start
 [[ "$(stat -c %i "$IDENTITY_DIR/uuid")" == "$inode" ]]
-# Reconstruct after reboot-like removal: same identity, no persistent input.
 rm "$IDENTITY_DIR/uuid"
 start
 [[ "$(cat "$IDENTITY_DIR/uuid")" == "$expected" ]]
@@ -28,7 +26,6 @@ printf '00:11:22:33:44:66\n' > "$IDENTITY_NET_DIR/eth0/address"
 start
 [[ "$(cat "$IDENTITY_DIR/uuid")" != "$expected" ]]
 
-# Reject virtual/random addresses and USB dongles; allow onboard PHY fallback.
 printf '1\n' > "$IDENTITY_NET_DIR/eth0/addr_assign_type"
 mkdir -p "$tmp/devices/usb1/port/net/dongle"
 printf '00:11:22:33:44:77\n' > "$tmp/devices/usb1/port/net/dongle/address"
