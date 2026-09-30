@@ -1,52 +1,71 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-player-mpd
-PKG_VERSION:=1.1.0
+PKG_VERSION:=1.2.0
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
-PKGARCH:=all
+PKG_MAINTAINER:=AudioWRT
 
 include $(INCLUDE_DIR)/package.mk
 
 define Package/audiowrt-player-mpd
   SECTION:=sound
   CATEGORY:=Sound
-  TITLE:=AudioWRT MPD player integration
-  DEPENDS:=+mpd
+  TITLE:=AudioWRT MPD player adapter
+  DEPENDS:=+mpd +libmpdclient +libuci +libaudiowrt-player
 endef
 
 define Package/audiowrt-player-mpd/description
- Configures whichever package provides the OpenWrt mpd capability for use as an
- AudioWRT playback backend. The package does not build or replace MPD: mpd-mini
- and mpd-full remain independently installable OpenWrt packages and both can
- satisfy the mpd dependency.
+ Integrates the existing OpenWrt MPD instance into the AudioWRT playback
+ registry without replacing MPD configuration or changing its ALSA output.
+ A localhost listener is added to /etc/mpd.conf only when no existing local
+ listener can be used.
 endef
 
 define Build/Prepare
+	mkdir -p $(PKG_BUILD_DIR)
+	$(CP) ./src/* $(PKG_BUILD_DIR)/
 endef
 
 define Build/Configure
 endef
 
 define Build/Compile
+	$(TARGET_CC) $(TARGET_CFLAGS) $(TARGET_CPPFLAGS) \
+		-o $(PKG_BUILD_DIR)/audiowrt-player-mpd \
+		$(PKG_BUILD_DIR)/audiowrt-player-mpd.c \
+		$(TARGET_LDFLAGS) -lmpdclient -luci
 endef
 
 define Package/audiowrt-player-mpd/install
-	$(INSTALL_DIR) $(1)/etc/init.d $(1)/etc/rc.d
-	$(INSTALL_BIN) ./files/mpd-runtime.init $(1)/etc/init.d/audiowrt-mpd-runtime
-	ln -s ../init.d/audiowrt-mpd-runtime $(1)/etc/rc.d/S92audiowrt-mpd-runtime
+	$(INSTALL_DIR) $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/audiowrt-player-mpd $(1)/usr/bin/
 
 	$(INSTALL_DIR) $(1)/usr/libexec/audiowrt
-	$(INSTALL_BIN) ./files/mpd $(1)/usr/libexec/audiowrt/mpd
+	$(INSTALL_BIN) ./files/mpd-configure $(1)/usr/libexec/audiowrt/mpd-configure
 
-	$(INSTALL_DIR) $(1)/usr/share/audiowrt
-	$(INSTALL_DATA) ./files/mpd.conf $(1)/usr/share/audiowrt/mpd.conf
+	$(INSTALL_DIR) $(1)/usr/share/audiowrt/players
+	$(INSTALL_DATA) ./files/mpd.manifest $(1)/usr/share/audiowrt/players/mpd.manifest
+
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./files/audiowrt_mpd.config $(1)/etc/config/audiowrt_mpd
+endef
+
+define Package/audiowrt-player-mpd/conffiles
+/etc/config/audiowrt_mpd
 endef
 
 define Package/audiowrt-player-mpd/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/usr/libexec/audiowrt/mpd configure
+/usr/libexec/audiowrt/mpd-configure
+/usr/libexec/audiowrt-playback-registry rebuild
+endef
+
+define Package/audiowrt-player-mpd/prerm
+#!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
+/usr/libexec/audiowrt-playback-registry exclude mpd
 endef
 
 $(eval $(call BuildPackage,audiowrt-player-mpd))
