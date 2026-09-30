@@ -30,11 +30,29 @@ if [ "$server_count" -eq 0 ]; then
 	exit 0
 fi
 
-if timeout "$TIMEOUT_SECONDS" /usr/sbin/ntpd "$@" >"$LOG_FILE" 2>&1; then
-	logger -t audiowrt "System time synchronized."
+/usr/sbin/ntpd "$@" >"$LOG_FILE" 2>&1 &
+ntpd_pid=$!
+
+elapsed=0
+while kill -0 "$ntpd_pid" 2>/dev/null && [ "$elapsed" -lt "$TIMEOUT_SECONDS" ]; do
+	sleep 1
+	elapsed=$((elapsed + 1))
+done
+
+if kill -0 "$ntpd_pid" 2>/dev/null; then
+	kill "$ntpd_pid" 2>/dev/null || true
+	sleep 1
+	kill -9 "$ntpd_pid" 2>/dev/null || true
+	wait "$ntpd_pid" 2>/dev/null || true
+	logger -t audiowrt "Time synchronization timed out after ${TIMEOUT_SECONDS}s; continuing without Internet time."
 else
+	wait "$ntpd_pid"
 	rc=$?
-	logger -t audiowrt "Time synchronization failed (rc=$rc); continuing without Internet time."
+	if [ "$rc" -eq 0 ]; then
+		logger -t audiowrt "System time synchronized."
+	else
+		logger -t audiowrt "Time synchronization failed (rc=$rc); continuing without Internet time."
+	fi
 fi
 
 # Keep the normal OpenWrt NTP service running after the one-shot attempt.
