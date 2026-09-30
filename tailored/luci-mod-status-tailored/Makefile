@@ -1,6 +1,6 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=luci-mod-status-audiowrt
+PKG_NAME:=luci-mod-status-tailored
 PKG_VERSION:=1.0.0
 PKG_RELEASE:=1
 PKG_LICENSE:=Apache-2.0
@@ -10,21 +10,21 @@ LUCI_STATUS_DIR:=$(TOPDIR)/feeds/luci/modules/luci-mod-status
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-luci-minify.mk
 
-define Package/luci-mod-status-audiowrt
+define Package/luci-mod-status-tailored
   SECTION:=luci
   CATEGORY:=LuCI
   SUBMENU:=2. Modules
-  TITLE:=Lightweight LuCI status pages for AudioWRT
+  TITLE:=Tailored lightweight LuCI status pages
   DEPENDS:=+luci-base +libiwinfo +rpcd-mod-iwinfo
   PROVIDES:=luci-mod-status
   CONFLICTS:=luci-mod-status
 endef
 
-define Package/luci-mod-status-audiowrt/description
- Lightweight standalone replacement for luci-mod-status. It keeps the status
- pages useful on constrained OpenWrt devices, removes firewall/conntrack-only
- views, avoids the luci-mod-network dependency in Routing, and implements the
- Processes page without the BusyBox top applet. It is theme-independent.
+define Package/luci-mod-status-tailored/description
+ Tailored replacement for luci-mod-status on constrained OpenWrt devices. It
+ keeps the useful status pages, removes firewall/conntrack-only views, avoids
+ the luci-mod-network dependency in Routing, and implements Processes without
+ requiring the BusyBox top applet. It is theme-independent.
 endef
 
 define Build/Prepare
@@ -46,7 +46,7 @@ define Build/Compile
 		FPIC="$(FPIC)"
 endef
 
-define Package/luci-mod-status-audiowrt/install
+define Package/luci-mod-status-tailored/install
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/status/include
 	$(INSTALL_DATA) $(LUCI_STATUS_DIR)/htdocs/luci-static/resources/view/status/index.js $(1)/www/luci-static/resources/view/status/index.js
 	$(INSTALL_DATA) $(LUCI_STATUS_DIR)/htdocs/luci-static/resources/view/status/routes.js $(1)/www/luci-static/resources/view/status/routes.js
@@ -75,11 +75,11 @@ define Package/luci-mod-status-audiowrt/install
 	$(INSTALL_DATA) $(LUCI_STATUS_DIR)/ucode/template/admin_status/index.ut $(1)/usr/share/ucode/luci/template/admin_status/index.ut
 
 	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
-	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-mod-status-audiowrt.json $(1)/usr/share/luci/menu.d/luci-mod-status-audiowrt.json
+	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-mod-status-audiowrt.json $(1)/usr/share/luci/menu.d/luci-mod-status-tailored.json
 
 	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
 	$(INSTALL_DATA) $(LUCI_STATUS_DIR)/root/usr/share/rpcd/acl.d/luci-mod-status-index.json $(1)/usr/share/rpcd/acl.d/luci-mod-status-index.json
-	$(INSTALL_DATA) ./root/usr/share/rpcd/acl.d/luci-mod-status-audiowrt.json $(1)/usr/share/rpcd/acl.d/luci-mod-status-audiowrt.json
+	$(INSTALL_DATA) ./root/usr/share/rpcd/acl.d/luci-mod-status-audiowrt.json $(1)/usr/share/rpcd/acl.d/luci-mod-status-tailored.json
 
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/src/luci-bwc $(1)/usr/bin/luci-bwc
@@ -88,4 +88,4 @@ define Package/luci-mod-status-audiowrt/install
 	$(INSTALL_BIN) ./root/usr/libexec/audiowrt-process-list $(1)/usr/libexec/audiowrt-process-list
 endef
 
-$(eval $(call BuildPackage,luci-mod-status-audiowrt))
+$(eval $(call BuildPackage,luci-mod-status-tailored))
