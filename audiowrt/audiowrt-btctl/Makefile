@@ -5,6 +5,7 @@ PKG_VERSION:=1.0.2
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
+PKG_BUILD_DEPENDS:=glib2
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -12,7 +13,7 @@ define Package/audiowrt-btctl
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=AudioWRT compact BlueZ D-Bus controller
-  DEPENDS:=+glib2
+  DEPENDS:=+glib2-trimmed
 endef
 
 define Package/audiowrt-btctl/description

@@ -6,6 +6,7 @@ include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
 PKG_RELEASE:=1
+PKG_BUILD_DEPENDS:=glib2
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -13,7 +14,7 @@ define Package/bluez-trimmed
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=Trimmed BlueZ audio daemon
-  DEPENDS:=+bluez-libs +glib2 +dbus
+  DEPENDS:=+bluez-libs +glib2-trimmed +dbus
   URL:=https://www.bluez.org/
 endef
 

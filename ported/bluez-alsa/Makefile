@@ -13,6 +13,7 @@ PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=AudioWRT
 PKG_FIXUP:=autoreconf
 PKG_BUILD_PARALLEL:=1
+PKG_BUILD_DEPENDS:=glib2
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -36,7 +37,7 @@ define Package/bluez-alsa
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=BlueALSA Bluetooth audio backend
-  DEPENDS:=+alsa-lib +bluez-trimmed +bluez-libs +glib2 +sbc-trimmed +dbus
+  DEPENDS:=+alsa-lib +bluez-trimmed +bluez-libs +glib2-trimmed +sbc-trimmed +dbus
   URL:=https://github.com/arkq/bluez-alsa
 endef
 
