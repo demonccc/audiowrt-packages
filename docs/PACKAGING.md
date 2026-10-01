@@ -101,12 +101,13 @@ alsa-lib-trimmed
 bluez-trimmed
 dbus-trimmed
 dropbear-trimmed
+glib2-trimmed
 kmod-bluetooth-trimmed
 sbc-trimmed
 umdns-trimmed
 ```
 
-A future package belongs here only when its delta is removal-only. `glib2-trimmed` is intentionally not created until its exact retained runtime surface has been validated.
+`glib2-trimmed` binary-repackages the official selected-release `glib2` APK. It retains the GLib, GObject, GModule and GIO shared libraries used by AudioWRT and omits the unused GIRepository and legacy GThread shared libraries. The staging script fails if a future official package introduces an unclassified GLib runtime library, so release upgrades require an explicit review rather than silently dropping new payload.
 
 Source-derived trimmed packages inherit:
 
@@ -115,7 +116,7 @@ Source-derived trimmed packages inherit:
 - OpenWrt build flags, hardening and integration files;
 - the selected OpenWrt SDK target/subtarget/toolchain.
 
-Binary repackages such as `dbus-trimmed` retain the exact selected-release OpenWrt binary payload and remove only explicitly documented files.
+Binary repackages such as `dbus-trimmed` and `glib2-trimmed` retain the exact selected-release OpenWrt binary payload and remove only explicitly documented files.
 
 ## 4. Tailored
 
@@ -184,6 +185,7 @@ librespot                        # ported
 bluez-trimmed                    # trimmed
 alsa-lib-trimmed                 # trimmed
 dbus-trimmed                     # trimmed
+glib2-trimmed                    # trimmed
 
 busybox-udhcpd-tailored          # tailored
 hostapd-wpa-supplicant-tailored  # tailored
