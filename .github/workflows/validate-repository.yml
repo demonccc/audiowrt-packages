@@ -1,0 +1,38 @@
+name: Validate package repository tooling
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - testing
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compile Python tooling
+        run: python3 -m py_compile scripts/*.py
+      - name: Validate rebuild rules
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('repository/rebuild-dependents.json').read_text())
+          assert data['schema'] == 1
+          assert isinstance(data['rebuild_dependents'], dict)
+          for package, dependents in data['rebuild_dependents'].items():
+              assert package
+              assert isinstance(dependents, list)
+              assert len(dependents) == len(set(dependents))
+          PY
+      - name: Smoke-test no-op diff detection
+        run: |
+          result="$(python3 scripts/detect-changed-packages.py HEAD HEAD)"
+          test -z "$result"
