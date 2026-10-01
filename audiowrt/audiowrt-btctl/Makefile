@@ -12,7 +12,7 @@ define Package/audiowrt-btctl
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=AudioWRT compact BlueZ D-Bus controller
-  DEPENDS:=+glib2
+  DEPENDS:=+glib2-trimmed
 endef
 
 define Package/audiowrt-btctl/description
