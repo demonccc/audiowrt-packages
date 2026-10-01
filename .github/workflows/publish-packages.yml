@@ -170,6 +170,7 @@ jobs:
           tag='${{ steps.metadata.outputs.tag }}'
           args=(release create "$tag" "$output"/packages/*.apk "$output/repository-update.json" \
             --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
             --title "$tag" \
             --notes "Incremental AudioWRT package build for ${{ matrix.profile }} from $GITHUB_SHA")
           if [[ "$CHANNEL" == testing ]]; then
