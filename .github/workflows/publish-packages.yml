@@ -48,6 +48,7 @@ jobs:
           REQUESTED: ${{ inputs.package || '' }}
           BASE_SHA: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF_NAME" == main ]]; then
@@ -60,7 +61,17 @@ jobs:
 
           packages="$REQUESTED"
           if [[ -z "$packages" ]]; then
-            if [[ "${{ github.event_name }}" == push && "$BASE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+            bootstrap_output="$(python3 scripts/package-channel-bootstrap.py \
+              --repository "$GITHUB_REPOSITORY" \
+              --channel "$channel" \
+              --token "$GITHUB_TOKEN")"
+            bootstrap_required="$(printf '%s\n' "$bootstrap_output" | sed -n 's/^bootstrap_required=//p')"
+            missing_profiles="$(printf '%s\n' "$bootstrap_output" | sed -n 's/^missing_profiles=//p')"
+
+            if [[ "$bootstrap_required" == true ]]; then
+              packages=all
+              printf 'Bootstrap required for %s; missing contexts: %s\n' "$channel" "$missing_profiles"
+            elif [[ "${{ github.event_name }}" == push && "$BASE_SHA" != "0000000000000000000000000000000000000000" ]]; then
               packages="$(python3 scripts/detect-changed-packages.py "$BASE_SHA" "$HEAD_SHA")"
             else
               packages=all
