@@ -129,12 +129,9 @@ jobs:
         run: |
           set -euo pipefail
           packages="$REQUESTED"
-          if [[ "$packages" == all ]]; then
-            packages="$(awk -F'|' '$0 !~ /^[[:space:]]*(#|$)/ {print $1}' builder/config/build/package-build-targets | sort -u | xargs)"
-          fi
           [[ -n "$packages" ]] || { echo 'ERROR: empty package build request' >&2; exit 2; }
           echo "packages=$packages" >> "$GITHUB_OUTPUT"
-          echo "Building: $packages"
+          echo "Building request: $packages"
 
       - name: Build package APKs
         shell: bash
