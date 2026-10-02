@@ -1,5 +1,5 @@
 name: Publish AudioWRT Package Repository
-run-name: Publish packages / ${{ github.ref_name }} / ${{ inputs.package || 'changed' }}
+run-name: Publish packages / ${{ github.ref_name }} / ${{ inputs.package || 'pending' }}
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: "Package source directory name, 'all', or empty for changed packages"
+        description: "Package source directory name, 'all', or empty for pending packages"
         required: false
         default: ''
         type: string
@@ -45,8 +45,7 @@ jobs:
         shell: bash
         env:
           REQUESTED: ${{ inputs.package || '' }}
-          BASE_SHA: ${{ github.event.before }}
-          HEAD_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF_NAME" == main ]]; then
@@ -56,14 +55,16 @@ jobs:
           fi
 
           if [[ -n "$REQUESTED" ]]; then
-            matrix="$(python3 scripts/plan-package-builds.py --package "$REQUESTED")"
-          elif [[ "${{ github.event_name }}" == push && "$BASE_SHA" != "0000000000000000000000000000000000000000" ]]; then
-            matrix="$(python3 scripts/plan-package-builds.py --base "$BASE_SHA" --head "$HEAD_SHA")"
+            matrix="$(python3 scripts/plan-package-builds.py --package "$REQUESTED" --head "$GITHUB_SHA")"
           else
-            matrix='{"include":[]}'
+            matrix="$(python3 scripts/plan-package-builds.py \
+              --repository "$GITHUB_REPOSITORY" \
+              --channel "$channel" \
+              --head "$GITHUB_SHA")"
           fi
 
           count="$(python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))' <<<"$matrix")"
+          tasks="$(python3 -c 'import json,sys; print(sum(x["task_count"] for x in json.load(sys.stdin)["include"]))' <<<"$matrix")"
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
           if (( count > 0 )); then
@@ -71,13 +72,13 @@ jobs:
           else
             echo "should_build=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "Planned $count architecture build job(s) for $channel"
+          echo "Planned $tasks pending package task(s) in $count architecture job(s) for $channel"
           python3 -m json.tool <<<"$matrix"
 
   build-publish:
     needs: plan
     if: needs.plan.outputs.should_build == 'true'
-    name: ${{ matrix.release }} / ${{ matrix.arch }} / ${{ matrix.task_count }} changed task(s)
+    name: ${{ matrix.release }} / ${{ matrix.arch }} / ${{ matrix.task_count }} pending task(s)
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     strategy:
@@ -95,7 +96,7 @@ jobs:
           restore-keys: |
             audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-
 
-      - name: Build and publish changed packages for architecture
+      - name: Build and publish pending packages for architecture
         shell: bash
         env:
           TASKS_JSON: ${{ matrix.tasks_json }}
@@ -105,11 +106,9 @@ jobs:
         run: |
           set -uo pipefail
           failures=0
-          task_index=0
 
           while IFS=$'\t' read -r package scope target subtarget; do
             [[ -n "$package" ]] || continue
-            task_index=$((task_index + 1))
             echo "::group::${package} / ${{ matrix.release }} / ${{ matrix.arch }} / ${target}/${subtarget}"
 
             output="output/${package}/${{ matrix.release }}/${{ matrix.arch }}/${target}/${subtarget}"
