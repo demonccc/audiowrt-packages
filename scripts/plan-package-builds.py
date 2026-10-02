@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Create the minimal dynamic build matrix for changed AudioWRT packages."""
+"""Plan incremental AudioWRT builds grouped by architecture.
+
+Automatic builds are driven only by changes inside package source directories.
+Each matrix entry represents one OpenWrt release + package architecture and
+contains only the package build tasks affected by the git delta. Architecture-
+specific and target-specific patches narrow the affected contexts further.
+"""
 from __future__ import annotations
 
 import argparse
@@ -10,11 +16,9 @@ import tomllib
 from collections import deque
 from pathlib import Path
 
-PACKAGE_RE = re.compile(r"^define Package/([^\s]+)", re.MULTILINE)
 KERNEL_RE = re.compile(r"^define KernelPackage/([^\s]+)", re.MULTILINE)
 ALL_RE = re.compile(r"^\s*PKGARCH\s*:?=\s*all\s*$", re.MULTILINE)
 PACKAGE_ROOTS = ("audiowrt", "ported", "trimmed", "tailored")
-IGNORED_PREFIXES = ("docs/", ".github/")
 
 
 def git_changed_files(base: str, head: str) -> list[str]:
@@ -80,9 +84,8 @@ def release_family(version: str) -> str:
     return match.group(1) if match else version
 
 
-def load_contexts(path: Path) -> tuple[list[dict], list[dict], list[dict]]:
+def load_contexts(path: Path) -> tuple[list[dict], list[dict]]:
     data = tomllib.loads(path.read_text(encoding="utf-8"))
-    all_contexts: dict[str, dict] = {}
     arch_contexts: list[dict] = []
     kernel_contexts: list[dict] = []
     for arch, arch_data in data["architectures"].items():
@@ -93,14 +96,6 @@ def load_contexts(path: Path) -> tuple[list[dict], list[dict], list[dict]]:
                 "arch": arch,
                 "target": target,
                 "subtarget": subtarget,
-                "scope": "arch",
-            })
-            all_contexts.setdefault(version, {
-                "release": version,
-                "arch": "all",
-                "target": target,
-                "subtarget": subtarget,
-                "scope": "all",
             })
             for target_spec in cfg.get("kernel_targets", []):
                 kt, ks = target_spec.split("/", 1)
@@ -109,9 +104,8 @@ def load_contexts(path: Path) -> tuple[list[dict], list[dict], list[dict]]:
                     "arch": arch,
                     "target": kt,
                     "subtarget": ks,
-                    "scope": "kernel",
                 })
-    return list(all_contexts.values()), arch_contexts, kernel_contexts
+    return arch_contexts, kernel_contexts
 
 
 def context_matches(context: dict, restriction: dict[str, str]) -> bool:
@@ -138,7 +132,7 @@ def main() -> int:
 
     repo = Path.cwd().resolve()
     sources = source_dirs(repo)
-    all_ctx, arch_ctx, kernel_ctx = load_contexts(repo / args.matrix)
+    arch_ctx, kernel_ctx = load_contexts(repo / args.matrix)
 
     requested = args.package.strip()
     restrictions: dict[str, list[dict[str, str]]] = {}
@@ -147,6 +141,7 @@ def main() -> int:
     if requested:
         if requested == "all":
             changed_sources = set(sources)
+            restrictions = {source: [{}] for source in sources}
         else:
             for item in requested.split():
                 if item not in sources:
@@ -156,19 +151,15 @@ def main() -> int:
     else:
         if not args.base or not args.head:
             raise SystemExit("ERROR: --base and --head are required when --package is empty")
-        changed = git_changed_files(args.base, args.head)
-        # Build-matrix or shared helper changes can affect every package/context.
-        if any(p == args.matrix or p.startswith(("include/", "scripts/prepare-openwrt-derived.py")) for p in changed):
-            changed_sources = set(sources)
-        else:
-            for relative in changed:
-                if relative.startswith(IGNORED_PREFIXES) or relative.startswith("repository/"):
-                    continue
-                source = source_for_path(repo, relative)
-                if not source:
-                    continue
-                changed_sources.add(source)
-                restrictions.setdefault(source, []).append(restriction_for_path(source, relative))
+        for relative in git_changed_files(args.base, args.head):
+            source = source_for_path(repo, relative)
+            if not source:
+                # CI/tooling/repository metadata changes never bootstrap every
+                # package automatically. A full rebuild remains available via
+                # workflow_dispatch package=all.
+                continue
+            changed_sources.add(source)
+            restrictions.setdefault(source, []).append(restriction_for_path(source, relative))
 
     if not changed_sources:
         print(json.dumps({"include": []}, separators=(",", ":")))
@@ -191,21 +182,62 @@ def main() -> int:
             else:
                 restrictions.setdefault(dependent, []).extend(inherited)
 
-    matrix: list[dict] = []
-    seen: set[tuple] = set()
+    # Group tasks by release + architecture. This is the important boundary:
+    # GitHub Actions creates at most one job for an affected architecture,
+    # never one job per package.
+    grouped: dict[tuple[str, str], dict] = {}
+
+    def add_task(context: dict, source: str, scope: str) -> None:
+        key = (context["release"], context["arch"])
+        entry = grouped.setdefault(key, {
+            "release": context["release"],
+            "arch": context["arch"],
+            "tasks": [],
+        })
+        task = {
+            "package": source,
+            "scope": scope,
+            "target": context["target"],
+            "subtarget": context["subtarget"],
+        }
+        if task not in entry["tasks"]:
+            entry["tasks"].append(task)
+
     for source in sorted(changed_sources):
         scope = package_scope(sources[source])
-        contexts = all_ctx if scope == "all" else arch_ctx if scope == "arch" else kernel_ctx
         source_restrictions = restrictions.get(source, [{}]) or [{}]
         unrestricted = any(not item for item in source_restrictions)
-        for context in contexts:
-            if not unrestricted and not any(context_matches(context, item) for item in source_restrictions):
-                continue
-            key = (source, context["release"], context["arch"], context["target"], context["subtarget"], scope)
-            if key in seen:
-                continue
-            seen.add(key)
-            matrix.append({"package": source, **context})
+
+        if scope == "kernel":
+            contexts = kernel_ctx
+        else:
+            contexts = arch_ctx
+
+        matching = [
+            context for context in contexts
+            if unrestricted or any(context_matches(context, item) for item in source_restrictions)
+        ]
+
+        if scope == "all":
+            # Architecture-independent packages are built exactly once per
+            # release, using the first matching SDK context for that release.
+            by_release: dict[str, dict] = {}
+            for context in matching:
+                by_release.setdefault(context["release"], context)
+            matching = list(by_release.values())
+
+        for context in matching:
+            add_task(context, source, scope)
+
+    matrix = []
+    for _, entry in sorted(grouped.items()):
+        entry["tasks"].sort(key=lambda x: (x["target"], x["subtarget"], x["scope"], x["package"]))
+        matrix.append({
+            "release": entry["release"],
+            "arch": entry["arch"],
+            "tasks_json": json.dumps(entry["tasks"], separators=(",", ":")),
+            "task_count": len(entry["tasks"]),
+        })
 
     print(json.dumps({"include": matrix}, separators=(",", ":")))
     return 0

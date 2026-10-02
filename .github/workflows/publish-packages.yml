@@ -60,7 +60,7 @@ jobs:
           elif [[ "${{ github.event_name }}" == push && "$BASE_SHA" != "0000000000000000000000000000000000000000" ]]; then
             matrix="$(python3 scripts/plan-package-builds.py --base "$BASE_SHA" --head "$HEAD_SHA")"
           else
-            matrix="$(python3 scripts/plan-package-builds.py --package all)"
+            matrix='{"include":[]}'
           fi
 
           count="$(python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))' <<<"$matrix")"
@@ -71,13 +71,13 @@ jobs:
           else
             echo "should_build=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "Planned $count package build context(s) for $channel"
+          echo "Planned $count architecture build job(s) for $channel"
           python3 -m json.tool <<<"$matrix"
 
   build-publish:
     needs: plan
     if: needs.plan.outputs.should_build == 'true'
-    name: ${{ matrix.package }} / ${{ matrix.release }} / ${{ matrix.arch }} / ${{ matrix.target }}/${{ matrix.subtarget }}
+    name: ${{ matrix.release }} / ${{ matrix.arch }} / ${{ matrix.task_count }} changed task(s)
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     strategy:
@@ -91,72 +91,90 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/audiowrt-packages
-          key: audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-${{ matrix.target }}-${{ matrix.subtarget }}
+          key: audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}
           restore-keys: |
             audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-
 
-      - name: Build AudioWRT package
-        shell: bash
-        run: |
-          set -euo pipefail
-          output="output/${{ matrix.package }}/${{ matrix.release }}/${{ matrix.arch }}/${{ matrix.target }}/${{ matrix.subtarget }}"
-          bash scripts/build-package-context.sh \
-            --package '${{ matrix.package }}' \
-            --release '${{ matrix.release }}' \
-            --arch '${{ matrix.arch }}' \
-            --target '${{ matrix.target }}' \
-            --subtarget '${{ matrix.subtarget }}' \
-            --output "$output" \
-            --jobs '${{ inputs.jobs || '4' }}'
-
-      - name: Create repository update
-        id: metadata
+      - name: Build and publish changed packages for architecture
         shell: bash
         env:
+          TASKS_JSON: ${{ matrix.tasks_json }}
           CHANNEL: ${{ needs.plan.outputs.channel }}
-        run: |
-          set -euo pipefail
-          short_sha="${GITHUB_SHA:0:12}"
-          safe_target="${{ matrix.target }}-${{ matrix.subtarget }}"
-          tag="packages-${CHANNEL}-${GITHUB_RUN_ID}-${{ matrix.package }}-${{ matrix.release }}-${{ matrix.arch }}-${safe_target}-${short_sha}"
-          output="output/${{ matrix.package }}/${{ matrix.release }}/${{ matrix.arch }}/${{ matrix.target }}/${{ matrix.subtarget }}"
-          python3 scripts/create-repository-update.py \
-            --packages-dir "$output/packages" \
-            --context "$output/context.json" \
-            --scope '${{ matrix.scope }}' \
-            --channel "$CHANNEL" \
-            --release-tag "$tag" \
-            --repository "$GITHUB_REPOSITORY" \
-            --source-commit "$GITHUB_SHA" \
-            --output "$output/repository-update.json"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "output=$output" >> "$GITHUB_OUTPUT"
-
-      - name: Publish successful immutable package assets
-        shell: bash
-        env:
           GH_TOKEN: ${{ github.token }}
-          CHANNEL: ${{ needs.plan.outputs.channel }}
+          MAKE_JOBS: ${{ inputs.jobs || '4' }}
         run: |
-          set -euo pipefail
-          output='${{ steps.metadata.outputs.output }}'
-          tag='${{ steps.metadata.outputs.tag }}'
-          args=(release create "$tag" "$output"/packages/*.apk "$output/repository-update.json" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "$tag" \
-            --notes "AudioWRT ${{ matrix.package }} for OpenWrt ${{ matrix.release }} / ${{ matrix.arch }} / ${{ matrix.target }}/${{ matrix.subtarget }}")
-          if [[ "$CHANNEL" == testing ]]; then
-            args+=(--prerelease)
-          fi
-          gh "${args[@]}"
+          set -uo pipefail
+          failures=0
+          task_index=0
 
-      - name: Upload build diagnostics
+          while IFS=$'\t' read -r package scope target subtarget; do
+            [[ -n "$package" ]] || continue
+            task_index=$((task_index + 1))
+            echo "::group::${package} / ${{ matrix.release }} / ${{ matrix.arch }} / ${target}/${subtarget}"
+
+            output="output/${package}/${{ matrix.release }}/${{ matrix.arch }}/${target}/${subtarget}"
+            if bash scripts/build-package-context.sh \
+              --package "$package" \
+              --release '${{ matrix.release }}' \
+              --arch '${{ matrix.arch }}' \
+              --target "$target" \
+              --subtarget "$subtarget" \
+              --output "$output" \
+              --jobs "$MAKE_JOBS"; then
+
+              short_sha="${GITHUB_SHA:0:12}"
+              safe_target="${target}-${subtarget}"
+              tag="packages-${CHANNEL}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${package}-${{ matrix.release }}-${{ matrix.arch }}-${safe_target}-${short_sha}"
+
+              if python3 scripts/create-repository-update.py \
+                --packages-dir "$output/packages" \
+                --context "$output/context.json" \
+                --scope "$scope" \
+                --channel "$CHANNEL" \
+                --release-tag "$tag" \
+                --repository "$GITHUB_REPOSITORY" \
+                --source-commit "$GITHUB_SHA" \
+                --output "$output/repository-update.json"; then
+
+                args=(release create "$tag" "$output"/packages/*.apk "$output/repository-update.json" \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --target "$GITHUB_SHA" \
+                  --title "$tag" \
+                  --notes "AudioWRT ${package} for OpenWrt ${{ matrix.release }} / ${{ matrix.arch }} / ${target}/${subtarget}")
+                if [[ "$CHANNEL" == testing ]]; then
+                  args+=(--prerelease)
+                fi
+                if ! gh "${args[@]}"; then
+                  echo "ERROR: failed to publish $package for ${{ matrix.arch }}" >&2
+                  failures=$((failures + 1))
+                fi
+              else
+                echo "ERROR: failed to create repository metadata for $package / ${{ matrix.arch }}" >&2
+                failures=$((failures + 1))
+              fi
+            else
+              echo "ERROR: build failed for $package / ${{ matrix.arch }} / ${target}/${subtarget}" >&2
+              failures=$((failures + 1))
+            fi
+            echo "::endgroup::"
+          done < <(python3 - <<'PY'
+          import json, os
+          for task in json.loads(os.environ['TASKS_JSON']):
+              print('\t'.join((task['package'], task['scope'], task['target'], task['subtarget'])))
+          PY
+          )
+
+          if (( failures > 0 )); then
+            echo "ERROR: $failures task(s) failed for ${{ matrix.arch }}; successful sibling tasks were still published." >&2
+            exit 1
+          fi
+
+      - name: Upload architecture diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: package-${{ matrix.package }}-${{ matrix.release }}-${{ matrix.arch }}-${{ matrix.target }}-${{ matrix.subtarget }}
-          path: output/${{ matrix.package }}/${{ matrix.release }}/${{ matrix.arch }}/${{ matrix.target }}/${{ matrix.subtarget }}/
+          name: packages-${{ matrix.release }}-${{ matrix.arch }}
+          path: output/
           if-no-files-found: warn
           retention-days: 14
 

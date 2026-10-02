@@ -81,7 +81,7 @@ jobs:
               assert len(dependents) == len(set(dependents))
           PY
 
-      - name: Smoke-test package planner
+      - name: Smoke-test architecture-grouped planner
         run: |
           set -euo pipefail
           matrix="$(python3 scripts/plan-package-builds.py --base HEAD --head HEAD)"
@@ -91,13 +91,36 @@ jobs:
           MATRIX="$matrix" python3 - <<'PY'
           import json, os
           data = json.loads(os.environ['MATRIX'])
-          assert data['include'], 'all-package build must produce contexts'
-          contexts = {(x['release'], x['arch'], x['target'], x['subtarget']) for x in data['include']}
-          assert ('25.12.5', 'mips_24kc', 'ath79', 'generic') in contexts
-          assert ('25.12.5', 'arm_cortex-a7_neon-vfpv4', 'ipq40xx', 'generic') in contexts
-          assert ('25.12.5', 'arm_cortex-a7_neon-vfpv4', 'bcm27xx', 'bcm2709') in contexts
-          assert ('25.12.5', 'aarch64_cortex-a72', 'bcm27xx', 'bcm2711') in contexts
-          assert ('25.12.5', 'x86_64', 'x86', '64') in contexts
+          jobs = data['include']
+          assert len(jobs) == 4, f'expected one job per architecture, got {len(jobs)}'
+          expected_arches = {
+              'mips_24kc',
+              'arm_cortex-a7_neon-vfpv4',
+              'aarch64_cortex-a72',
+              'x86_64',
+          }
+          assert {job['arch'] for job in jobs} == expected_arches
+          assert len({(job['release'], job['arch']) for job in jobs}) == len(jobs)
+          for job in jobs:
+              tasks = json.loads(job['tasks_json'])
+              assert tasks
+              assert job['task_count'] == len(tasks)
+              assert all({'package', 'scope', 'target', 'subtarget'} <= set(task) for task in tasks)
+          arm = next(job for job in jobs if job['arch'] == 'arm_cortex-a7_neon-vfpv4')
+          arm_tasks = json.loads(arm['tasks_json'])
+          kernel_targets = {(t['target'], t['subtarget']) for t in arm_tasks if t['scope'] == 'kernel'}
+          assert ('ipq40xx', 'generic') in kernel_targets
+          assert ('bcm27xx', 'bcm2709') in kernel_targets
+          PY
+
+          matrix="$(python3 scripts/plan-package-builds.py --package bluez-trimmed)"
+          MATRIX="$matrix" python3 - <<'PY'
+          import json, os
+          jobs = json.loads(os.environ['MATRIX'])['include']
+          assert len(jobs) == 4, f'bluez-trimmed must create one job per architecture, got {len(jobs)}'
+          for job in jobs:
+              packages = {task['package'] for task in json.loads(job['tasks_json'])}
+              assert 'bluez-trimmed' in packages
           PY
 
       - name: Validate wpad syslog patch
