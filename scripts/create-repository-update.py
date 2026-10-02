@@ -9,6 +9,7 @@ import re
 from pathlib import Path
 
 PACKAGE_RE = re.compile(r"^define Package/([^\s]+)", re.MULTILINE)
+KERNEL_RE = re.compile(r"^define KernelPackage/([^\s]+)", re.MULTILINE)
 
 
 def sha256(path: Path) -> str:
@@ -21,20 +22,25 @@ def sha256(path: Path) -> str:
 
 def source_map(repo: Path) -> dict[str, str]:
     result: dict[str, str] = {}
-    for makefile in repo.rglob("Makefile"):
-        if ".git" in makefile.parts:
+    for root in ("audiowrt", "ported", "trimmed", "tailored"):
+        base = repo / root
+        if not base.is_dir():
             continue
-        text = makefile.read_text(encoding="utf-8", errors="replace")
-        for name in PACKAGE_RE.findall(text):
-            result[name] = makefile.parent.relative_to(repo).as_posix()
+        for makefile in base.glob("*/Makefile"):
+            text = makefile.read_text(encoding="utf-8", errors="replace")
+            rel = makefile.parent.relative_to(repo).as_posix()
+            for name in PACKAGE_RE.findall(text):
+                result[name] = rel
+            for name in KERNEL_RE.findall(text):
+                result[f"kmod-{name}"] = rel
     return result
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--packages-dir", required=True)
-    parser.add_argument("--platform", required=True)
-    parser.add_argument("--profile", required=True)
+    parser.add_argument("--context", required=True)
+    parser.add_argument("--scope", choices=("all", "arch", "kernel"), required=True)
     parser.add_argument("--channel", choices=("stable", "testing"), required=True)
     parser.add_argument("--release-tag", required=True)
     parser.add_argument("--repository", required=True, help="owner/repo")
@@ -44,8 +50,7 @@ def main() -> int:
 
     repo = Path.cwd().resolve()
     packages_dir = Path(args.packages_dir)
-    platform = json.loads(Path(args.platform).read_text(encoding="utf-8"))
-    profile = json.loads(Path(args.profile).read_text(encoding="utf-8"))
+    context = json.loads(Path(args.context).read_text(encoding="utf-8"))
     sources = source_map(repo)
 
     names = sorted(sources, key=len, reverse=True)
@@ -70,13 +75,13 @@ def main() -> int:
         raise SystemExit("ERROR: no APKs found for repository update")
 
     update = {
-        "schema": 1,
+        "schema": 2,
         "channel": args.channel,
-        "openwrt_version": profile["openwrt_version"],
-        "openwrt_source": profile["openwrt_source"],
-        "target": platform["target"],
-        "subtarget": platform["subtarget"],
-        "architecture": platform["arch_packages"],
+        "scope": args.scope,
+        "openwrt_version": context["openwrt_version"],
+        "target": context["target"],
+        "subtarget": context["subtarget"],
+        "architecture": context["arch"],
         "source_commit": args.source_commit,
         "release_tag": args.release_tag,
         "packages": packages,

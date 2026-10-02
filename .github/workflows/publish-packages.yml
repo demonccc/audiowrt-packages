@@ -9,12 +9,12 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: "Space-separated packages, or 'all'. Empty means packages changed since the previous commit."
+        description: "Package source directory name, 'all', or empty for changed packages"
         required: false
         default: ''
         type: string
       jobs:
-        description: "Parallel SDK build jobs"
+        description: "Parallel make jobs inside each SDK build"
         required: true
         default: '4'
         type: string
@@ -33,9 +33,8 @@ jobs:
     if: github.ref_name == 'main' || github.ref_name == 'testing'
     runs-on: ubuntu-24.04
     outputs:
-      packages: ${{ steps.plan.outputs.packages }}
+      matrix: ${{ steps.plan.outputs.matrix }}
       channel: ${{ steps.plan.outputs.channel }}
-      builder_ref: ${{ steps.plan.outputs.builder_ref }}
       should_build: ${{ steps.plan.outputs.should_build }}
     steps:
       - uses: actions/checkout@v4
@@ -48,106 +47,67 @@ jobs:
           REQUESTED: ${{ inputs.package || '' }}
           BASE_SHA: ${{ github.event.before }}
           HEAD_SHA: ${{ github.sha }}
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF_NAME" == main ]]; then
             channel=stable
-            builder_ref=main
           else
             channel=testing
-            builder_ref=testing
           fi
 
-          packages="$REQUESTED"
-          if [[ -z "$packages" ]]; then
-            bootstrap_output="$(python3 scripts/package-channel-bootstrap.py \
-              --repository "$GITHUB_REPOSITORY" \
-              --channel "$channel" \
-              --token "$GITHUB_TOKEN")"
-            bootstrap_required="$(printf '%s\n' "$bootstrap_output" | sed -n 's/^bootstrap_required=//p')"
-            missing_profiles="$(printf '%s\n' "$bootstrap_output" | sed -n 's/^missing_profiles=//p')"
-
-            if [[ "$bootstrap_required" == true ]]; then
-              packages=all
-              printf 'Bootstrap required for %s; missing contexts: %s\n' "$channel" "$missing_profiles"
-            elif [[ "${{ github.event_name }}" == push && "$BASE_SHA" != "0000000000000000000000000000000000000000" ]]; then
-              packages="$(python3 scripts/detect-changed-packages.py "$BASE_SHA" "$HEAD_SHA")"
-            else
-              packages=all
-            fi
+          if [[ -n "$REQUESTED" ]]; then
+            matrix="$(python3 scripts/plan-package-builds.py --package "$REQUESTED")"
+          elif [[ "${{ github.event_name }}" == push && "$BASE_SHA" != "0000000000000000000000000000000000000000" ]]; then
+            matrix="$(python3 scripts/plan-package-builds.py --base "$BASE_SHA" --head "$HEAD_SHA")"
+          else
+            matrix="$(python3 scripts/plan-package-builds.py --package all)"
           fi
 
+          count="$(python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))' <<<"$matrix")"
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
-          echo "builder_ref=$builder_ref" >> "$GITHUB_OUTPUT"
-          echo "packages=$packages" >> "$GITHUB_OUTPUT"
-          if [[ -n "$packages" ]]; then
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          if (( count > 0 )); then
             echo "should_build=true" >> "$GITHUB_OUTPUT"
           else
             echo "should_build=false" >> "$GITHUB_OUTPUT"
           fi
-          printf 'Channel: %s\nBuilder: %s\nPackages: %s\n' "$channel" "$builder_ref" "${packages:-none}"
+          echo "Planned $count package build context(s) for $channel"
+          python3 -m json.tool <<<"$matrix"
 
   build-publish:
     needs: plan
     if: needs.plan.outputs.should_build == 'true'
+    name: ${{ matrix.package }} / ${{ matrix.release }} / ${{ matrix.arch }} / ${{ matrix.target }}/${{ matrix.subtarget }}
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     strategy:
       fail-fast: false
-      matrix:
-        profile:
-          - tplink-tl-wdr4300-v1-minimal-usb-bluetooth-25.12.5
-          - linksys-ea8300-usb-bluetooth-audio-25.12.5
-          - raspberry-pi-3-usb-bluetooth-audio-25.12.5
-          - raspberry-pi-4-usb-bluetooth-audio-25.12.5
-          - x86-64-usb-bluetooth-audio-25.12.5
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - name: Checkout AudioWRT packages
         uses: actions/checkout@v4
 
-      - name: Checkout AudioWRT build engine
-        uses: actions/checkout@v4
-        with:
-          repository: demonccc/audiowrt
-          ref: ${{ needs.plan.outputs.builder_ref }}
-          path: builder
-
-      - name: Restore SDK download cache
+      - name: Restore OpenWrt SDK cache
         uses: actions/cache@v4
         with:
-          path: builder/.cache/audiowrt
-          key: audiowrt-packages-${{ runner.os }}-${{ matrix.profile }}-${{ needs.plan.outputs.builder_ref }}
+          path: .cache/audiowrt-packages
+          key: audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-${{ matrix.target }}-${{ matrix.subtarget }}
           restore-keys: |
-            audiowrt-packages-${{ runner.os }}-${{ matrix.profile }}-
+            audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-
 
-      - name: Resolve package request
-        id: packages
-        shell: bash
-        env:
-          REQUESTED: ${{ needs.plan.outputs.packages }}
-        run: |
-          set -euo pipefail
-          packages="$REQUESTED"
-          if [[ "$packages" == all ]]; then
-            packages="$(awk -F'|' '$0 !~ /^[[:space:]]*(#|$)/ {print $1}' builder/config/build/package-build-targets | sort -u | xargs)"
-          fi
-          [[ -n "$packages" ]] || { echo 'ERROR: empty package build request' >&2; exit 2; }
-          echo "packages=$packages" >> "$GITHUB_OUTPUT"
-          echo "Building: $packages"
-
-      - name: Build package APKs
+      - name: Build AudioWRT package
         shell: bash
         run: |
           set -euo pipefail
-          package_ref="$(git rev-parse HEAD)"
-          make -C builder packages \
-            AUDIOWRT_PROFILE='${{ matrix.profile }}' \
-            PACKAGE='${{ steps.packages.outputs.packages }}' \
-            AUDIOWRT_PACKAGES_REF="$package_ref" \
-            JOBS='${{ inputs.jobs || '4' }}' \
-            VERBOSITY=normal \
-            CACHE_DIR='.cache/audiowrt'
+          output="output/${{ matrix.package }}/${{ matrix.release }}/${{ matrix.arch }}/${{ matrix.target }}/${{ matrix.subtarget }}"
+          bash scripts/build-package-context.sh \
+            --package '${{ matrix.package }}' \
+            --release '${{ matrix.release }}' \
+            --arch '${{ matrix.arch }}' \
+            --target '${{ matrix.target }}' \
+            --subtarget '${{ matrix.subtarget }}' \
+            --output "$output" \
+            --jobs '${{ inputs.jobs || '4' }}'
 
       - name: Create repository update
         id: metadata
@@ -157,13 +117,13 @@ jobs:
         run: |
           set -euo pipefail
           short_sha="${GITHUB_SHA:0:12}"
-          safe_profile="${{ matrix.profile }}"
-          tag="packages-${CHANNEL}-${GITHUB_RUN_ID}-${safe_profile}-${short_sha}"
-          output="builder/output/packages/${{ matrix.profile }}"
+          safe_target="${{ matrix.target }}-${{ matrix.subtarget }}"
+          tag="packages-${CHANNEL}-${GITHUB_RUN_ID}-${{ matrix.package }}-${{ matrix.release }}-${{ matrix.arch }}-${safe_target}-${short_sha}"
+          output="output/${{ matrix.package }}/${{ matrix.release }}/${{ matrix.arch }}/${{ matrix.target }}/${{ matrix.subtarget }}"
           python3 scripts/create-repository-update.py \
             --packages-dir "$output/packages" \
-            --platform "$output/platform.json" \
-            --profile "$output/audiowrt-profile.json" \
+            --context "$output/context.json" \
+            --scope '${{ matrix.scope }}' \
             --channel "$CHANNEL" \
             --release-tag "$tag" \
             --repository "$GITHUB_REPOSITORY" \
@@ -172,7 +132,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "output=$output" >> "$GITHUB_OUTPUT"
 
-      - name: Publish immutable package assets
+      - name: Publish successful immutable package assets
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -185,7 +145,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "$tag" \
-            --notes "Incremental AudioWRT package build for ${{ matrix.profile }} from $GITHUB_SHA")
+            --notes "AudioWRT ${{ matrix.package }} for OpenWrt ${{ matrix.release }} / ${{ matrix.arch }} / ${{ matrix.target }}/${{ matrix.subtarget }}")
           if [[ "$CHANNEL" == testing ]]; then
             args+=(--prerelease)
           fi
@@ -195,8 +155,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: package-build-${{ needs.plan.outputs.channel }}-${{ matrix.profile }}
-          path: builder/output/packages/${{ matrix.profile }}/
+          name: package-${{ matrix.package }}-${{ matrix.release }}-${{ matrix.arch }}-${{ matrix.target }}-${{ matrix.subtarget }}
+          path: output/${{ matrix.package }}/${{ matrix.release }}/${{ matrix.arch }}/${{ matrix.target }}/${{ matrix.subtarget }}/
           if-no-files-found: warn
           retention-days: 14
 
@@ -204,7 +164,7 @@ jobs:
     needs:
       - plan
       - build-publish
-    if: needs.plan.outputs.should_build == 'true' && needs.build-publish.result == 'success'
+    if: always() && needs.plan.outputs.should_build == 'true' && needs.plan.result == 'success' && needs.build-publish.result != 'cancelled'
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
@@ -212,7 +172,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rebuild repository metadata from release history
+      - name: Rebuild repository metadata from successful release history
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/build-pages-repository.py --repository "$GITHUB_REPOSITORY" --output _site
