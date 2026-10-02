@@ -70,9 +70,9 @@ jobs:
       - name: Smoke-test complete planner matrix
         run: |
           matrix="$(python3 scripts/plan-package-builds.py --package all)"
-          python3 - <<'PY' <<<"$matrix"
-          import json, sys
-          data = json.load(sys.stdin)
+          MATRIX="$matrix" python3 - <<'PY'
+          import json, os
+          data = json.loads(os.environ['MATRIX'])
           assert data['include'], 'all-package build must produce contexts'
           contexts = {(x['release'], x['arch'], x['target'], x['subtarget']) for x in data['include']}
           assert ('25.12.5', 'mips_24kc', 'ath79', 'generic') in contexts
