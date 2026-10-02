@@ -36,3 +36,13 @@ jobs:
         run: |
           result="$(python3 scripts/detect-changed-packages.py HEAD HEAD)"
           test -z "$result"
+      - name: Smoke-test planner SHA arguments
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+          BASE_SHA="$(git rev-parse HEAD^)"
+          python3 scripts/detect-changed-packages.py "$BASE_SHA" "$HEAD_SHA" >/dev/null
+          if grep -Fq "'$GITHUB_SHA'" .github/workflows/publish-packages.yml; then
+            echo "ERROR: publish workflow passes GITHUB_SHA as a literal string" >&2
+            exit 1
+          fi
