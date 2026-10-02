@@ -1,27 +1,33 @@
 #!/usr/bin/env python3
-"""Plan incremental AudioWRT builds grouped by architecture.
+"""Plan pending AudioWRT package builds grouped by package architecture.
 
-Automatic builds are driven only by changes inside package source directories.
-Each matrix entry represents one OpenWrt release + package architecture and
-contains only the package build tasks affected by the git delta. Architecture-
-specific and target-specific patches narrow the affected contexts further.
+Automatic builds are repository-state driven: each package/context is compared
+with its last successfully published source commit. Missing contexts and changes
+that happened after a failed build remain pending on later merges. The resulting
+GitHub Actions matrix contains at most one job per OpenWrt release + package
+architecture, with the pending package tasks embedded in that job.
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import tomllib
+import urllib.request
 from collections import deque
 from pathlib import Path
 
 KERNEL_RE = re.compile(r"^define KernelPackage/([^\s]+)", re.MULTILINE)
 ALL_RE = re.compile(r"^\s*PKGARCH\s*:?=\s*all\s*$", re.MULTILINE)
 PACKAGE_ROOTS = ("audiowrt", "ported", "trimmed", "tailored")
+API = "https://api.github.com"
 
 
 def git_changed_files(base: str, head: str) -> list[str]:
+    if base == head:
+        return []
     out = subprocess.check_output(["git", "diff", "--name-only", f"{base}...{head}"], text=True)
     return [line.strip() for line in out.splitlines() if line.strip()]
 
@@ -121,53 +127,77 @@ def context_matches(context: dict, restriction: dict[str, str]) -> bool:
     return True
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--base")
-    parser.add_argument("--head")
-    parser.add_argument("--package", default="")
-    parser.add_argument("--matrix", default="repository/build-matrix.toml")
-    parser.add_argument("--rules", default="repository/rebuild-dependents.json")
-    args = parser.parse_args()
+def request_json(url: str, token: str, *, asset: bool = False):
+    headers = {
+        "Accept": "application/octet-stream" if asset else "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "AudioWRT-package-planner",
+    }
+    with urllib.request.urlopen(urllib.request.Request(url, headers=headers)) as response:
+        raw = response.read()
+    return json.loads(raw.decode("utf-8"))
 
-    repo = Path.cwd().resolve()
-    sources = source_dirs(repo)
-    arch_ctx, kernel_ctx = load_contexts(repo / args.matrix)
 
-    requested = args.package.strip()
+def published_state(repository: str, channel: str, token: str) -> dict[tuple, str]:
+    """Return latest successful source commit per package-source build context."""
+    state: dict[tuple, tuple[str, str]] = {}
+    page = 1
+    while True:
+        releases = request_json(f"{API}/repos/{repository}/releases?per_page=100&page={page}", token)
+        if not releases:
+            break
+        for release in releases:
+            asset = next((a for a in release.get("assets", []) if a.get("name") == "repository-update.json"), None)
+            if not asset:
+                continue
+            update = request_json(asset["url"], token, asset=True)
+            if update.get("schema", 0) < 2 or update.get("channel") != channel:
+                continue
+            scope = update.get("scope")
+            version = update.get("openwrt_version")
+            arch = update.get("architecture")
+            target = update.get("target")
+            subtarget = update.get("subtarget")
+            published_at = release.get("published_at") or release.get("created_at") or ""
+            for package in update.get("packages", {}).values():
+                source_dir = package.get("source_dir", "")
+                source = Path(source_dir).name if source_dir else ""
+                source_commit = package.get("source_commit") or update.get("source_commit")
+                if not source or not source_commit:
+                    continue
+                if scope == "all":
+                    key = (source, version, "all", "", "")
+                elif scope == "arch":
+                    key = (source, version, arch, "", "")
+                elif scope == "kernel":
+                    key = (source, version, arch, target, subtarget)
+                else:
+                    continue
+                previous = state.get(key)
+                if previous is None or published_at >= previous[0]:
+                    state[key] = (published_at, source_commit)
+        if len(releases) < 100:
+            break
+        page += 1
+    return {key: value[1] for key, value in state.items()}
+
+
+def affected_sources(
+    repo: Path,
+    changed: list[str],
+    sources: dict[str, Path],
+    dependents: dict[str, list[str]],
+) -> dict[str, list[dict[str, str]]]:
     restrictions: dict[str, list[dict[str, str]]] = {}
     changed_sources: set[str] = set()
+    for relative in changed:
+        source = source_for_path(repo, relative)
+        if not source:
+            continue
+        changed_sources.add(source)
+        restrictions.setdefault(source, []).append(restriction_for_path(source, relative))
 
-    if requested:
-        if requested == "all":
-            changed_sources = set(sources)
-            restrictions = {source: [{}] for source in sources}
-        else:
-            for item in requested.split():
-                if item not in sources:
-                    raise SystemExit(f"ERROR: unknown package source: {item}")
-                changed_sources.add(item)
-                restrictions[item] = [{}]
-    else:
-        if not args.base or not args.head:
-            raise SystemExit("ERROR: --base and --head are required when --package is empty")
-        for relative in git_changed_files(args.base, args.head):
-            source = source_for_path(repo, relative)
-            if not source:
-                # CI/tooling/repository metadata changes never bootstrap every
-                # package automatically. A full rebuild remains available via
-                # workflow_dispatch package=all.
-                continue
-            changed_sources.add(source)
-            restrictions.setdefault(source, []).append(restriction_for_path(source, relative))
-
-    if not changed_sources:
-        print(json.dumps({"include": []}, separators=(",", ":")))
-        return 0
-
-    rules_path = repo / args.rules
-    rules = json.loads(rules_path.read_text(encoding="utf-8")) if rules_path.is_file() else {}
-    dependents = rules.get("rebuild_dependents", {})
     queue = deque(sorted(changed_sources))
     while queue:
         source = queue.popleft()
@@ -181,10 +211,93 @@ def main() -> int:
                 queue.append(dependent)
             else:
                 restrictions.setdefault(dependent, []).extend(inherited)
+    return restrictions
 
-    # Group tasks by release + architecture. This is the important boundary:
-    # GitHub Actions creates at most one job for an affected architecture,
-    # never one job per package.
+
+def task_key(source: str, scope: str, context: dict) -> tuple:
+    if scope == "all":
+        return (source, context["release"], "all", "", "")
+    if scope == "arch":
+        return (source, context["release"], context["arch"], "", "")
+    return (
+        source,
+        context["release"],
+        context["arch"],
+        context["target"],
+        context["subtarget"],
+    )
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base")
+    parser.add_argument("--head", default="HEAD")
+    parser.add_argument("--package", default="")
+    parser.add_argument("--matrix", default="repository/build-matrix.toml")
+    parser.add_argument("--rules", default="repository/rebuild-dependents.json")
+    parser.add_argument("--repository", default="")
+    parser.add_argument("--channel", choices=("stable", "testing"))
+    parser.add_argument("--token-env", default="GITHUB_TOKEN")
+    args = parser.parse_args()
+
+    repo = Path.cwd().resolve()
+    sources = source_dirs(repo)
+    arch_ctx, kernel_ctx = load_contexts(repo / args.matrix)
+    rules_path = repo / args.rules
+    rules = json.loads(rules_path.read_text(encoding="utf-8")) if rules_path.is_file() else {}
+    dependents = rules.get("rebuild_dependents", {})
+
+    requested = args.package.strip()
+    explicit_restrictions: dict[str, list[dict[str, str]]] | None = None
+    state: dict[tuple, str] = {}
+
+    if requested:
+        if requested == "all":
+            explicit_restrictions = {source: [{}] for source in sources}
+        else:
+            explicit_restrictions = {}
+            for item in requested.split():
+                if item not in sources:
+                    raise SystemExit(f"ERROR: unknown package source: {item}")
+                explicit_restrictions[item] = [{}]
+    elif args.repository and args.channel:
+        token = os.environ.get(args.token_env, "")
+        if not token:
+            raise SystemExit(f"ERROR: {args.token_env} is required for repository-state planning")
+        state = published_state(args.repository, args.channel, token)
+    elif args.base:
+        # Local/test fallback: plan only the supplied git delta.
+        explicit_restrictions = affected_sources(
+            repo, git_changed_files(args.base, args.head), sources, dependents
+        )
+    else:
+        raise SystemExit("ERROR: automatic planning requires --repository and --channel")
+
+    diff_cache: dict[str, dict[str, list[dict[str, str]]]] = {}
+
+    def task_is_pending(source: str, scope: str, context: dict) -> bool:
+        if explicit_restrictions is not None:
+            source_restrictions = explicit_restrictions.get(source)
+            if not source_restrictions:
+                return False
+            unrestricted = any(not item for item in source_restrictions)
+            return unrestricted or any(context_matches(context, item) for item in source_restrictions)
+
+        previous = state.get(task_key(source, scope, context))
+        if not previous:
+            return True
+        if previous == args.head or previous == subprocess.check_output(["git", "rev-parse", args.head], text=True).strip():
+            return False
+        if previous not in diff_cache:
+            diff_cache[previous] = affected_sources(
+                repo, git_changed_files(previous, args.head), sources, dependents
+            )
+        source_restrictions = diff_cache[previous].get(source)
+        if not source_restrictions:
+            return False
+        unrestricted = any(not item for item in source_restrictions)
+        return unrestricted or any(context_matches(context, item) for item in source_restrictions)
+
     grouped: dict[tuple[str, str], dict] = {}
 
     def add_task(context: dict, source: str, scope: str) -> None:
@@ -203,31 +316,19 @@ def main() -> int:
         if task not in entry["tasks"]:
             entry["tasks"].append(task)
 
-    for source in sorted(changed_sources):
+    for source in sorted(sources):
         scope = package_scope(sources[source])
-        source_restrictions = restrictions.get(source, [{}]) or [{}]
-        unrestricted = any(not item for item in source_restrictions)
-
-        if scope == "kernel":
-            contexts = kernel_ctx
-        else:
-            contexts = arch_ctx
-
-        matching = [
-            context for context in contexts
-            if unrestricted or any(context_matches(context, item) for item in source_restrictions)
-        ]
+        contexts = kernel_ctx if scope == "kernel" else arch_ctx
 
         if scope == "all":
-            # Architecture-independent packages are built exactly once per
-            # release, using the first matching SDK context for that release.
             by_release: dict[str, dict] = {}
-            for context in matching:
+            for context in contexts:
                 by_release.setdefault(context["release"], context)
-            matching = list(by_release.values())
+            contexts = list(by_release.values())
 
-        for context in matching:
-            add_task(context, source, scope)
+        for context in contexts:
+            if task_is_pending(source, scope, context):
+                add_task(context, source, scope)
 
     matrix = []
     for _, entry in sorted(grouped.items()):
