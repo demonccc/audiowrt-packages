@@ -29,7 +29,10 @@ jobs:
           fetch-depth: 0
 
       - name: Compile Python tooling
-        run: python3 -m py_compile scripts/*.py
+        run: python3 -m py_compile scripts/*.py tests/test-package-planner-state.py
+
+      - name: Validate planner state helpers
+        run: python3 tests/test-package-planner-state.py
 
       - name: Validate shell tooling
         shell: bash
