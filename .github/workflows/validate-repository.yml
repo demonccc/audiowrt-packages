@@ -17,8 +17,37 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
       - name: Compile Python tooling
         run: python3 -m py_compile scripts/*.py
+
+      - name: Validate shell tooling
+        run: bash -n scripts/build-package-context.sh
+
+      - name: Validate architecture matrix
+        run: |
+          python3 - <<'PY'
+          import tomllib
+          from pathlib import Path
+          data = tomllib.loads(Path('repository/build-matrix.toml').read_text())
+          assert data['schema_version'] == 1
+          arches = data['architectures']
+          expected = {
+              'mips_24kc',
+              'arm_cortex-a7_neon-vfpv4',
+              'aarch64_cortex-a72',
+              'x86_64',
+          }
+          assert set(arches) == expected
+          for arch, cfg in arches.items():
+              assert cfg['versions']
+              for version, version_cfg in cfg['versions'].items():
+                  assert version
+                  assert '/' in version_cfg['sdk_target']
+                  assert version_cfg['kernel_targets']
+                  assert all('/' in item for item in version_cfg['kernel_targets'])
+          PY
+
       - name: Validate rebuild rules
         run: |
           python3 - <<'PY'
@@ -32,17 +61,23 @@ jobs:
               assert isinstance(dependents, list)
               assert len(dependents) == len(set(dependents))
           PY
-      - name: Smoke-test no-op diff detection
+
+      - name: Smoke-test empty planner diff
         run: |
-          result="$(python3 scripts/detect-changed-packages.py HEAD HEAD)"
-          test -z "$result"
-      - name: Smoke-test planner SHA arguments
+          matrix="$(python3 scripts/plan-package-builds.py --base HEAD --head HEAD)"
+          python3 -c 'import json,sys; assert json.load(sys.stdin) == {"include": []}' <<<"$matrix"
+
+      - name: Smoke-test complete planner matrix
         run: |
-          set -euo pipefail
-          HEAD_SHA="$(git rev-parse HEAD)"
-          BASE_SHA="$(git rev-parse HEAD^)"
-          python3 scripts/detect-changed-packages.py "$BASE_SHA" "$HEAD_SHA" >/dev/null
-          if grep -Fq "'$GITHUB_SHA'" .github/workflows/publish-packages.yml; then
-            echo "ERROR: publish workflow passes GITHUB_SHA as a literal string" >&2
-            exit 1
-          fi
+          matrix="$(python3 scripts/plan-package-builds.py --package all)"
+          python3 - <<'PY' <<<"$matrix"
+          import json, sys
+          data = json.load(sys.stdin)
+          assert data['include'], 'all-package build must produce contexts'
+          contexts = {(x['release'], x['arch'], x['target'], x['subtarget']) for x in data['include']}
+          assert ('25.12.5', 'mips_24kc', 'ath79', 'generic') in contexts
+          assert ('25.12.5', 'arm_cortex-a7_neon-vfpv4', 'ipq40xx', 'generic') in contexts
+          assert ('25.12.5', 'arm_cortex-a7_neon-vfpv4', 'bcm27xx', 'bcm2709') in contexts
+          assert ('25.12.5', 'aarch64_cortex-a72', 'bcm27xx', 'bcm2711') in contexts
+          assert ('25.12.5', 'x86_64', 'x86', '64') in contexts
+          PY
