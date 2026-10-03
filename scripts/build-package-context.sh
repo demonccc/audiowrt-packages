@@ -90,13 +90,27 @@ else
   echo "Reusing prepared OpenWrt SDK for $release / $target/$subtarget"
 fi
 
-official_marker="$sdk/.audiowrt-official-feeds-ready"
+# Version this marker whenever SDK preparation changes so an old cached SDK is
+# never silently reused with stale build-dependency behavior.
+official_marker="$sdk/.audiowrt-official-feeds-v2-ready"
 if [[ ! -f "$official_marker" ]]; then
   cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
   (
     cd "$sdk"
     ./scripts/feeds update -a
+
+    # OpenWrt 25.12 pins Rust with llvm.download-ci-llvm=false, which makes a
+    # package such as librespot compile the complete LLVM host toolchain from
+    # source on every fresh SDK. AudioWRT carries this build-only patch so the
+    # SDK downloads Rust's matching prebuilt CI LLVM instead.
+    release_series="${release%.*}"
+    rust_patch="$repo_root/repository/sdk-patches/$release_series/packages-rust-use-ci-llvm.patch"
+    if [[ -f "$rust_patch" && -f feeds/packages/lang/rust/Makefile ]]; then
+      echo "Applying SDK patch: $rust_patch"
+      patch -d feeds/packages -p1 --forward --batch < "$rust_patch"
+    fi
+
     ./scripts/feeds install -a
   )
   touch "$official_marker"
