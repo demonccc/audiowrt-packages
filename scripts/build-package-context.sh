@@ -90,22 +90,31 @@ else
   echo "Reusing prepared OpenWrt SDK for $release / $target/$subtarget"
 fi
 
-# Official feeds are pinned by the SDK and expensive to index/install. Prepare
-# them exactly once for this cached SDK. AudioWRT itself is refreshed once per
-# source commit so all package builds in the same Actions job reuse the setup.
-official_marker="$sdk/.audiowrt-official-feeds-ready"
+# Version this marker whenever SDK preparation changes so an old cached SDK is
+# never silently reused with stale build-dependency behavior.
+official_marker="$sdk/.audiowrt-official-feeds-v2-ready"
 if [[ ! -f "$official_marker" ]]; then
   cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
   (
     cd "$sdk"
     ./scripts/feeds update -a
+
+    # OpenWrt 25.12 pins Rust with llvm.download-ci-llvm=false, which makes a
+    # package such as librespot compile the complete LLVM host toolchain from
+    # source on every fresh SDK. AudioWRT carries this build-only patch so the
+    # SDK downloads Rust's matching prebuilt CI LLVM instead.
+    release_series="${release%.*}"
+    rust_patch="$repo_root/repository/sdk-patches/$release_series/packages-rust-use-ci-llvm.patch"
+    if [[ -f "$rust_patch" && -f feeds/packages/lang/rust/Makefile ]]; then
+      echo "Applying SDK patch: $rust_patch"
+      patch -d feeds/packages -p1 --forward --batch < "$rust_patch"
+    fi
+
     ./scripts/feeds install -a
   )
   touch "$official_marker"
 else
-  # The checkout path is stable on GitHub-hosted runners, but rewrite the
-  # local feed entry so cached SDKs also work in other environments.
   cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
 fi
@@ -134,8 +143,6 @@ fi
   make "$target_path" -j"$jobs" V=s
 )
 
-# Collect only APK outputs declared by this AudioWRT source Makefile. Dependency
-# APKs built as part of SDK preparation are not published as AudioWRT artifacts.
 mapfile -t output_names < <(python3 - "$source_dir/Makefile" <<'PY'
 import re, sys
 text = open(sys.argv[1], encoding='utf-8').read()

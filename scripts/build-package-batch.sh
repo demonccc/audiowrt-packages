@@ -43,7 +43,8 @@ seen=set()
 for t in json.loads(os.environ['TASKS_JSON']):
     k=(t['target'], t['subtarget'])
     if k not in seen:
-        seen.add(k); print('\t'.join(k))
+        seen.add(k)
+        print('\t'.join(k))
 PY
 )
 
@@ -68,7 +69,8 @@ prepare_sdk() {
   sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1 || true)"
   if [[ -z "$sdk" ]]; then
     echo "Preparing OpenWrt SDK for $release / $target/$subtarget" >&2
-    rm -rf "$sdk_parent"; mkdir -p "$sdk_parent"
+    rm -rf "$sdk_parent"
+    mkdir -p "$sdk_parent"
     case "$archive" in
       *.tar.zst) tar --zstd -xf "$archive_path" -C "$sdk_parent" ;;
       *.tar.xz) tar -xJf "$archive_path" -C "$sdk_parent" ;;
@@ -81,9 +83,23 @@ prepare_sdk() {
 
   cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
-  if [[ ! -f "$sdk/.audiowrt-official-feeds-ready" ]]; then
-    (cd "$sdk"; ./scripts/feeds update -a; ./scripts/feeds install -a) >&2
-    touch "$sdk/.audiowrt-official-feeds-ready"
+
+  local official_marker="$sdk/.audiowrt-official-feeds-v2-ready"
+  if [[ ! -f "$official_marker" ]]; then
+    (
+      cd "$sdk"
+      ./scripts/feeds update -a
+
+      release_series="${release%.*}"
+      rust_patch="$repo_root/repository/sdk-patches/$release_series/packages-rust-use-ci-llvm.patch"
+      if [[ -f "$rust_patch" && -f feeds/packages/lang/rust/Makefile ]]; then
+        echo "Applying SDK patch: $rust_patch" >&2
+        patch -d feeds/packages -p1 --forward --batch < "$rust_patch"
+      fi
+
+      ./scripts/feeds install -a
+    ) >&2
+    touch "$official_marker"
   fi
 
   local source_commit source_marker
@@ -91,10 +107,16 @@ prepare_sdk() {
   source_marker="$sdk/.audiowrt-source-$source_commit-ready"
   if [[ ! -f "$source_marker" ]]; then
     echo "Refreshing AudioWRT feed for source $source_commit" >&2
-    (cd "$sdk"; ./scripts/feeds update audiowrt; ./scripts/feeds install -a -p audiowrt; make defconfig) >&2
+    (
+      cd "$sdk"
+      ./scripts/feeds update audiowrt
+      ./scripts/feeds install -a -p audiowrt
+      make defconfig
+    ) >&2
     find "$sdk" -maxdepth 1 -type f -name '.audiowrt-source-*-ready' -delete
     touch "$source_marker"
   fi
+
   printf '%s\n' "$sdk"
 }
 
@@ -107,7 +129,8 @@ import json, os
 seen=set()
 for t in json.loads(os.environ['TASKS_JSON']):
     if t['target']==os.environ['TARGET'] and t['subtarget']==os.environ['SUBTARGET'] and t['package'] not in seen:
-        seen.add(t['package']); print(t['package'])
+        seen.add(t['package'])
+        print(t['package'])
 PY
   )
 
@@ -146,7 +169,10 @@ PY
 
     found=0
     for name in "${output_names[@]}"; do
-      while IFS= read -r apk; do cp -f "$apk" "$package_output/packages/"; found=1; done < <(find "$sdk/bin" -type f -name "$name-*.apk" -print)
+      while IFS= read -r apk; do
+        cp -f "$apk" "$package_output/packages/"
+        found=1
+      done < <(find "$sdk/bin" -type f -name "$name-*.apk" -print)
     done
     if [[ "$found" != 1 ]]; then
       echo "$package|$target|$subtarget|no-apk" >> "$failures_file"
@@ -157,7 +183,8 @@ PY
 import json, sys
 path, package, release, arch, target, subtarget=sys.argv[1:]
 with open(path,'w',encoding='utf-8') as f:
-    json.dump({'package_source':package,'openwrt_version':release,'arch':arch,'target':target,'subtarget':subtarget},f,indent=2,sort_keys=True); f.write('\n')
+    json.dump({'package_source':package,'openwrt_version':release,'arch':arch,'target':target,'subtarget':subtarget},f,indent=2,sort_keys=True)
+    f.write('\n')
 PY
     echo "Built $package for OpenWrt $release / $arch / $target/$subtarget"
   done

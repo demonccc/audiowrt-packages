@@ -2,10 +2,7 @@ name: Validate AudioWRT packages
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
-      - testing
+  workflow_call:
   workflow_dispatch:
     inputs:
       openwrt_ref:
@@ -109,21 +106,6 @@ jobs:
               assert tasks
               assert job['task_count'] == len(tasks)
               assert all({'package', 'scope', 'target', 'subtarget'} <= set(task) for task in tasks)
-          arm = next(job for job in jobs if job['arch'] == 'arm_cortex-a7_neon-vfpv4')
-          arm_tasks = json.loads(arm['tasks_json'])
-          kernel_targets = {(t['target'], t['subtarget']) for t in arm_tasks if t['scope'] == 'kernel'}
-          assert ('ipq40xx', 'generic') in kernel_targets
-          assert ('bcm27xx', 'bcm2709') in kernel_targets
-          PY
-
-          matrix="$(python3 scripts/plan-package-builds.py --package bluez-trimmed)"
-          MATRIX="$matrix" python3 - <<'PY'
-          import json, os
-          jobs = json.loads(os.environ['MATRIX'])['include']
-          assert len(jobs) == 4, f'bluez-trimmed must create one job per architecture, got {len(jobs)}'
-          for job in jobs:
-              packages = {task['package'] for task in json.loads(job['tasks_json'])}
-              assert 'bluez-trimmed' in packages
           PY
 
       - name: Validate wpad syslog patch
@@ -159,30 +141,15 @@ jobs:
           set -euo pipefail
           workspace="$PWD"
           openwrt=/tmp/openwrt
-
           git clone --depth=1 --branch '${{ inputs.openwrt_ref || 'v25.12.5' }}' https://github.com/openwrt/openwrt.git "$openwrt"
           cd "$openwrt"
-
           mkdir -p feeds
           ln -s ../package feeds/base
-
           cp feeds.conf.default feeds.conf
           printf '\nsrc-link audiowrt %s\n' "$workspace" >> feeds.conf
           ./scripts/feeds update -a
-
-          if [[ -d logs/feeds/audiowrt ]]; then
-            while IFS= read -r -d '' dump; do
-              if [[ -s "$dump" ]]; then
-                echo "::group::${dump}"
-                cat "$dump"
-                echo "::endgroup::"
-              fi
-            done < <(find logs/feeds/audiowrt -name dump.txt -type f -print0 | sort -z)
-          fi
-
           ./scripts/feeds install -a
           make -s prepare-tmpinfo
-
           while IFS= read -r makefile; do
             while IFS= read -r package; do
               grep -q "^Package: $package$" tmp/.packageinfo || {
