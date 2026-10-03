@@ -96,8 +96,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/audiowrt-packages
-          key: audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}
+          key: audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
           restore-keys: |
+            audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
             audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-
 
       - name: Build and publish pending packages for architecture
