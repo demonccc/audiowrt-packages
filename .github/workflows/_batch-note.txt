@@ -1,0 +1,1 @@
+Batch build fix: one SDK setup and one make invocation per release/target/subtarget context.
