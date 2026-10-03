@@ -7,9 +7,8 @@ Usage: build-package-batch.sh --release VERSION --arch ARCH --tasks-json JSON \
   --output DIR [--jobs N] [--cache DIR]
 
 Build all pending AudioWRT package sources for one architecture. Tasks are grouped
-by target/subtarget. Each OpenWrt SDK is prepared once and all package targets for
-that context are built in one make invocation. Shared OpenWrt dependencies are
-therefore resolved and compiled once per context, not once per package.
+by target/subtarget. Each OpenWrt SDK is prepared once and all requested package
+targets for that context are built in one make invocation.
 EOF
 }
 
@@ -64,11 +63,13 @@ prepare_sdk() {
     mv "$archive_path.tmp" "$archive_path"
   fi
 
-  sdk_key="$release-$target-$subtarget"
+  # v3 deliberately invalidates SDKs polluted by the old `feeds install -a`
+  # behavior. The archive itself remains cached.
+  sdk_key="v3-$release-$target-$subtarget"
   sdk_parent="$cache/sdk-$sdk_key"
   sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1 || true)"
   if [[ -z "$sdk" ]]; then
-    echo "Preparing OpenWrt SDK for $release / $target/$subtarget" >&2
+    echo "Preparing clean OpenWrt SDK for $release / $target/$subtarget" >&2
     rm -rf "$sdk_parent"
     mkdir -p "$sdk_parent"
     case "$archive" in
@@ -78,16 +79,19 @@ prepare_sdk() {
     esac
     sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d | head -n1)"
   else
-    echo "Reusing prepared OpenWrt SDK for $release / $target/$subtarget" >&2
+    echo "Reusing clean OpenWrt SDK for $release / $target/$subtarget" >&2
   fi
 
   cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
 
-  local official_marker="$sdk/.audiowrt-official-feeds-v2-ready"
+  local official_marker="$sdk/.audiowrt-official-feeds-v3-ready"
   if [[ ! -f "$official_marker" ]]; then
     (
       cd "$sdk"
+      # Updating feed indexes is enough. Installing every package from every
+      # official feed is both slow and wrong: it pollutes Kconfig with tens of
+      # thousands of unrelated package symbols and recursive dependencies.
       ./scripts/feeds update -a
 
       release_series="${release%.*}"
@@ -96,25 +100,8 @@ prepare_sdk() {
         echo "Applying SDK patch: $rust_patch" >&2
         patch -d feeds/packages -p1 --forward --batch < "$rust_patch"
       fi
-
-      ./scripts/feeds install -a
     ) >&2
     touch "$official_marker"
-  fi
-
-  local source_commit source_marker
-  source_commit="$(git -C "$repo_root" rev-parse HEAD)"
-  source_marker="$sdk/.audiowrt-source-$source_commit-ready"
-  if [[ ! -f "$source_marker" ]]; then
-    echo "Refreshing AudioWRT feed for source $source_commit" >&2
-    (
-      cd "$sdk"
-      ./scripts/feeds update audiowrt
-      ./scripts/feeds install -a -p audiowrt
-      make defconfig
-    ) >&2
-    find "$sdk" -maxdepth 1 -type f -name '.audiowrt-source-*-ready' -delete
-    touch "$source_marker"
   fi
 
   printf '%s\n' "$sdk"
@@ -133,6 +120,25 @@ for t in json.loads(os.environ['TASKS_JSON']):
         print(t['package'])
 PY
   )
+
+  source_commit="$(git -C "$repo_root" rev-parse HEAD)"
+  source_marker="$sdk/.audiowrt-source-$source_commit-ready"
+  if [[ ! -f "$source_marker" ]]; then
+    echo "Refreshing AudioWRT feed for source $source_commit" >&2
+    (cd "$sdk"; ./scripts/feeds update audiowrt) >&2
+    find "$sdk" -maxdepth 1 -type f -name '.audiowrt-source-*-ready' -delete
+    touch "$source_marker"
+  fi
+
+  # Install only the AudioWRT sources requested for this context. The feeds
+  # helper pulls their declared dependencies as needed; we never install all
+  # packages from packages/luci/routing/telephony/video or all AudioWRT sources.
+  for package in "${packages[@]}"; do
+    (cd "$sdk"; ./scripts/feeds install -f -p audiowrt "$package") >&2 || {
+      echo "$package|$target|$subtarget|feed-install-failed" >> "$failures_file"
+    }
+  done
+  (cd "$sdk"; make defconfig) >&2
 
   targets=()
   for package in "${packages[@]}"; do
