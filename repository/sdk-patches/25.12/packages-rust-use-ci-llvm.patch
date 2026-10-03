@@ -1,0 +1,9 @@
+--- a/lang/rust/Makefile
++++ b/lang/rust/Makefile
+@@
+-	--set=llvm.download-ci-llvm=false \
++	--set=llvm.download-ci-llvm=true \
+@@
+ 	$(PYTHON) $(HOST_BUILD_DIR)/x.py \
++		--ci false \
+ 		--build-dir $(HOST_BUILD_DIR)/build \
