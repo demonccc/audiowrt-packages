@@ -7,8 +7,9 @@ Usage: build-package-context.sh --package NAME --release VERSION --arch ARCH \
   --target TARGET --subtarget SUBTARGET --output DIR [--jobs N] [--cache DIR]
 
 Builds exactly one AudioWRT package source in one OpenWrt build context.
-The AudioWRT repository itself is used as an OpenWrt feed; demonccc/audiowrt is
-not consulted or cloned.
+The OpenWrt SDK is prepared once per release/target/subtarget and then reused
+for every package built in that context. The AudioWRT repository itself is used
+as an OpenWrt feed; demonccc/audiowrt is not consulted or cloned.
 EOF
 }
 
@@ -59,7 +60,6 @@ base_url="https://downloads.openwrt.org/releases/$release/targets/$target/$subta
 index="$(curl -fsSL "$base_url/")"
 archive="$(printf '%s' "$index" | grep -oE "openwrt-sdk-${release//./\.}-${target//-/_}-${subtarget//-/_}[^\"<> ]*Linux-x86_64\.tar\.(zst|xz)" | head -n1 || true)"
 if [[ -z "$archive" ]]; then
-  # OpenWrt target naming can retain dashes. Fall back to a release/target prefix match.
   archive="$(printf '%s' "$index" | grep -oE "openwrt-sdk-${release//./\.}-[^\"<> ]*Linux-x86_64\.tar\.(zst|xz)" | head -n1 || true)"
 fi
 [[ -n "$archive" ]] || { echo "ERROR: unable to discover SDK at $base_url/" >&2; exit 4; }
@@ -73,27 +73,54 @@ fi
 
 sdk_key="$release-$target-$subtarget"
 sdk_parent="$cache/sdk-$sdk_key"
-rm -rf "$sdk_parent"
-mkdir -p "$sdk_parent"
-case "$archive" in
-  *.tar.zst) tar --zstd -xf "$archive_path" -C "$sdk_parent" ;;
-  *.tar.xz) tar -xJf "$archive_path" -C "$sdk_parent" ;;
-  *) echo "ERROR: unsupported SDK archive: $archive" >&2; exit 4 ;;
-esac
-sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d | head -n1)"
-[[ -n "$sdk" ]] || { echo "ERROR: SDK extraction produced no directory" >&2; exit 4; }
+sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1 || true)"
 
-# Use this repository directly as an OpenWrt feed. Official package/luci feeds
-# remain SDK-pinned by OpenWrt's feeds.conf.default.
-cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
-printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
+if [[ -z "$sdk" ]]; then
+  echo "Preparing OpenWrt SDK for $release / $target/$subtarget"
+  rm -rf "$sdk_parent"
+  mkdir -p "$sdk_parent"
+  case "$archive" in
+    *.tar.zst) tar --zstd -xf "$archive_path" -C "$sdk_parent" ;;
+    *.tar.xz) tar -xJf "$archive_path" -C "$sdk_parent" ;;
+    *) echo "ERROR: unsupported SDK archive: $archive" >&2; exit 4 ;;
+  esac
+  sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+  [[ -n "$sdk" ]] || { echo "ERROR: SDK extraction produced no directory" >&2; exit 4; }
+else
+  echo "Reusing prepared OpenWrt SDK for $release / $target/$subtarget"
+fi
+
+official_marker="$sdk/.audiowrt-official-feeds-ready"
+if [[ ! -f "$official_marker" ]]; then
+  cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
+  printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
+  (
+    cd "$sdk"
+    ./scripts/feeds update -a
+    ./scripts/feeds install -a
+  )
+  touch "$official_marker"
+else
+  cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
+  printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
+fi
+
+source_commit="$(git -C "$repo_root" rev-parse HEAD)"
+source_marker="$sdk/.audiowrt-source-$source_commit-ready"
+if [[ ! -f "$source_marker" ]]; then
+  echo "Refreshing AudioWRT feed for source $source_commit"
+  (
+    cd "$sdk"
+    ./scripts/feeds update audiowrt
+    ./scripts/feeds install -a -p audiowrt
+    make defconfig
+  )
+  find "$sdk" -maxdepth 1 -type f -name '.audiowrt-source-*-ready' -delete
+  touch "$source_marker"
+fi
 
 (
   cd "$sdk"
-  ./scripts/feeds update -a
-  ./scripts/feeds install -a
-  make defconfig
-
   target_path="package/feeds/audiowrt/$package/compile"
   [[ -e "package/feeds/audiowrt/$package" ]] || {
     echo "ERROR: AudioWRT feed did not register source package $package" >&2
@@ -102,8 +129,6 @@ printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
   make "$target_path" -j"$jobs" V=s
 )
 
-# Collect only APK outputs declared by this AudioWRT source Makefile. Dependency
-# APKs built as part of SDK preparation are not published as AudioWRT artifacts.
 mapfile -t output_names < <(python3 - "$source_dir/Makefile" <<'PY'
 import re, sys
 text = open(sys.argv[1], encoding='utf-8').read()
