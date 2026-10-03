@@ -29,7 +29,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    uses: ./.github/workflows/validate.yml
+
   plan:
+    needs: validate
     if: github.ref_name == 'main' || github.ref_name == 'testing'
     runs-on: ubuntu-24.04
     outputs:
