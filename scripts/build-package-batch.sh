@@ -15,7 +15,7 @@ EOF
 }
 
 release=""; arch=""; tasks_json=""; output_root=""; jobs=4
-cache=".cache/audiowrt-packages"; success_hook=""
+cache=""; success_hook=""
 while (($#)); do
   case "$1" in
     --release) release="$2"; shift 2 ;;
@@ -43,6 +43,14 @@ engine_dir="${AUDIOWRT_ENGINE_DIR:-$repo_root/.audiowrt-engine}"
 if [[ -n "$success_hook" ]]; then
   success_hook="$(cd "$(dirname "$success_hook")" && pwd)/$(basename "$success_hook")"
   [[ -f "$success_hook" ]] || { echo "ERROR: success hook not found: $success_hook" >&2; exit 2; }
+fi
+
+# The canonical AudioWRT builder mounts CACHE_DIR into Docker and therefore
+# requires the cache to live inside the AudioWRT checkout. Keep the default
+# cache under the checked-out build engine so GitHub Actions can persist it
+# without violating that invariant.
+if [[ -z "$cache" ]]; then
+  cache="$engine_dir/.cache/audiowrt-packages"
 fi
 
 mkdir -p "$cache" "$output_root"
