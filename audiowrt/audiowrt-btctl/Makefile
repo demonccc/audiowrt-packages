@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-btctl
 PKG_VERSION:=1.0.2
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
 PKG_BUILD_DEPENDS:=glib2
@@ -13,7 +13,7 @@ define Package/audiowrt-btctl
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=AudioWRT compact BlueZ D-Bus controller
-  DEPENDS:=+glib2-trimmed
+  EXTRA_DEPENDS:=glib2-trimmed (>=0)
 endef
 
 define Package/audiowrt-btctl/description
