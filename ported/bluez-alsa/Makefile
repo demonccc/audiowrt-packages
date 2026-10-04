@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=bluez-alsa
 PKG_VERSION:=4.1.1
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
 PKG_SOURCE_URL:=https://github.com/Arkq/bluez-alsa/archive/v$(PKG_VERSION)
@@ -37,7 +37,8 @@ define Package/bluez-alsa
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=BlueALSA Bluetooth audio backend
-  DEPENDS:=+alsa-lib +bluez-trimmed +bluez-libs +glib2-trimmed +sbc-trimmed +dbus
+  DEPENDS:=+alsa-lib +bluez-libs +dbus
+  EXTRA_DEPENDS:=bluez-trimmed (>=0), glib2-trimmed (>=0), sbc-trimmed (>=0)
   URL:=https://github.com/arkq/bluez-alsa
 endef
 
