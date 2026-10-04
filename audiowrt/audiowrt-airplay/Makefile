@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-airplay
 PKG_VERSION:=1.0.2
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 
@@ -12,7 +12,7 @@ define Package/audiowrt-airplay
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT AirPlay integration
-  DEPENDS:=+audiowrt-config +shairport-sync-mini
+  EXTRA_DEPENDS:=audiowrt-config (>=0), shairport-sync-mini (>=0)
 endef
 
 define Package/audiowrt-airplay/description
