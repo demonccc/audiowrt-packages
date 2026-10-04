@@ -115,10 +115,10 @@ jobs:
       - name: Restore canonical build cache
         uses: actions/cache@v4
         with:
-          path: .cache/audiowrt-packages
-          key: audiowrt-packages-v7-canonical-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
+          path: .audiowrt-engine/.cache/audiowrt-packages
+          key: audiowrt-packages-v8-canonical-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
           restore-keys: |
-            audiowrt-packages-v7-canonical-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
+            audiowrt-packages-v8-canonical-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
 
       - name: Build and publish pending packages with canonical AudioWRT builder
         shell: bash
