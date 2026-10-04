@@ -3,7 +3,7 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=glib2-trimmed
 AUDIOWRT_REPACKAGE_VERSION_SOURCE:=$(TOPDIR)/feeds/packages/libs/glib2/Makefile
 PKG_VERSION:=$(shell sed -n 's/^PKG_VERSION:=//p' $(AUDIOWRT_REPACKAGE_VERSION_SOURCE) 2>/dev/null | head -n1)
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=LGPL-2.1-or-later
 PKG_MAINTAINER:=AudioWRT
 
@@ -19,8 +19,6 @@ define Package/glib2-trimmed
   CATEGORY:=Libraries
   TITLE:=Trimmed GLib 2.0 runtime
   DEPENDS:=$(ICONV_DEPENDS) $(INTL_DEPENDS) +zlib +libpthread +libffi +libattr +libpcre2
-  PROVIDES:=glib2
-  CONFLICTS:=glib2
   URL:=https://www.gtk.org/
 endef
 
@@ -28,7 +26,9 @@ define Package/glib2-trimmed/description
  Repackages the exact official OpenWrt GLib2 APK selected for the current
  release and architecture. It keeps the GLib, GObject, GModule and GIO runtime
  libraries required by AudioWRT Bluetooth components while omitting the unused
- GIRepository and legacy GThread shared libraries.
+ GIRepository and legacy GThread shared libraries. AudioWRT packages depend on
+ glib2-trimmed explicitly instead of declaring it as a virtual provider for the
+ official glib2 package.
 endef
 
 define Build/Prepare
