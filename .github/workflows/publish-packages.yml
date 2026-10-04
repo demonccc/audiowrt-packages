@@ -110,10 +110,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/audiowrt-packages
-          key: audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
+          key: audiowrt-packages-v5-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
           restore-keys: |
-            audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
-            audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-
+            audiowrt-packages-v5-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
 
       - name: Build and publish pending packages incrementally
         shell: bash
