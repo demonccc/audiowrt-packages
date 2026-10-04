@@ -101,81 +101,16 @@ jobs:
             audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
             audiowrt-packages-${{ runner.os }}-${{ matrix.release }}-
 
-      - name: Build pending packages for architecture
+      - name: Build and publish pending packages incrementally
         shell: bash
         env:
+          RELEASE: ${{ matrix.release }}
+          ARCH: ${{ matrix.arch }}
           TASKS_JSON: ${{ matrix.tasks_json }}
           MAKE_JOBS: ${{ inputs.jobs || '4' }}
-        run: |
-          set -euo pipefail
-          bash scripts/build-package-batch.sh \
-            --release '${{ matrix.release }}' \
-            --arch '${{ matrix.arch }}' \
-            --tasks-json "$TASKS_JSON" \
-            --output output \
-            --jobs "$MAKE_JOBS"
-
-      - name: Publish successful package outputs
-        shell: bash
-        env:
-          TASKS_JSON: ${{ matrix.tasks_json }}
           CHANNEL: ${{ needs.plan.outputs.channel }}
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -uo pipefail
-          failures=0
-
-          while IFS=$'\t' read -r package scope target subtarget; do
-            [[ -n "$package" ]] || continue
-            output="output/${package}/${{ matrix.release }}/${{ matrix.arch }}/${target}/${subtarget}"
-
-            if [[ ! -d "$output/packages" ]] || ! compgen -G "$output/packages/*.apk" >/dev/null; then
-              echo "ERROR: no successful output for $package / ${{ matrix.arch }} / $target/$subtarget" >&2
-              failures=$((failures + 1))
-              continue
-            fi
-
-            short_sha="${GITHUB_SHA:0:12}"
-            safe_target="${target}-${subtarget}"
-            tag="packages-${CHANNEL}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${package}-${{ matrix.release }}-${{ matrix.arch }}-${safe_target}-${short_sha}"
-
-            if python3 scripts/create-repository-update.py \
-              --packages-dir "$output/packages" \
-              --context "$output/context.json" \
-              --scope "$scope" \
-              --channel "$CHANNEL" \
-              --release-tag "$tag" \
-              --repository "$GITHUB_REPOSITORY" \
-              --source-commit "$GITHUB_SHA" \
-              --output "$output/repository-update.json"; then
-
-              args=(release create "$tag" "$output"/packages/*.apk "$output/repository-update.json" \
-                --repo "$GITHUB_REPOSITORY" \
-                --target "$GITHUB_SHA" \
-                --title "$tag" \
-                --notes "AudioWRT ${package} for OpenWrt ${{ matrix.release }} / ${{ matrix.arch }} / ${target}/${subtarget}")
-              if [[ "$CHANNEL" == testing ]]; then
-                args+=(--prerelease)
-              fi
-              if ! gh "${args[@]}"; then
-                echo "ERROR: failed to publish $package for ${{ matrix.arch }}" >&2
-                failures=$((failures + 1))
-              fi
-            else
-              echo "ERROR: failed to create repository metadata for $package / ${{ matrix.arch }}" >&2
-              failures=$((failures + 1))
-            fi
-          done < <(python3 - <<'PY'
-          import json, os
-          for task in json.loads(os.environ['TASKS_JSON']):
-              print('\t'.join((task['package'], task['scope'], task['target'], task['subtarget'])))
-          PY
-          )
-
-          if (( failures > 0 )); then
-            echo "ERROR: $failures task(s) failed for ${{ matrix.arch }}; successful sibling tasks were still published." >&2
-            exit 1
-          fi
+        run: bash scripts/build-publish-incremental.sh
 
       - name: Upload architecture diagnostics
         if: always()
