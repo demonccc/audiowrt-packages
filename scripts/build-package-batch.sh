@@ -147,14 +147,6 @@ PY
       continue
     fi
 
-    echo "::group::Build $package / $release / $arch / $target/$subtarget"
-    if ! (cd "$sdk"; make "package/feeds/audiowrt/$package/compile" -j"$jobs" V=s); then
-      echo "$package|$target|$subtarget|compile-failed" >> "$failures_file"
-      echo "::endgroup::"
-      continue
-    fi
-    echo "::endgroup::"
-
     source_dir=""
     for category in audiowrt ported trimmed tailored; do
       candidate="$repo_root/$category/$package"
@@ -164,6 +156,16 @@ PY
 
     package_output="$output_root/$package/$release/$arch/$target/$subtarget"
     mkdir -p "$package_output/packages"
+    build_log="$package_output/build.log"
+
+    echo "Build $package / $release / $arch / $target/$subtarget"
+    if ! (cd "$sdk"; make "package/feeds/audiowrt/$package/compile" -j"$jobs" >"$build_log" 2>&1); then
+      echo "$package|$target|$subtarget|compile-failed" >> "$failures_file"
+      echo "ERROR: compile failed for $package; last 120 log lines:" >&2
+      tail -n 120 "$build_log" >&2 || true
+      continue
+    fi
+
     mapfile -t output_names < <(python3 - "$source_dir/Makefile" <<'PY'
 import re, sys
 text=open(sys.argv[1], encoding='utf-8').read()
@@ -181,6 +183,8 @@ PY
     done
     if [[ "$found" != 1 ]]; then
       echo "$package|$target|$subtarget|no-apk" >> "$failures_file"
+      echo "ERROR: $package compiled but produced no APK; last 80 log lines:" >&2
+      tail -n 80 "$build_log" >&2 || true
       continue
     fi
 
