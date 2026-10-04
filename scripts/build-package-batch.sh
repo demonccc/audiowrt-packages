@@ -6,15 +6,16 @@ usage() {
 Usage: build-package-batch.sh --release VERSION --arch ARCH --tasks-json JSON \
   --output DIR [--jobs N] [--cache DIR] [--success-hook SCRIPT]
 
-Build pending AudioWRT package sources for one architecture. Tasks are grouped
-by target/subtarget. Each OpenWrt SDK/context is prepared once, all requested
-package sources are installed into the feed once, defconfig runs once, and the
-packages are then compiled sequentially. An optional success hook runs
-immediately after each successful package output is captured.
+Build pending package roots with the canonical AudioWRT package builder. The
+AudioWRT repository owns OpenWrt SDK preparation, exact-release feed handling,
+dependency ordering, development-interface staging and special kernel/package
+preparation. This repository only selects pending roots, captures their APKs
+and publishes successful outputs.
 EOF
 }
 
-release=""; arch=""; tasks_json=""; output_root=""; jobs=4; cache=".cache/audiowrt-packages"; success_hook=""
+release=""; arch=""; tasks_json=""; output_root=""; jobs=4
+cache=".cache/audiowrt-packages"; success_hook=""
 while (($#)); do
   case "$1" in
     --release) release="$2"; shift 2 ;;
@@ -33,12 +34,10 @@ for value in release arch tasks_json output_root; do
 done
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source_build_packages_file="$repo_root/config/build/source-build-packages"
-
-is_source_build_package() {
-  local package="$1"
-  [[ -f "$source_build_packages_file" ]] || return 1
-  grep -Ev '^[[:space:]]*(#|$)' "$source_build_packages_file" | grep -Fxq "$package"
+engine_dir="${AUDIOWRT_ENGINE_DIR:-$repo_root/.audiowrt-engine}"
+[[ -f "$engine_dir/Makefile" && -f "$engine_dir/scripts/build.sh" ]] || {
+  echo "ERROR: canonical AudioWRT build engine is missing at $engine_dir" >&2
+  exit 2
 }
 
 if [[ -n "$success_hook" ]]; then
@@ -51,154 +50,94 @@ cache="$(cd "$cache" && pwd)"
 output_root="$(cd "$output_root" && pwd)"
 failures_file="$output_root/build-failures.txt"
 : > "$failures_file"
+source_commit="$(git -C "$repo_root" rev-parse HEAD)"
+
+profile_for_context() {
+  case "$1/$2" in
+    ath79/generic) printf 'tplink-tl-wdr4300-v1-minimal-usb-bluetooth-%s\n' "$release" ;;
+    ipq40xx/generic) printf 'linksys-ea8300-usb-bluetooth-audio-%s\n' "$release" ;;
+    bcm27xx/bcm2709) printf 'raspberry-pi-3-usb-bluetooth-audio-%s\n' "$release" ;;
+    bcm27xx/bcm2711) printf 'raspberry-pi-4-usb-bluetooth-audio-%s\n' "$release" ;;
+    x86/64) printf 'x86-64-usb-bluetooth-audio-%s\n' "$release" ;;
+    *) return 1 ;;
+  esac
+}
 
 mapfile -t contexts < <(TASKS_JSON="$tasks_json" python3 - <<'PY'
 import json, os
 seen=set()
-for t in json.loads(os.environ['TASKS_JSON']):
-    k=(t['target'], t['subtarget'])
-    if k not in seen:
-        seen.add(k)
-        print('\t'.join(k))
+for task in json.loads(os.environ['TASKS_JSON']):
+    key=(task['target'], task['subtarget'])
+    if key not in seen:
+        seen.add(key)
+        print('\t'.join(key))
 PY
 )
 
-prepare_sdk() {
-  local target="$1" subtarget="$2"
-  local base_url index archive archive_path feeds_buildinfo sdk_key sdk_parent sdk
-  base_url="https://downloads.openwrt.org/releases/$release/targets/$target/$subtarget"
-  index="$(curl -fsSL "$base_url/")"
-  archive="$(printf '%s' "$index" | grep -oE "openwrt-sdk-${release//./\\.}-${target//-/_}-${subtarget//-/_}[^\"<> ]*Linux-x86_64\\.tar\\.(zst|xz)" | head -n1 || true)"
-  [[ -n "$archive" ]] || archive="$(printf '%s' "$index" | grep -oE "openwrt-sdk-${release//./\\.}-[^\"<> ]*Linux-x86_64\\.tar\\.(zst|xz)" | head -n1 || true)"
-  [[ -n "$archive" ]] || { echo "ERROR: unable to discover SDK at $base_url/" >&2; return 4; }
-
-  archive_path="$cache/$archive"
-  if [[ ! -s "$archive_path" ]]; then
-    echo "Downloading $archive" >&2
-    curl -fL --retry 3 -o "$archive_path.tmp" "$base_url/$archive" >&2
-    mv "$archive_path.tmp" "$archive_path"
-  fi
-
-  feeds_buildinfo="$cache/feeds-$release-$target-$subtarget.buildinfo"
-  if [[ ! -s "$feeds_buildinfo" ]]; then
-    echo "Downloading exact release feed revisions for $release / $target/$subtarget" >&2
-    curl -fL --retry 3 -o "$feeds_buildinfo.tmp" "$base_url/feeds.buildinfo" >&2
-    mv "$feeds_buildinfo.tmp" "$feeds_buildinfo"
-  fi
-
-  sdk_key="v5-exact-$release-$target-$subtarget"
-  sdk_parent="$cache/sdk-$sdk_key"
-  sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1 || true)"
-  if [[ -z "$sdk" ]]; then
-    echo "Preparing clean OpenWrt SDK for $release / $target/$subtarget" >&2
-    rm -rf "$sdk_parent"
-    mkdir -p "$sdk_parent"
-    case "$archive" in
-      *.tar.zst) tar --zstd -xf "$archive_path" -C "$sdk_parent" ;;
-      *.tar.xz) tar -xJf "$archive_path" -C "$sdk_parent" ;;
-      *) return 4 ;;
-    esac
-    sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d | head -n1)"
-  else
-    echo "Reusing OpenWrt SDK session for $release / $target/$subtarget" >&2
-  fi
-
-  # The SDK feed branches move after a release. Reproduce the exact feed commits
-  # recorded by OpenWrt for this target instead of mixing a release SDK with the
-  # current feed branch heads.
-  cp "$feeds_buildinfo" "$sdk/feeds.conf"
-  printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
-
-  local official_marker="$sdk/.audiowrt-official-feeds-v5-exact-ready"
-  if [[ ! -f "$official_marker" ]]; then
-    (
-      cd "$sdk"
-      rm -rf feeds/packages feeds/luci feeds/routing feeds/telephony feeds/video
-      ./scripts/feeds update -a
-
-      release_series="${release%.*}"
-      rust_patch="$repo_root/repository/sdk-patches/$release_series/packages-rust-use-ci-llvm.patch"
-      if [[ -f "$rust_patch" && -f feeds/packages/lang/rust/Makefile ]]; then
-        echo "Applying SDK patch: $rust_patch" >&2
-        if ! patch -d feeds/packages -p1 --forward --batch < "$rust_patch"; then
-          echo "ERROR: failed to apply Rust CI LLVM patch; refusing to build a full LLVM toolchain" >&2
-          exit 20
-        fi
-        grep -q -- '--set=llvm.download-ci-llvm=true' feeds/packages/lang/rust/Makefile || {
-          echo "ERROR: Rust CI LLVM patch did not enable llvm.download-ci-llvm" >&2
-          exit 21
-        }
-      fi
-    ) >&2
-    touch "$official_marker"
-  fi
-
-  printf '%s\n' "$sdk"
-}
-
 for context in "${contexts[@]}"; do
   IFS=$'\t' read -r target subtarget <<<"$context"
-  sdk="$(prepare_sdk "$target" "$subtarget")"
+  if ! profile="$(profile_for_context "$target" "$subtarget")"; then
+    echo "ERROR: no canonical AudioWRT profile for $target/$subtarget" >&2
+    exit 4
+  fi
+  [[ -f "$engine_dir/profiles/$profile.yaml" ]] || {
+    echo "ERROR: canonical AudioWRT profile does not exist: $profile" >&2
+    exit 4
+  }
 
   mapfile -t task_rows < <(TASKS_JSON="$tasks_json" TARGET="$target" SUBTARGET="$subtarget" python3 - <<'PY'
 import json, os
 seen=set()
-for t in json.loads(os.environ['TASKS_JSON']):
-    if t['target'] != os.environ['TARGET'] or t['subtarget'] != os.environ['SUBTARGET']:
+for task in json.loads(os.environ['TASKS_JSON']):
+    if task['target'] != os.environ['TARGET'] or task['subtarget'] != os.environ['SUBTARGET']:
         continue
-    key=(t['package'], t['scope'])
+    key=(task['package'], task['scope'])
     if key in seen:
         continue
     seen.add(key)
     print('\t'.join(key))
 PY
   )
+  ((${#task_rows[@]})) || continue
 
-  source_commit="$(git -C "$repo_root" rev-parse HEAD)"
-  source_marker="$sdk/.audiowrt-source-$source_commit-ready"
-  if [[ ! -f "$source_marker" ]]; then
-    echo "Refreshing AudioWRT feed for source $source_commit" >&2
-    (cd "$sdk"; ./scripts/feeds update audiowrt) >&2
-    find "$sdk" -maxdepth 1 -type f -name '.audiowrt-source-*-ready' -delete
-    touch "$source_marker"
-  fi
-
-  # Do not let package links or generated Kconfig metadata from a previous
-  # cached run leak into the current task set.
-  rm -rf "$sdk/package/feeds/audiowrt"
-  rm -f "$sdk/tmp/.packageinfo" "$sdk/tmp/.config-package.in"
-
-  echo "Registering ${#task_rows[@]} package source(s) for $target/$subtarget"
+  roots=()
+  declare -A pending_scope=()
   for row in "${task_rows[@]}"; do
     IFS=$'\t' read -r package scope <<<"$row"
-    if ! (cd "$sdk"; ./scripts/feeds install -f -p audiowrt "$package") >/dev/null 2>&1; then
-      echo "$package|$target|$subtarget|feed-install-failed" >> "$failures_file"
-      echo "ERROR: feed install failed for $package" >&2
-    fi
+    roots+=("$package")
+    pending_scope["$package"]="$scope"
   done
 
-  echo "Configuring SDK once for $target/$subtarget"
-  config_log="$output_root/config-$release-$arch-$target-$subtarget.log"
-  if ! (cd "$sdk"; make defconfig >"$config_log" 2>&1); then
-    echo "ERROR: make defconfig failed for $target/$subtarget; last 120 log lines:" >&2
-    tail -n 120 "$config_log" >&2 || true
-    for row in "${task_rows[@]}"; do
-      IFS=$'\t' read -r package scope <<<"$row"
-      echo "$package|$target|$subtarget|defconfig-failed" >> "$failures_file"
-    done
-    continue
+  echo "::group::Canonical AudioWRT build / $release / $arch / $target/$subtarget"
+  echo "Profile: $profile"
+  echo "Pending roots: ${roots[*]}"
+
+  engine_cache="$cache/canonical-$release-$target-$subtarget"
+  mkdir -p "$engine_cache"
+  rm -rf "$engine_dir/output/packages/$profile" "$engine_dir/.work/packages/$profile"
+
+  build_log="$output_root/canonical-$release-$arch-$target-$subtarget.log"
+  set +e
+  make -C "$engine_dir" packages \
+    AUDIOWRT_PROFILE="$profile" \
+    PACKAGE="${roots[*]}" \
+    AUDIOWRT_PACKAGES_REPOSITORY="https://github.com/${GITHUB_REPOSITORY}.git" \
+    AUDIOWRT_PACKAGES_REF="$source_commit" \
+    JOBS="$jobs" \
+    VERBOSITY=normal \
+    CACHE_DIR="$engine_cache" >"$build_log" 2>&1
+  build_rc=$?
+  set -e
+
+  engine_output="$engine_dir/output/packages/$profile/packages"
+  if (( build_rc != 0 )); then
+    echo "ERROR: canonical AudioWRT package build failed for $target/$subtarget; last 160 log lines:" >&2
+    tail -n 160 "$build_log" >&2 || true
   fi
 
   for row in "${task_rows[@]}"; do
     IFS=$'\t' read -r package scope <<<"$row"
-    echo "::group::Task $package / $release / $arch / $target/$subtarget"
-
-    if [[ ! -e "$sdk/package/feeds/audiowrt/$package" ]]; then
-      echo "$package|$target|$subtarget|not-registered" >> "$failures_file"
-      echo "ERROR: package is not registered in the SDK: $package" >&2
-      echo "::endgroup::"
-      continue
-    fi
+    echo "::group::Capture $package / $release / $arch / $target/$subtarget"
 
     source_dir=""
     for category in audiowrt ported trimmed tailored; do
@@ -215,43 +154,32 @@ PY
     package_output="$output_root/$package/$release/$arch/$target/$subtarget"
     mkdir -p "$package_output/packages"
     rm -f "$package_output/packages"/*.apk
-    build_log="$package_output/build.log"
-
-    make_args=("package/feeds/audiowrt/$package/compile" "-j$jobs")
-    if is_source_build_package "$package"; then
-      echo "Build $package (source-build dependencies enabled)"
-    else
-      make_args+=("NO_DEPS=1")
-      echo "Build $package (NO_DEPS=1)"
-    fi
-
-    if ! (cd "$sdk"; make "${make_args[@]}" >"$build_log" 2>&1); then
-      echo "$package|$target|$subtarget|compile-failed" >> "$failures_file"
-      echo "ERROR: compile failed for $package; last 120 log lines:" >&2
-      tail -n 120 "$build_log" >&2 || true
-      echo "::endgroup::"
-      continue
-    fi
 
     mapfile -t output_names < <(python3 - "$source_dir/Makefile" <<'PY'
 import re, sys
 text=open(sys.argv[1], encoding='utf-8').read()
-for n in re.findall(r'^define Package/([^\s]+)', text, re.M): print(n)
-for n in re.findall(r'^define KernelPackage/([^\s]+)', text, re.M): print('kmod-'+n)
+for name in re.findall(r'^define Package/([^\s]+)', text, re.M):
+    print(name)
+for name in re.findall(r'^define KernelPackage/([^\s]+)', text, re.M):
+    print('kmod-'+name)
 PY
     )
 
     found=0
-    for name in "${output_names[@]}"; do
-      while IFS= read -r apk; do
-        cp -f "$apk" "$package_output/packages/"
-        found=1
-      done < <(find "$sdk/bin" -type f -name "$name-*.apk" -print)
-    done
+    if [[ -d "$engine_output" ]]; then
+      for name in "${output_names[@]}"; do
+        while IFS= read -r apk; do
+          cp -f "$apk" "$package_output/packages/"
+          found=1
+        done < <(find "$engine_output" -maxdepth 1 -type f -name "$name-*.apk" -print)
+      done
+    fi
+
     if [[ "$found" != 1 ]]; then
-      echo "$package|$target|$subtarget|no-apk" >> "$failures_file"
-      echo "ERROR: $package compiled but produced no APK; last 80 log lines:" >&2
-      tail -n 80 "$build_log" >&2 || true
+      reason="no-apk"
+      (( build_rc == 0 )) || reason="canonical-build-failed"
+      echo "$package|$target|$subtarget|$reason" >> "$failures_file"
+      echo "ERROR: no canonical APK captured for $package" >&2
       echo "::endgroup::"
       continue
     fi
@@ -259,12 +187,18 @@ PY
     python3 - "$package_output/context.json" "$package" "$release" "$arch" "$target" "$subtarget" <<'PY'
 import json, sys
 path, package, release, arch, target, subtarget=sys.argv[1:]
-with open(path,'w',encoding='utf-8') as f:
-    json.dump({'package_source':package,'openwrt_version':release,'arch':arch,'target':target,'subtarget':subtarget},f,indent=2,sort_keys=True)
-    f.write('\n')
+with open(path,'w',encoding='utf-8') as handle:
+    json.dump({
+        'package_source':package,
+        'openwrt_version':release,
+        'arch':arch,
+        'target':target,
+        'subtarget':subtarget,
+    }, handle, indent=2, sort_keys=True)
+    handle.write('\n')
 PY
-    echo "Built $package"
 
+    echo "Built $package with canonical AudioWRT builder"
     if [[ -n "$success_hook" ]]; then
       if ! PACKAGE_NAME="$package" PACKAGE_SCOPE="$scope" PACKAGE_OUTPUT="$package_output" \
           RELEASE="$release" ARCH="$arch" TARGET="$target" SUBTARGET="$subtarget" \
@@ -275,9 +209,10 @@ PY
         continue
       fi
     fi
-
     echo "::endgroup::"
   done
+
+  echo "::endgroup::"
 done
 
 if [[ -s "$failures_file" ]]; then
