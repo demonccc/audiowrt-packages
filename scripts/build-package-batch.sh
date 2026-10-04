@@ -65,7 +65,7 @@ PY
 
 prepare_sdk() {
   local target="$1" subtarget="$2"
-  local base_url index archive archive_path sdk_key sdk_parent sdk
+  local base_url index archive archive_path feeds_buildinfo sdk_key sdk_parent sdk
   base_url="https://downloads.openwrt.org/releases/$release/targets/$target/$subtarget"
   index="$(curl -fsSL "$base_url/")"
   archive="$(printf '%s' "$index" | grep -oE "openwrt-sdk-${release//./\\.}-${target//-/_}-${subtarget//-/_}[^\"<> ]*Linux-x86_64\\.tar\\.(zst|xz)" | head -n1 || true)"
@@ -79,7 +79,14 @@ prepare_sdk() {
     mv "$archive_path.tmp" "$archive_path"
   fi
 
-  sdk_key="v4-$release-$target-$subtarget"
+  feeds_buildinfo="$cache/feeds-$release-$target-$subtarget.buildinfo"
+  if [[ ! -s "$feeds_buildinfo" ]]; then
+    echo "Downloading exact release feed revisions for $release / $target/$subtarget" >&2
+    curl -fL --retry 3 -o "$feeds_buildinfo.tmp" "$base_url/feeds.buildinfo" >&2
+    mv "$feeds_buildinfo.tmp" "$feeds_buildinfo"
+  fi
+
+  sdk_key="v5-exact-$release-$target-$subtarget"
   sdk_parent="$cache/sdk-$sdk_key"
   sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1 || true)"
   if [[ -z "$sdk" ]]; then
@@ -96,13 +103,17 @@ prepare_sdk() {
     echo "Reusing OpenWrt SDK session for $release / $target/$subtarget" >&2
   fi
 
-  cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
+  # The SDK feed branches move after a release. Reproduce the exact feed commits
+  # recorded by OpenWrt for this target instead of mixing a release SDK with the
+  # current feed branch heads.
+  cp "$feeds_buildinfo" "$sdk/feeds.conf"
   printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
 
-  local official_marker="$sdk/.audiowrt-official-feeds-v4-ready"
+  local official_marker="$sdk/.audiowrt-official-feeds-v5-exact-ready"
   if [[ ! -f "$official_marker" ]]; then
     (
       cd "$sdk"
+      rm -rf feeds/packages feeds/luci feeds/routing feeds/telephony feeds/video
       ./scripts/feeds update -a
 
       release_series="${release%.*}"
@@ -151,6 +162,11 @@ PY
     find "$sdk" -maxdepth 1 -type f -name '.audiowrt-source-*-ready' -delete
     touch "$source_marker"
   fi
+
+  # Do not let package links or generated Kconfig metadata from a previous
+  # cached run leak into the current task set.
+  rm -rf "$sdk/package/feeds/audiowrt"
+  rm -f "$sdk/tmp/.packageinfo" "$sdk/tmp/.config-package.in"
 
   echo "Registering ${#task_rows[@]} package source(s) for $target/$subtarget"
   for row in "${task_rows[@]}"; do
