@@ -104,15 +104,23 @@ jobs:
       - name: Checkout AudioWRT packages
         uses: actions/checkout@v4
 
-      - name: Restore OpenWrt SDK cache
+      - name: Checkout canonical AudioWRT build engine
+        uses: actions/checkout@v4
+        with:
+          repository: demonccc/audiowrt
+          ref: 680f766ac513d3c9bdcc6ea04f20ac0b8f59b207
+          path: .audiowrt-engine
+          fetch-depth: 1
+
+      - name: Restore canonical build cache
         uses: actions/cache@v4
         with:
           path: .cache/audiowrt-packages
-          key: audiowrt-packages-v6-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
+          key: audiowrt-packages-v7-canonical-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
           restore-keys: |
-            audiowrt-packages-v6-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
+            audiowrt-packages-v7-canonical-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
 
-      - name: Build and publish pending packages incrementally
+      - name: Build and publish pending packages with canonical AudioWRT builder
         shell: bash
         env:
           RELEASE: ${{ matrix.release }}
@@ -121,6 +129,7 @@ jobs:
           MAKE_JOBS: ${{ inputs.jobs || '4' }}
           CHANNEL: ${{ needs.plan.outputs.channel }}
           GH_TOKEN: ${{ github.token }}
+          AUDIOWRT_ENGINE_DIR: ${{ github.workspace }}/.audiowrt-engine
         run: bash scripts/build-publish-incremental.sh
 
       - name: Upload architecture diagnostics
