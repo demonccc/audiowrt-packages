@@ -4,15 +4,17 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: build-package-batch.sh --release VERSION --arch ARCH --tasks-json JSON \
-  --output DIR [--jobs N] [--cache DIR]
+  --output DIR [--jobs N] [--cache DIR] [--success-hook SCRIPT]
 
 Build pending AudioWRT package sources for one architecture. Tasks are grouped
-by target/subtarget. Each OpenWrt SDK is prepared once, then package sources are
-compiled one at a time so completed outputs survive a later package failure.
+by target/subtarget. Each OpenWrt SDK/context is prepared once, all requested
+package sources are installed into the feed once, defconfig runs once, and the
+packages are then compiled sequentially. An optional success hook runs
+immediately after each successful package output is captured.
 EOF
 }
 
-release=""; arch=""; tasks_json=""; output_root=""; jobs=4; cache=".cache/audiowrt-packages"
+release=""; arch=""; tasks_json=""; output_root=""; jobs=4; cache=".cache/audiowrt-packages"; success_hook=""
 while (($#)); do
   case "$1" in
     --release) release="$2"; shift 2 ;;
@@ -21,6 +23,7 @@ while (($#)); do
     --output) output_root="$2"; shift 2 ;;
     --jobs) jobs="$2"; shift 2 ;;
     --cache) cache="$2"; shift 2 ;;
+    --success-hook) success_hook="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "ERROR: unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -30,6 +33,11 @@ for value in release arch tasks_json output_root; do
 done
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ -n "$success_hook" ]]; then
+  success_hook="$(cd "$(dirname "$success_hook")" && pwd)/$(basename "$success_hook")"
+  [[ -f "$success_hook" ]] || { echo "ERROR: success hook not found: $success_hook" >&2; exit 2; }
+fi
+
 mkdir -p "$cache" "$output_root"
 cache="$(cd "$cache" && pwd)"
 output_root="$(cd "$output_root" && pwd)"
@@ -63,8 +71,6 @@ prepare_sdk() {
     mv "$archive_path.tmp" "$archive_path"
   fi
 
-  # v4 invalidates v3 SDKs whose Rust optimization patch failed to apply while
-  # the old code still wrote the ready marker. The SDK archive itself remains cached.
   sdk_key="v4-$release-$target-$subtarget"
   sdk_parent="$cache/sdk-$sdk_key"
   sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1 || true)"
@@ -79,7 +85,7 @@ prepare_sdk() {
     esac
     sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d | head -n1)"
   else
-    echo "Reusing clean OpenWrt SDK for $release / $target/$subtarget" >&2
+    echo "Reusing OpenWrt SDK session for $release / $target/$subtarget" >&2
   fi
 
   cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
@@ -115,13 +121,17 @@ for context in "${contexts[@]}"; do
   IFS=$'\t' read -r target subtarget <<<"$context"
   sdk="$(prepare_sdk "$target" "$subtarget")"
 
-  mapfile -t packages < <(TASKS_JSON="$tasks_json" TARGET="$target" SUBTARGET="$subtarget" python3 - <<'PY'
+  mapfile -t task_rows < <(TASKS_JSON="$tasks_json" TARGET="$target" SUBTARGET="$subtarget" python3 - <<'PY'
 import json, os
 seen=set()
 for t in json.loads(os.environ['TASKS_JSON']):
-    if t['target']==os.environ['TARGET'] and t['subtarget']==os.environ['SUBTARGET'] and t['package'] not in seen:
-        seen.add(t['package'])
-        print(t['package'])
+    if t['target'] != os.environ['TARGET'] or t['subtarget'] != os.environ['SUBTARGET']:
+        continue
+    key=(t['package'], t['scope'])
+    if key in seen:
+        continue
+    seen.add(key)
+    print('\t'.join(key))
 PY
   )
 
@@ -134,16 +144,35 @@ PY
     touch "$source_marker"
   fi
 
-  for package in "${packages[@]}"; do
-    (cd "$sdk"; ./scripts/feeds install -f -p audiowrt "$package") >&2 || {
+  echo "Registering ${#task_rows[@]} package source(s) for $target/$subtarget"
+  for row in "${task_rows[@]}"; do
+    IFS=$'\t' read -r package scope <<<"$row"
+    if ! (cd "$sdk"; ./scripts/feeds install -f -p audiowrt "$package") >/dev/null 2>&1; then
       echo "$package|$target|$subtarget|feed-install-failed" >> "$failures_file"
-    }
+      echo "ERROR: feed install failed for $package" >&2
+    fi
   done
-  (cd "$sdk"; make defconfig) >&2
 
-  for package in "${packages[@]}"; do
+  echo "Configuring SDK once for $target/$subtarget"
+  config_log="$output_root/config-$release-$arch-$target-$subtarget.log"
+  if ! (cd "$sdk"; make defconfig >"$config_log" 2>&1); then
+    echo "ERROR: make defconfig failed for $target/$subtarget; last 120 log lines:" >&2
+    tail -n 120 "$config_log" >&2 || true
+    for row in "${task_rows[@]}"; do
+      IFS=$'\t' read -r package scope <<<"$row"
+      echo "$package|$target|$subtarget|defconfig-failed" >> "$failures_file"
+    done
+    continue
+  fi
+
+  for row in "${task_rows[@]}"; do
+    IFS=$'\t' read -r package scope <<<"$row"
+    echo "::group::Task $package / $release / $arch / $target/$subtarget"
+
     if [[ ! -e "$sdk/package/feeds/audiowrt/$package" ]]; then
       echo "$package|$target|$subtarget|not-registered" >> "$failures_file"
+      echo "ERROR: package is not registered in the SDK: $package" >&2
+      echo "::endgroup::"
       continue
     fi
 
@@ -152,17 +181,24 @@ PY
       candidate="$repo_root/$category/$package"
       [[ -f "$candidate/Makefile" ]] && { source_dir="$candidate"; break; }
     done
-    [[ -n "$source_dir" ]] || { echo "$package|$target|$subtarget|unknown-source" >> "$failures_file"; continue; }
+    if [[ -z "$source_dir" ]]; then
+      echo "$package|$target|$subtarget|unknown-source" >> "$failures_file"
+      echo "ERROR: source directory not found for $package" >&2
+      echo "::endgroup::"
+      continue
+    fi
 
     package_output="$output_root/$package/$release/$arch/$target/$subtarget"
     mkdir -p "$package_output/packages"
+    rm -f "$package_output/packages"/*.apk
     build_log="$package_output/build.log"
 
-    echo "Build $package / $release / $arch / $target/$subtarget"
+    echo "Build $package"
     if ! (cd "$sdk"; make "package/feeds/audiowrt/$package/compile" -j"$jobs" >"$build_log" 2>&1); then
       echo "$package|$target|$subtarget|compile-failed" >> "$failures_file"
       echo "ERROR: compile failed for $package; last 120 log lines:" >&2
       tail -n 120 "$build_log" >&2 || true
+      echo "::endgroup::"
       continue
     fi
 
@@ -185,6 +221,7 @@ PY
       echo "$package|$target|$subtarget|no-apk" >> "$failures_file"
       echo "ERROR: $package compiled but produced no APK; last 80 log lines:" >&2
       tail -n 80 "$build_log" >&2 || true
+      echo "::endgroup::"
       continue
     fi
 
@@ -195,11 +232,25 @@ with open(path,'w',encoding='utf-8') as f:
     json.dump({'package_source':package,'openwrt_version':release,'arch':arch,'target':target,'subtarget':subtarget},f,indent=2,sort_keys=True)
     f.write('\n')
 PY
-    echo "Built $package for OpenWrt $release / $arch / $target/$subtarget"
+    echo "Built $package"
+
+    if [[ -n "$success_hook" ]]; then
+      if ! PACKAGE_NAME="$package" PACKAGE_SCOPE="$scope" PACKAGE_OUTPUT="$package_output" \
+          RELEASE="$release" ARCH="$arch" TARGET="$target" SUBTARGET="$subtarget" \
+          SOURCE_COMMIT="$source_commit" bash "$success_hook"; then
+        echo "$package|$target|$subtarget|success-hook-failed" >> "$failures_file"
+        echo "ERROR: success hook failed for $package" >&2
+        echo "::endgroup::"
+        continue
+      fi
+    fi
+
+    echo "::endgroup::"
   done
 done
 
 if [[ -s "$failures_file" ]]; then
-  echo "Some package outputs were not produced:" >&2
+  echo "Some package tasks failed; successful outputs were already preserved/published:" >&2
   cat "$failures_file" >&2
+  exit 1
 fi
