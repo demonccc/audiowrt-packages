@@ -63,9 +63,9 @@ prepare_sdk() {
     mv "$archive_path.tmp" "$archive_path"
   fi
 
-  # v3 deliberately invalidates SDKs polluted by the old `feeds install -a`
-  # behavior. The archive itself remains cached.
-  sdk_key="v3-$release-$target-$subtarget"
+  # v4 invalidates v3 SDKs whose Rust optimization patch failed to apply while
+  # the old code still wrote the ready marker. The SDK archive itself remains cached.
+  sdk_key="v4-$release-$target-$subtarget"
   sdk_parent="$cache/sdk-$sdk_key"
   sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n1 || true)"
   if [[ -z "$sdk" ]]; then
@@ -85,20 +85,24 @@ prepare_sdk() {
   cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
 
-  local official_marker="$sdk/.audiowrt-official-feeds-v3-ready"
+  local official_marker="$sdk/.audiowrt-official-feeds-v4-ready"
   if [[ ! -f "$official_marker" ]]; then
     (
       cd "$sdk"
-      # Updating feed indexes is enough. Installing every package from every
-      # official feed is both slow and wrong: it pollutes Kconfig with tens of
-      # thousands of unrelated package symbols and recursive dependencies.
       ./scripts/feeds update -a
 
       release_series="${release%.*}"
       rust_patch="$repo_root/repository/sdk-patches/$release_series/packages-rust-use-ci-llvm.patch"
       if [[ -f "$rust_patch" && -f feeds/packages/lang/rust/Makefile ]]; then
         echo "Applying SDK patch: $rust_patch" >&2
-        patch -d feeds/packages -p1 --forward --batch < "$rust_patch"
+        if ! patch -d feeds/packages -p1 --forward --batch < "$rust_patch"; then
+          echo "ERROR: failed to apply Rust CI LLVM patch; refusing to build a full LLVM toolchain" >&2
+          exit 20
+        fi
+        grep -q -- '--set=llvm.download-ci-llvm=true' feeds/packages/lang/rust/Makefile || {
+          echo "ERROR: Rust CI LLVM patch did not enable llvm.download-ci-llvm" >&2
+          exit 21
+        }
       fi
     ) >&2
     touch "$official_marker"
@@ -130,9 +134,6 @@ PY
     touch "$source_marker"
   fi
 
-  # Install only the AudioWRT sources requested for this context. The feeds
-  # helper pulls their declared dependencies as needed; we never install all
-  # packages from packages/luci/routing/telephony/video or all AudioWRT sources.
   for package in "${packages[@]}"; do
     (cd "$sdk"; ./scripts/feeds install -f -p audiowrt "$package") >&2 || {
       echo "$package|$target|$subtarget|feed-install-failed" >> "$failures_file"
