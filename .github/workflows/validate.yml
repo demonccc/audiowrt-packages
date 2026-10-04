@@ -84,16 +84,17 @@ jobs:
       - name: Smoke-test architecture-grouped planner
         run: |
           set -euo pipefail
-          matrix="$(python3 scripts/plan-package-builds.py --base HEAD --head HEAD)"
+          matrix="$(python3 scripts/plan-package-builds-matrix.py --base HEAD --head HEAD)"
           python3 -c 'import json,sys; assert json.load(sys.stdin) == {"include": []}' <<<"$matrix"
 
-          matrix="$(python3 scripts/plan-package-builds.py --package all)"
+          matrix="$(python3 scripts/plan-package-builds-matrix.py --package all)"
           MATRIX="$matrix" python3 - <<'PY'
           import json, os
           data = json.loads(os.environ['MATRIX'])
           jobs = data['include']
-          assert len(jobs) == 4, f'expected one job per architecture, got {len(jobs)}'
+          assert len(jobs) == 5, f'expected all + four architecture jobs, got {len(jobs)}'
           expected_arches = {
+              'all',
               'mips_24kc',
               'arm_cortex-a7_neon-vfpv4',
               'aarch64_cortex-a72',
@@ -106,6 +107,11 @@ jobs:
               assert tasks
               assert job['task_count'] == len(tasks)
               assert all({'package', 'scope', 'target', 'subtarget'} <= set(task) for task in tasks)
+              if job['arch'] == 'all':
+                  assert all(task['scope'] == 'all' for task in tasks)
+                  assert all((task['target'], task['subtarget']) == ('x86', '64') for task in tasks)
+              else:
+                  assert all(task['scope'] != 'all' for task in tasks)
           PY
 
       - name: Validate wpad syslog patch

@@ -21,8 +21,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: package-repository-${{ github.ref_name }}
@@ -59,11 +57,11 @@ jobs:
           fi
 
           if [[ -n "$REQUESTED" ]]; then
-            matrix="$(python3 scripts/plan-package-builds.py --package "$REQUESTED" --head "$GITHUB_SHA")"
+            matrix="$(python3 scripts/plan-package-builds-matrix.py --package "$REQUESTED" --head "$GITHUB_SHA")"
           else
             matrix=""
             for attempt in 1 2 3 4 5; do
-              if matrix="$(python3 scripts/plan-package-builds.py \
+              if matrix="$(python3 scripts/plan-package-builds-matrix.py \
                 --repository "$GITHUB_REPOSITORY" \
                 --channel "$channel" \
                 --head "$GITHUB_SHA")"; then
@@ -90,7 +88,7 @@ jobs:
           else
             echo "should_build=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "Planned $tasks pending package task(s) in $count architecture job(s) for $channel"
+          echo "Planned $tasks pending package task(s) in $count independent build job(s) for $channel"
           python3 -m json.tool <<<"$matrix"
 
   build-publish:
@@ -110,9 +108,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/audiowrt-packages
-          key: audiowrt-packages-v5-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
+          key: audiowrt-packages-v6-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
           restore-keys: |
-            audiowrt-packages-v5-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
+            audiowrt-packages-v6-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
 
       - name: Build and publish pending packages incrementally
         shell: bash
@@ -133,28 +131,3 @@ jobs:
           path: output/
           if-no-files-found: warn
           retention-days: 14
-
-  pages:
-    needs:
-      - plan
-      - build-publish
-    if: always() && needs.plan.outputs.should_build == 'true' && needs.plan.result == 'success' && needs.build-publish.result != 'cancelled'
-    runs-on: ubuntu-24.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Rebuild repository metadata from successful release history
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/build-pages-repository.py --repository "$GITHUB_REPOSITORY" --output _site
-
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-      - name: Deploy GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
