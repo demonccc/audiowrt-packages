@@ -238,11 +238,33 @@ def main() -> int:
     parser.add_argument("--repository", default="")
     parser.add_argument("--channel", choices=("stable", "testing"))
     parser.add_argument("--token-env", default="GITHUB_TOKEN")
+    parser.add_argument("--arch", default="", help="Restrict planning to one package architecture")
+    parser.add_argument("--target", default="", help="Restrict planning to one OpenWrt target")
+    parser.add_argument("--subtarget", default="", help="Restrict planning to one OpenWrt subtarget")
     args = parser.parse_args()
 
     repo = Path.cwd().resolve()
     sources = source_dirs(repo)
     arch_ctx, kernel_ctx = load_contexts(repo / args.matrix)
+
+    context_filter = {
+        key: value
+        for key, value in (
+            ("arch", args.arch.strip()),
+            ("target", args.target.strip()),
+            ("subtarget", args.subtarget.strip()),
+        )
+        if value
+    }
+    if context_filter:
+        arch_ctx = [ctx for ctx in arch_ctx if context_matches(ctx, context_filter)]
+        kernel_ctx = [ctx for ctx in kernel_ctx if context_matches(ctx, context_filter)]
+        if not arch_ctx:
+            requested_filter = "/".join(
+                context_filter.get(key, "*") for key in ("arch", "target", "subtarget")
+            )
+            raise SystemExit(f"ERROR: build matrix has no architecture context matching {requested_filter}")
+
     rules_path = repo / args.rules
     rules = json.loads(rules_path.read_text(encoding="utf-8")) if rules_path.is_file() else {}
     dependents = rules.get("rebuild_dependents", {})
