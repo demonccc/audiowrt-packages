@@ -6,9 +6,9 @@ usage() {
 Usage: build-package-batch.sh --release VERSION --arch ARCH --tasks-json JSON \
   --output DIR [--jobs N] [--cache DIR]
 
-Build all pending AudioWRT package sources for one architecture. Tasks are grouped
-by target/subtarget. Each OpenWrt SDK is prepared once and all requested package
-targets for that context are built in one make invocation.
+Build pending AudioWRT package sources for one architecture. Tasks are grouped
+by target/subtarget. Each OpenWrt SDK is prepared once, then package sources are
+compiled one at a time so completed outputs survive a later package failure.
 EOF
 }
 
@@ -141,22 +141,20 @@ PY
   done
   (cd "$sdk"; make defconfig) >&2
 
-  targets=()
   for package in "${packages[@]}"; do
-    if [[ -e "$sdk/package/feeds/audiowrt/$package" ]]; then
-      targets+=("package/feeds/audiowrt/$package/compile")
-    else
+    if [[ ! -e "$sdk/package/feeds/audiowrt/$package" ]]; then
       echo "$package|$target|$subtarget|not-registered" >> "$failures_file"
+      continue
     fi
-  done
 
-  if ((${#targets[@]})); then
-    echo "::group::Build ${#targets[@]} package source(s) / $release / $arch / $target/$subtarget"
-    (cd "$sdk"; make -k "${targets[@]}" -j"$jobs" V=s) || true
+    echo "::group::Build $package / $release / $arch / $target/$subtarget"
+    if ! (cd "$sdk"; make "package/feeds/audiowrt/$package/compile" -j"$jobs" V=s); then
+      echo "$package|$target|$subtarget|compile-failed" >> "$failures_file"
+      echo "::endgroup::"
+      continue
+    fi
     echo "::endgroup::"
-  fi
 
-  for package in "${packages[@]}"; do
     source_dir=""
     for category in audiowrt ported trimmed tailored; do
       candidate="$repo_root/$category/$package"
