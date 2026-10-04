@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=audiowrt-spotify
 PKG_VERSION:=1.0.2
-PKG_RELEASE:=2
+PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKGARCH:=all
 
@@ -12,7 +12,7 @@ define Package/audiowrt-spotify
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=AudioWRT Spotify Connect integration
-  EXTRA_DEPENDS:=audiowrt-config (>=0), librespot (>=0)
+  DEPENDS:=+audiowrt-config +librespot
 endef
 
 define Package/audiowrt-spotify/description

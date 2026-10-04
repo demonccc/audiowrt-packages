@@ -33,6 +33,14 @@ for value in release arch tasks_json output_root; do
 done
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source_build_packages_file="$repo_root/config/build/source-build-packages"
+
+is_source_build_package() {
+  local package="$1"
+  [[ -f "$source_build_packages_file" ]] || return 1
+  grep -Ev '^[[:space:]]*(#|$)' "$source_build_packages_file" | grep -Fxq "$package"
+}
+
 if [[ -n "$success_hook" ]]; then
   success_hook="$(cd "$(dirname "$success_hook")" && pwd)/$(basename "$success_hook")"
   [[ -f "$success_hook" ]] || { echo "ERROR: success hook not found: $success_hook" >&2; exit 2; }
@@ -193,8 +201,15 @@ PY
     rm -f "$package_output/packages"/*.apk
     build_log="$package_output/build.log"
 
-    echo "Build $package"
-    if ! (cd "$sdk"; make "package/feeds/audiowrt/$package/compile" -j"$jobs" >"$build_log" 2>&1); then
+    make_args=("package/feeds/audiowrt/$package/compile" "-j$jobs")
+    if is_source_build_package "$package"; then
+      echo "Build $package (source-build dependencies enabled)"
+    else
+      make_args+=("NO_DEPS=1")
+      echo "Build $package (NO_DEPS=1)"
+    fi
+
+    if ! (cd "$sdk"; make "${make_args[@]}" >"$build_log" 2>&1); then
       echo "$package|$target|$subtarget|compile-failed" >> "$failures_file"
       echo "ERROR: compile failed for $package; last 120 log lines:" >&2
       tail -n 120 "$build_log" >&2 || true

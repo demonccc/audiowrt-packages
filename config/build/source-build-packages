@@ -1,0 +1,9 @@
+# AudioWRT packages that genuinely need SDK development dependencies staged
+# while compiling. Every package not listed here is built with NO_DEPS=1 so
+# runtime dependencies remain official OpenWrt release binaries and are not
+# rebuilt from source.
+
+librespot
+bluez-trimmed
+audiowrt-btctl
+bluez-alsa
