@@ -51,7 +51,16 @@ def main() -> int:
     repo = Path.cwd().resolve()
     packages_dir = Path(args.packages_dir)
     context = json.loads(Path(args.context).read_text(encoding="utf-8"))
-    sources = source_map(repo)
+
+    # New build artifacts carry the package output names and source directory so
+    # publication can happen later without checking out the exact build commit.
+    # Keep source_map() as compatibility for older artifacts.
+    output_names = context.get("output_names") or []
+    source_dir = context.get("source_dir")
+    if output_names and source_dir:
+        sources = {name: source_dir for name in output_names}
+    else:
+        sources = source_map(repo)
 
     names = sorted(sources, key=len, reverse=True)
     packages: dict[str, dict[str, str]] = {}
