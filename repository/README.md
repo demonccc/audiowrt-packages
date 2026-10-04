@@ -1,29 +1,66 @@
 # Published AudioWRT package repository
 
-AudioWRT package source and its build engine live in this repository. The package pipeline is intentionally independent from `demonccc/audiowrt`: it uses official OpenWrt SDKs and this repository itself as an OpenWrt feed.
+AudioWRT package sources live in this repository. Package compilation reuses the canonical package-mode builder from `demonccc/audiowrt`, while this repository owns planning, testing publication, production promotion, repository metadata and Pages.
 
-- GitHub Releases store immutable APK assets produced by incremental builds.
-- Each successful build context stores `repository-update.json` describing exactly which package entries it updates.
-- GitHub Pages rebuilds the current repository view from the complete immutable update history.
-- Failed build contexts never cancel sibling architectures and never replace the last known-good package state.
+## Release flow
+
+The package lifecycle deliberately separates build, testing publication and production promotion:
+
+1. Merges to `testing` run **Build AudioWRT Packages**.
+2. Build jobs run independently by logical scope/context (`all`, architecture and kernel target) and upload successful APKs as GitHub Actions artifacts. They do not create Releases.
+3. **Publish AudioWRT Packages to Testing** is a manual workflow. Given a build run ID, it publishes the exact successful APK artifacts from that run to testing Releases.
+4. Tested package releases are added to `repository/production-packages.yaml`.
+5. When that manifest change reaches `main`, **Promote Production Packages** copies the exact testing APK bytes to stable Releases after validating SHA256. Nothing is rebuilt on `main`.
+6. **Publish Package Repository Pages** rebuilds the current testing/stable repository view from immutable Release metadata.
+
+This keeps source acceptance and binary promotion separate: a package can exist in testing for as long as necessary without becoming production, and stable always contains the same artifact that was tested.
+
+## Production package manifest
+
+`repository/production-packages.yaml` is the production whitelist. Its root keys are package scope categories:
+
+```yaml
+all:
+  package-name:
+    - release: "1.2.3-r1"
+      openwrt_versions:
+        - "25.12.5"
+        - "25.12.6"
+
+architectures:
+  mips_24kc:
+    package-name:
+      - release: "1.2.3-r1"
+        openwrt_versions:
+          - "25.12.5"
+
+targets:
+  ath79/generic:
+    package-name:
+      - release: "6.6.110-r1"
+        openwrt_versions:
+          - "25.12.5"
+```
+
+A package may have multiple approved releases, and one package release may be approved for multiple OpenWrt versions. The manifest intentionally contains only human-maintained approval data. Release tags, source commits and SHA256 values are resolved and verified automatically from the testing repository.
 
 ## Channels
 
-- `stable` is produced from `main`.
-- `testing` is produced from `testing`.
+- `testing` contains manually published build artifacts selected from completed testing build runs.
+- `stable` contains only package releases explicitly listed in `repository/production-packages.yaml` after that manifest reaches `main`.
 
-Feature/fix branches validate tooling but do not publish permanent package repository state.
+Feature/fix branches validate tooling but never publish package repository state.
 
 ## Architecture-first build matrix
 
-`repository/build-matrix.toml` is the only list of build contexts that participate automatically. Configuration is grouped by package architecture first, then by OpenWrt version.
+`repository/build-matrix.toml` defines the build contexts that participate automatically. Configuration is grouped by package architecture first, then by OpenWrt version.
 
 For each architecture/version:
 
 - `sdk_target` is the canonical OpenWrt target/subtarget used to compile architecture-scoped userspace packages once.
 - `kernel_targets` lists every target/subtarget that needs its own kernel-scoped package build.
 
-An architecture/version absent from this file is not built automatically. Adding it is an explicit support decision and bootstraps that new context through the normal merge-triggered pipeline.
+`PKGARCH:=all` packages are planned as their own logical `all` build job. The builder may use a concrete SDK internally, but repository state and publication remain scope `all` rather than being mixed into that SDK architecture.
 
 ## Package scopes
 
@@ -35,27 +72,9 @@ The planner derives scope from each package Makefile:
 
 ## Incremental builds
 
-Every merge to `testing` or `main` runs `scripts/plan-package-builds.py` against the merge delta. The planner resolves only changed package source directories plus explicit compile/link dependents declared in `repository/rebuild-dependents.json`, then emits a dynamic GitHub Actions matrix.
+Merges to `testing` run `scripts/plan-package-builds.py` against the published testing state. The planner resolves changed package source directories plus explicit compile/link dependents declared in `repository/rebuild-dependents.json`, then emits a dynamic GitHub Actions matrix.
 
-Each matrix entry is one independent package source + OpenWrt context. GitHub Actions uses `fail-fast: false`, so an architecture-specific failure does not cancel other architectures. Successful contexts publish immediately; failed contexts keep their previous repository state.
-
-## Context-scoped patches
-
-Common AudioWRT patches remain directly under `patches/` and apply to every context. Architecture- or target-specific patches use:
-
-```text
-patches/arch/<arch>/*.patch
-patches/target/<target>/<subtarget>/*.patch
-```
-
-The same structure is supported below a release family:
-
-```text
-releases/25.12/patches/arch/<arch>/*.patch
-releases/25.12/patches/target/<target>/<subtarget>/*.patch
-```
-
-Changing an architecture-specific patch rebuilds only that architecture. Changing a target-specific patch rebuilds only that target/subtarget. Common Makefile/source/patch changes rebuild all enabled contexts applicable to that package scope.
+Architecture jobs use `fail-fast: false`, so a failure in one architecture does not cancel sibling architectures. Successful package outputs remain available as workflow artifacts even when another package in that job fails.
 
 ## Published repository layout
 
@@ -67,4 +86,4 @@ Pages publishes scope-specific current views:
 <channel>/<openwrt-version>/targets/<target>/<subtarget>/repository.json
 ```
 
-A firmware profile can therefore compose the `all`, package-architecture and target repositories appropriate for its OpenWrt build context without causing package recompilation.
+The root `index.json` catalogs every current repository view, and `index.html` provides a browsable summary. A firmware profile can compose the `all`, package-architecture and target repositories appropriate for its OpenWrt build context without causing package recompilation.
