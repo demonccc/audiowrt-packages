@@ -5,7 +5,7 @@ AUDIOWRT_CANONICAL_RECIPE:=$(TOPDIR)/feeds/packages/utils/bluez/Makefile
 include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_BUILD_DEPENDS:=glib2
 
 include $(INCLUDE_DIR)/package.mk
@@ -14,7 +14,8 @@ define Package/bluez-trimmed
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=Trimmed BlueZ audio daemon
-  DEPENDS:=+bluez-libs +glib2-trimmed +dbus
+  DEPENDS:=+bluez-libs +dbus
+  EXTRA_DEPENDS:=glib2-trimmed (>=0)
   URL:=https://www.bluez.org/
 endef
 
