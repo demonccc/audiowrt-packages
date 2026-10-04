@@ -21,8 +21,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: package-repository-${{ github.ref_name }}
@@ -133,33 +131,3 @@ jobs:
           path: output/
           if-no-files-found: warn
           retention-days: 14
-
-  pages:
-    needs:
-      - plan
-      - build-publish
-    if: always() && needs.plan.outputs.should_build == 'true' && needs.plan.result == 'success' && needs.build-publish.result != 'cancelled'
-    runs-on: ubuntu-24.04
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Rebuild repository metadata from all successful release history
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/build-pages-repository.py --repository "$GITHUB_REPOSITORY" --output _site
-
-      - name: Configure or enable GitHub Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Deploy GitHub Pages aggregate index
-        id: deployment
-        uses: actions/deploy-pages@v4
