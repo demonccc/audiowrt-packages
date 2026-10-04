@@ -1,0 +1,70 @@
+name: Publish Package Repository Pages
+run-name: Rebuild package repository index
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: package-repository-pages
+  cancel-in-progress: true
+
+jobs:
+  pages:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build repository index from immutable releases
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          rm -rf site
+          python3 scripts/build-pages-repository.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --output site
+
+      - name: Publish gh-pages branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd site
+          git init -q
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git checkout -q -b gh-pages
+          git add -A
+          git commit -q -m "pages: rebuild package repository index"
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --force origin gh-pages
+
+      - name: Configure GitHub Pages from gh-pages
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          if gh api "repos/$GITHUB_REPOSITORY/pages" >/dev/null 2>&1; then
+            gh api --method PUT "repos/$GITHUB_REPOSITORY/pages" \
+              -f 'source[branch]=gh-pages' \
+              -f 'source[path]=/'
+            rc=$?
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/pages" \
+              -f 'source[branch]=gh-pages' \
+              -f 'source[path]=/'
+            rc=$?
+          fi
+          if (( rc != 0 )); then
+            echo "::warning::The gh-pages branch was updated, but GitHub did not allow this workflow token to enable/configure Pages. Enable Pages once from Settings > Pages using gh-pages / root; future updates are automatic."
+          fi
+          exit 0
