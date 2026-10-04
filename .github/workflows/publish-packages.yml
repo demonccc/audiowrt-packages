@@ -58,24 +58,15 @@ jobs:
             channel=testing
           fi
 
-          # Temporary focus: only build packages required for the TP-Link
-          # TL-WDR4300 (mips_24kc / ath79/generic). Remove these filters when
-          # the other supported architectures are ready to be re-enabled.
-          planner_scope=(--arch mips_24kc --target ath79 --subtarget generic)
-
           if [[ -n "$REQUESTED" ]]; then
-            matrix="$(python3 scripts/plan-package-builds.py \
-              --package "$REQUESTED" \
-              --head "$GITHUB_SHA" \
-              "${planner_scope[@]}")"
+            matrix="$(python3 scripts/plan-package-builds.py --package "$REQUESTED" --head "$GITHUB_SHA")"
           else
             matrix=""
             for attempt in 1 2 3 4 5; do
               if matrix="$(python3 scripts/plan-package-builds.py \
                 --repository "$GITHUB_REPOSITORY" \
                 --channel "$channel" \
-                --head "$GITHUB_SHA" \
-                "${planner_scope[@]}")"; then
+                --head "$GITHUB_SHA")"; then
                 break
               fi
 
@@ -99,7 +90,7 @@ jobs:
           else
             echo "should_build=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "Planned $tasks pending WDR4300 package task(s) in $count architecture job(s) for $channel"
+          echo "Planned $tasks pending package task(s) in $count architecture job(s) for $channel"
           python3 -m json.tool <<<"$matrix"
 
   build-publish:
@@ -119,9 +110,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/audiowrt-packages
-          key: audiowrt-packages-v5-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-ath79-generic-${{ github.sha }}
+          key: audiowrt-packages-v5-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
           restore-keys: |
-            audiowrt-packages-v5-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-ath79-generic-
+            audiowrt-packages-v5-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
 
       - name: Build and publish pending packages incrementally
         shell: bash
