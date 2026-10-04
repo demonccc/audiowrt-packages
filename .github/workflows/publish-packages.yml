@@ -61,10 +61,24 @@ jobs:
           if [[ -n "$REQUESTED" ]]; then
             matrix="$(python3 scripts/plan-package-builds.py --package "$REQUESTED" --head "$GITHUB_SHA")"
           else
-            matrix="$(python3 scripts/plan-package-builds.py \
-              --repository "$GITHUB_REPOSITORY" \
-              --channel "$channel" \
-              --head "$GITHUB_SHA")"
+            matrix=""
+            for attempt in 1 2 3 4 5; do
+              if matrix="$(python3 scripts/plan-package-builds.py \
+                --repository "$GITHUB_REPOSITORY" \
+                --channel "$channel" \
+                --head "$GITHUB_SHA")"; then
+                break
+              fi
+
+              if (( attempt == 5 )); then
+                echo "ERROR: package planner failed after $attempt attempts; refusing to start package builds with incomplete publication state" >&2
+                exit 1
+              fi
+
+              delay=$((5 * (2 ** (attempt - 1))))
+              echo "WARNING: package planner failed, likely due to a transient GitHub API/asset error; retrying in ${delay}s ($attempt/5)" >&2
+              sleep "$delay"
+            done
           fi
 
           count="$(python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))' <<<"$matrix")"
