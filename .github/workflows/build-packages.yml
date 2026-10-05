@@ -85,7 +85,7 @@ jobs:
     if: needs.plan.outputs.should_build == 'true'
     name: ${{ matrix.release }} / ${{ matrix.arch }} / ${{ matrix.task_count }} pending task(s)
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -93,21 +93,22 @@ jobs:
       - name: Checkout AudioWRT packages
         uses: actions/checkout@v4
 
-      - name: Restore OpenWrt SDK cache
+      - name: Restore OpenWrt SDK archive cache
         uses: actions/cache@v4
         with:
-          path: .cache/audiowrt-packages
-          key: audiowrt-packages-v10-sdk-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
+          path: ${{ runner.temp }}/audiowrt-packages-cache
+          key: audiowrt-packages-v11-isolated-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
           restore-keys: |
-            audiowrt-packages-v10-sdk-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
+            audiowrt-packages-v11-isolated-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
 
-      - name: Build pending packages with OpenWrt SDK
+      - name: Build pending packages with isolated OpenWrt SDKs
         shell: bash
         env:
           RELEASE: ${{ matrix.release }}
           ARCH: ${{ matrix.arch }}
           TASKS_JSON: ${{ matrix.tasks_json }}
           MAKE_JOBS: ${{ inputs.jobs || '4' }}
+          SDK_CACHE_DIR: ${{ runner.temp }}/audiowrt-packages-cache
         run: bash scripts/build-publish-incremental.sh
 
       - name: Upload architecture build artifacts
