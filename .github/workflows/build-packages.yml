@@ -101,13 +101,16 @@ jobs:
           path: .audiowrt-engine
           fetch-depth: 1
 
+      - name: Prepare canonical engine for package contexts
+        run: python3 scripts/prepare-canonical-engine.py .audiowrt-engine
+
       - name: Restore canonical build cache
         uses: actions/cache@v4
         with:
           path: .audiowrt-engine/.cache/audiowrt-packages
-          key: audiowrt-packages-v8-canonical-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
+          key: audiowrt-packages-v9-canonical-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
           restore-keys: |
-            audiowrt-packages-v8-canonical-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
+            audiowrt-packages-v9-canonical-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
 
       - name: Build pending packages with canonical AudioWRT builder
         shell: bash
