@@ -6,9 +6,9 @@ usage() {
 Usage: build-package-context.sh --package NAME --release VERSION --arch ARCH \
   --target TARGET --subtarget SUBTARGET --output DIR [--jobs N] [--cache DIR]
 
-Build exactly one AudioWRT package source in one clean OpenWrt SDK context.
-The package repository itself is used as an OpenWrt feed. No AudioWRT firmware
-profile, device or flavor participates in package compilation.
+Build one AudioWRT package root in one clean OpenWrt SDK context. AudioWRT-owned
+runtime/build dependencies are resolved and compiled first in topological order.
+No AudioWRT firmware profile, device or flavor participates in package CI.
 EOF
 }
 
@@ -51,6 +51,18 @@ for category in audiowrt ported trimmed tailored; do
 done
 [[ -n "$source_dir" ]] || { echo "ERROR: unknown AudioWRT package source: $package" >&2; exit 3; }
 
+build_targets="$repo_root/config/build/package-build-targets"
+source_build_packages="$repo_root/config/build/source-build-packages"
+resolver="$repo_root/scripts/resolve-package-build-targets.py"
+[[ -f "$build_targets" ]] || { echo "ERROR: package build target map is missing" >&2; exit 3; }
+[[ -f "$resolver" ]] || { echo "ERROR: package dependency resolver is missing" >&2; exit 3; }
+
+is_source_build_package() {
+  local name="$1"
+  [[ -f "$source_build_packages" ]] || return 1
+  grep -Ev '^[[:space:]]*(#|$)' "$source_build_packages" | grep -Fxq "$name"
+}
+
 mkdir -p "$cache" "$output/packages"
 cache="$(cd "$cache" && pwd)"
 output="$(cd "$output" && pwd)"
@@ -70,9 +82,9 @@ if [[ ! -s "$archive_path" ]]; then
   mv "$archive_path.tmp" "$archive_path"
 fi
 
-# The archive is cached, but every package gets a clean extracted SDK. This is
-# deliberate: generated Kconfig/package state from one package must never leak
-# into another package build.
+# Cache only the immutable SDK archive. Every package root receives a fresh SDK
+# workspace so generated Kconfig, package metadata and staging state cannot leak
+# between independent package tasks.
 sdk_parent="$(mktemp -d "$cache/sdk-work-${release}-${target}-${subtarget}-XXXXXX")"
 cleanup() { rm -rf "$sdk_parent"; }
 trap cleanup EXIT
@@ -84,9 +96,6 @@ esac
 sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d | head -n1)"
 [[ -n "$sdk" ]] || { echo "ERROR: SDK extraction produced no directory" >&2; exit 4; }
 
-# This is the proven package-repository build model: start from the SDK's own
-# exact-release feed configuration, add only this repository as the AudioWRT
-# feed, install the feed set in the clean SDK, then build one package context.
 cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
 printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
 
@@ -96,14 +105,51 @@ printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
   ./scripts/feeds install -a
   make defconfig
 
-  target_path="package/feeds/audiowrt/$package/compile"
-  [[ -e "package/feeds/audiowrt/$package" ]] || {
-    echo "ERROR: AudioWRT feed did not register source package $package" >&2
+  packageinfo="$sdk/tmp/.packageinfo"
+  [[ -s "$packageinfo" ]] || {
+    echo "ERROR: OpenWrt package metadata was not generated" >&2
     exit 5
   }
-  make "$target_path" -j"$jobs" V=s
+
+  build_plan="$sdk/tmp/audiowrt-build-plan.txt"
+  python3 "$resolver" "$build_targets" "$packageinfo" "$package" > "$build_plan"
+  mapfile -t build_specs < "$build_plan"
+  ((${#build_specs[@]})) || {
+    echo "ERROR: no AudioWRT build targets resolved for $package" >&2
+    exit 5
+  }
+
+  echo "AudioWRT dependency closure for $package:"
+  printf '  %s\n' "${build_specs[@]}"
+
+  # Compile dependencies first, then the requested root. Package-only recipes
+  # stay behind NO_DEPS=1 so official OpenWrt runtime dependencies are not
+  # rebuilt. The small explicit source-build set may traverse its development
+  # dependency graph (GLib for btctl/BlueZ, Rust for librespot, etc.).
+  for spec in "${build_specs[@]}"; do
+    build_package="${spec%%|*}"
+    target_path="${spec#*|}"
+    [[ -n "$build_package" && -n "$target_path" && "$target_path" != "$spec" ]] || {
+      echo "ERROR: invalid build plan entry: $spec" >&2
+      exit 5
+    }
+    [[ -e "package/feeds/audiowrt/$build_package" ]] || {
+      echo "ERROR: AudioWRT feed did not register source package $build_package" >&2
+      exit 5
+    }
+
+    if is_source_build_package "$build_package"; then
+      echo "Building AudioWRT source dependency/root: $build_package"
+      make "$target_path" -j"$jobs" V=s
+    else
+      echo "Building AudioWRT package-only dependency/root: $build_package (NO_DEPS=1)"
+      make "$target_path" NO_DEPS=1 -j"$jobs" V=s
+    fi
+  done
 )
 
+# Publish only APK outputs declared by the requested source root. Dependency APKs
+# are internal build inputs for this task; their own planner tasks publish them.
 mapfile -t output_names < <(python3 - "$source_dir/Makefile" <<'PY'
 import re, sys
 text = open(sys.argv[1], encoding='utf-8').read()
