@@ -29,10 +29,12 @@ def load_targets(path: Path):
 
 def normalize_dependency(token: str) -> str:
     token = token.strip().lstrip("+@")
+    if not token or token.startswith("$(") or token.startswith("("):
+        return ""
     if ":" in token:
         token = token.rsplit(":", 1)[1]
     token = token.lstrip("+@")
-    return re.split(r"[<>= ]", token, maxsplit=1)[0]
+    return re.split(r"[<>= ()]", token, maxsplit=1)[0]
 
 
 def load_package_metadata(path: Path):
@@ -61,6 +63,64 @@ def load_package_metadata(path: Path):
     return dependencies, provides
 
 
+def logical_make_lines(text: str):
+    pending = ""
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        if pending:
+            line = pending + line.lstrip()
+        if line.endswith("\\"):
+            pending = line[:-1] + " "
+            continue
+        yield line
+        pending = ""
+    if pending:
+        yield pending
+
+
+def load_extra_dependencies(repo_root: Path, owned_packages: set[str]):
+    """Return AudioWRT runtime edges hidden from tmp/.packageinfo.
+
+    OpenWrt EXTRA_DEPENDS is deliberately packaging-only: it is written into the
+    resulting package metadata but does not participate in the normal build
+    dependency graph. AudioWRT uses it for trimmed runtime providers so source
+    builds can compile against official development packages without rebuilding
+    those providers transitively. Package CI still needs those AudioWRT runtime
+    providers built first so OpenWrt's shared-library checker can resolve them.
+    """
+    package_makefiles = {}
+    for category in ("audiowrt", "ported", "trimmed", "tailored"):
+        root = repo_root / category
+        if not root.is_dir():
+            continue
+        for makefile in root.glob("*/Makefile"):
+            text = makefile.read_text(encoding="utf-8", errors="replace")
+            for match in re.finditer(r"^define (?:Package|KernelPackage)/([^\s]+)", text, re.M):
+                name = match.group(1)
+                if match.group(0).startswith("define KernelPackage/"):
+                    name = "kmod-" + name
+                package_makefiles.setdefault(name, makefile)
+
+    extra_dependencies = {package: [] for package in owned_packages}
+    for package in owned_packages:
+        makefile = package_makefiles.get(package)
+        if makefile is None:
+            continue
+        for line in logical_make_lines(makefile.read_text(encoding="utf-8", errors="replace")):
+            match = re.match(r"\s*EXTRA_DEPENDS\s*(?::|\+)?=\s*(.*)$", line)
+            if not match:
+                continue
+            for token in match.group(1).split():
+                dependency = normalize_dependency(token)
+                if (
+                    dependency
+                    and dependency in owned_packages
+                    and dependency not in extra_dependencies[package]
+                ):
+                    extra_dependencies[package].append(dependency)
+    return extra_dependencies
+
+
 def main() -> None:
     if len(sys.argv) < 4:
         fail(
@@ -69,7 +129,7 @@ def main() -> None:
             "[--providers <package> ...]"
         )
 
-    targets_path = Path(sys.argv[1])
+    targets_path = Path(sys.argv[1]).resolve()
     packageinfo_path = Path(sys.argv[2])
     arguments = sys.argv[3:]
     providers = []
@@ -89,6 +149,8 @@ def main() -> None:
 
     targets = load_targets(targets_path)
     dependencies, package_provides = load_package_metadata(packageinfo_path)
+    repo_root = targets_path.parents[2]
+    extra_dependencies = load_extra_dependencies(repo_root, set(targets))
     selected = []
     state = {}
 
@@ -109,7 +171,15 @@ def main() -> None:
             fail("AudioWRT package dependency cycle: " + " -> ".join([*chain, package]))
 
         state[package] = 1
-        for dependency in dependencies.get(package, []):
+        package_dependencies = [
+            *dependencies.get(package, []),
+            *extra_dependencies.get(package, []),
+        ]
+        seen_dependencies = set()
+        for dependency in package_dependencies:
+            if dependency in seen_dependencies:
+                continue
+            seen_dependencies.add(dependency)
             if dependency in targets:
                 visit(dependency, [*chain, package])
                 continue
