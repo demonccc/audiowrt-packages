@@ -1,0 +1,42 @@
+name: Validate Package Builder
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/build-package-context.sh'
+      - 'scripts/resolve-package-build-targets.py'
+      - 'scripts/resolve-source-build-dependencies.py'
+      - 'config/build/package-build-targets'
+      - 'config/build/source-build-packages'
+      - 'audiowrt/audiowrt-btctl/**'
+      - 'trimmed/glib2-trimmed/**'
+      - '.github/workflows/validate-package-builder.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-btctl-mips:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout AudioWRT packages
+        uses: actions/checkout@v4
+
+      - name: Smoke-build audiowrt-btctl on OpenWrt 25.12.5 ath79/generic
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$RUNNER_TEMP/btctl-smoke"
+          cache="$RUNNER_TEMP/audiowrt-package-sdk-cache"
+          scripts/build-package-context.sh \
+            --package audiowrt-btctl \
+            --release 25.12.5 \
+            --arch mips_24kc \
+            --target ath79 \
+            --subtarget generic \
+            --output "$output" \
+            --jobs 2 \
+            --cache "$cache"
+          test -n "$(find "$output/packages" -maxdepth 1 -type f -name 'audiowrt-btctl-*.apk' -print -quit)"
