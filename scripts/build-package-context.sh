@@ -6,9 +6,10 @@ usage() {
 Usage: build-package-context.sh --package NAME --release VERSION --arch ARCH \
   --target TARGET --subtarget SUBTARGET --output DIR [--jobs N] [--cache DIR]
 
-Build one AudioWRT package root in one clean OpenWrt SDK context. AudioWRT-owned
-dependencies are resolved first; official OpenWrt dependencies are installed only
-when required by that closure. No firmware profile, device or flavor participates.
+Build one AudioWRT package root in one clean OpenWrt SDK context. The package
+flow mirrors the proven AudioWRT firmware builder, but is driven only by exact
+OpenWrt release + architecture + target/subtarget. No firmware profile, device
+or flavor participates.
 EOF
 }
 
@@ -41,30 +42,25 @@ for value in package release arch target subtarget output; do
 done
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+build_targets="$repo_root/config/build/package-build-targets"
+source_build_packages="$repo_root/config/build/source-build-packages"
+resolver="$repo_root/scripts/resolve-package-build-targets.py"
+source_dep_resolver="$repo_root/scripts/resolve-source-build-dependencies.py"
+
+for required in "$build_targets" "$source_build_packages" "$resolver" "$source_dep_resolver"; do
+  [[ -f "$required" ]] || { echo "ERROR: required build input is missing: $required" >&2; exit 3; }
+done
+
 source_dir=""
 for category in audiowrt ported trimmed tailored; do
-  candidate="$repo_root/$category/$package"
-  if [[ -f "$candidate/Makefile" ]]; then
-    source_dir="$candidate"
-    break
-  fi
-done
-if [[ -z "$source_dir" ]]; then
   while IFS= read -r makefile; do
     if grep -Eq "^define (Package/${package}|KernelPackage/${package#kmod-})([[:space:]]|$)" "$makefile"; then
       source_dir="$(dirname "$makefile")"
-      break
+      break 2
     fi
-  done < <(find "$repo_root"/audiowrt "$repo_root"/ported "$repo_root"/trimmed "$repo_root"/tailored -mindepth 2 -maxdepth 2 -name Makefile -type f | sort)
-fi
+  done < <(find "$repo_root/$category" -mindepth 2 -maxdepth 2 -name Makefile -type f | sort)
+done
 [[ -n "$source_dir" ]] || { echo "ERROR: unknown AudioWRT package source: $package" >&2; exit 3; }
-
-build_targets="$repo_root/config/build/package-build-targets"
-resolver="$repo_root/scripts/resolve-package-build-targets.py"
-official_dep_resolver="$repo_root/scripts/resolve-official-sdk-dependencies.py"
-[[ -f "$build_targets" ]] || { echo "ERROR: package build target map is missing" >&2; exit 3; }
-[[ -f "$resolver" ]] || { echo "ERROR: package dependency resolver is missing" >&2; exit 3; }
-[[ -f "$official_dep_resolver" ]] || { echo "ERROR: official SDK dependency resolver is missing" >&2; exit 3; }
 
 mkdir -p "$cache" "$output/packages"
 cache="$(cd "$cache" && pwd)"
@@ -97,28 +93,33 @@ sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d | head -n1)"
 [[ -n "$sdk" ]] || { echo "ERROR: SDK extraction produced no directory" >&2; exit 4; }
 
 cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
-printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
 
 (
   cd "$sdk"
+
+  # Same source-registration model as audiowrt/scripts/build.sh: update feed
+  # source trees, but never `feeds install -a` and never install the whole
+  # AudioWRT feed into package/. AudioWRT-owned recipes are registered directly.
   ./scripts/feeds update -a
 
-  # Register AudioWRT source trees directly, exactly once. Do not use
-  # `feeds install -p audiowrt -a`: that installs unrelated package outputs and
-  # reintroduces the recursive Kconfig graph that package CI must avoid.
   rm -rf package/feeds/audiowrt
   mkdir -p package/feeds/audiowrt
   while IFS='|' read -r owned target_path extra; do
     [[ -n "$owned" && "$owned" != \#* ]] || continue
     [[ -z "${extra:-}" ]] || { echo "ERROR: invalid package-build-targets entry: $owned" >&2; exit 5; }
+    [[ "$target_path" == package/feeds/audiowrt/*/compile ]] || continue
+
     source_path=""
-    while IFS= read -r makefile; do
-      if grep -Eq "^define (Package/${owned}|KernelPackage/${owned#kmod-})([[:space:]]|$)" "$makefile"; then
-        source_path="$(dirname "$makefile")"
-        break
-      fi
-    done < <(find "$repo_root"/audiowrt "$repo_root"/ported "$repo_root"/trimmed "$repo_root"/tailored -mindepth 2 -maxdepth 2 -name Makefile -type f | sort)
+    for category in audiowrt ported trimmed tailored; do
+      while IFS= read -r makefile; do
+        if grep -Eq "^define (Package/${owned}|KernelPackage/${owned#kmod-})([[:space:]]|$)" "$makefile"; then
+          source_path="$(dirname "$makefile")"
+          break 2
+        fi
+      done < <(find "$repo_root/$category" -mindepth 2 -maxdepth 2 -name Makefile -type f | sort)
+    done
     [[ -n "$source_path" ]] || { echo "ERROR: source directory not found for $owned" >&2; exit 5; }
+
     source_rel="${target_path#package/feeds/audiowrt/}"
     source_rel="${source_rel%/compile}"
     destination="package/feeds/audiowrt/$source_rel"
@@ -126,8 +127,6 @@ printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
     [[ -e "$destination" || -L "$destination" ]] || ln -s "$source_path" "$destination"
   done < "$build_targets"
 
-  # First metadata pass: enough to resolve the AudioWRT closure and identify the
-  # official OpenWrt packages that closure actually needs.
   make VERSION_NUMBER="$release" -s prepare-tmpinfo
   packageinfo="$sdk/tmp/.packageinfo"
   [[ -s "$packageinfo" ]] || { echo "ERROR: OpenWrt package metadata was not generated" >&2; exit 5; }
@@ -137,36 +136,18 @@ printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
   mapfile -t build_specs < "$build_plan"
   ((${#build_specs[@]})) || { echo "ERROR: no AudioWRT build targets resolved for $package" >&2; exit 5; }
 
+  declare -A source_build_package=()
+  while IFS= read -r name; do
+    [[ -n "$name" && "$name" != \#* ]] || continue
+    source_build_package["$name"]=1
+  done < "$source_build_packages"
+
   build_packages=()
-  for spec in "${build_specs[@]}"; do
-    build_packages+=("${spec%%|*}")
-  done
+  source_packages=()
+  ordered_targets=()
+  declare -A source_target_seen=()
+  declare -A ordered_target_seen=()
 
-  mapfile -t official_dependencies < <(
-    python3 "$official_dep_resolver" "$build_targets" "$packageinfo" "${build_packages[@]}"
-  )
-  if ((${#official_dependencies[@]})); then
-    echo "Official SDK dependencies required by $package:"
-    printf '  %s\n' "${official_dependencies[@]}"
-    for dependency in "${official_dependencies[@]}"; do
-      # Base/toolchain packages are already registered by the SDK. Install only
-      # dependencies whose package symbol is not present yet; this keeps feeds
-      # narrow while making their source available for dependency staging.
-      if grep -Fxq "Package: $dependency" "$packageinfo"; then
-        continue
-      fi
-      ./scripts/feeds install "$dependency"
-    done
-  fi
-
-  make VERSION_NUMBER="$release" defconfig
-
-  echo "AudioWRT dependency closure for $package:"
-  printf '  %s\n' "${build_specs[@]}"
-
-  # Build the closure with normal OpenWrt dependency traversal inside this clean
-  # SDK. Official dependency APKs are staging inputs only: output collection
-  # below exports exclusively the requested AudioWRT root package(s).
   for spec in "${build_specs[@]}"; do
     build_package="${spec%%|*}"
     target_path="${spec#*|}"
@@ -174,15 +155,106 @@ printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
       echo "ERROR: invalid build plan entry: $spec" >&2
       exit 5
     }
-    [[ -e "${target_path%/compile}" ]] || {
-      echo "ERROR: AudioWRT source target is not registered: ${target_path%/compile}" >&2
-      exit 5
-    }
-    echo "Building AudioWRT dependency/root: $build_package"
-    make VERSION_NUMBER="$release" "$target_path" -j"$jobs" V=s
+    build_packages+=("$build_package")
+    if [[ -n "${source_build_package[$build_package]+x}" ]]; then
+      source_packages+=("$build_package")
+      source_target_seen["$target_path"]=1
+    fi
+    if [[ -z "${ordered_target_seen[$target_path]+x}" ]]; then
+      ordered_targets+=("$target_path")
+      ordered_target_seen["$target_path"]=1
+    fi
+  done
+
+  # Select exactly the AudioWRT closure. This is important for runtime-provider
+  # metadata (for example glib2-trimmed) while an official package with the same
+  # SONAMEs is used only for development headers/linking.
+  for name in "${build_packages[@]}"; do
+    sed -i -E "/^(# )?CONFIG_PACKAGE_${name}(=| is not set)/d" .config 2>/dev/null || true
+    printf 'CONFIG_PACKAGE_%s=m\n' "$name" >> .config
+  done
+  make VERSION_NUMBER="$release" defconfig
+  packageinfo="$sdk/tmp/.packageinfo"
+
+  # Ported verbatim in behavior from AudioWRT: only genuine source-build roots
+  # are allowed to pull official development dependencies into the SDK.
+  if ((${#source_packages[@]})); then
+    source_dependencies_file="$sdk/tmp/source-build-dependencies.txt"
+    python3 "$source_dep_resolver" \
+      "$build_targets" "$packageinfo" "${source_packages[@]}" \
+      --providers "${build_packages[@]}" > "$source_dependencies_file"
+    mapfile -t source_dependencies < "$source_dependencies_file"
+    if ((${#source_dependencies[@]})); then
+      echo "Official source-build dependencies:"
+      printf '  %s\n' "${source_dependencies[@]}"
+      ./scripts/feeds install "${source_dependencies[@]}"
+      make VERSION_NUMBER="$release" defconfig
+      packageinfo="$sdk/tmp/.packageinfo"
+    fi
+  fi
+
+  package_config_args=()
+  for name in "${build_packages[@]}"; do
+    package_config_args+=("CONFIG_PACKAGE_${name}=m")
+  done
+
+  # Same prerequisite used by the working AudioWRT builder: package dependency
+  # checking needs libc/libgcc metadata even when package-only roots use NO_DEPS.
+  make VERSION_NUMBER="$release" package/toolchain/compile NO_DEPS=1 -j"$jobs"
+
+  echo "AudioWRT dependency closure for $package:"
+  printf '  %s\n' "${build_specs[@]}"
+
+  # Download selected roots without dependency traversal, then compile targets in
+  # the exact topological order. Package-only targets use NO_DEPS=1; only the
+  # explicit source-build set may traverse the development dependencies above.
+  download_targets=()
+  for target_path in "${ordered_targets[@]}"; do
+    download_targets+=("${target_path%/compile}/download")
+  done
+  if ((${#download_targets[@]})); then
+    make VERSION_NUMBER="$release" "${package_config_args[@]}" "${download_targets[@]}" NO_DEPS=1 -j"$jobs"
+  fi
+
+  for target_path in "${ordered_targets[@]}"; do
+    target_roots=()
+    for spec in "${build_specs[@]}"; do
+      [[ "${spec#*|}" == "$target_path" ]] || continue
+      target_roots+=("${spec%%|*}")
+    done
+
+    target_plan="$sdk/tmp/audiowrt-target-plan.txt"
+    python3 "$resolver" "$build_targets" "$packageinfo" "${target_roots[@]}" \
+      --providers "${build_packages[@]}" > "$target_plan"
+    mapfile -t target_specs < "$target_plan"
+    declare -A target_package_seen=()
+    for spec in "${target_specs[@]}"; do
+      target_package_seen["${spec%%|*}"]=1
+    done
+
+    target_config_args=()
+    for name in "${build_packages[@]}"; do
+      if [[ -n "${target_package_seen[$name]+x}" ]]; then
+        target_config_args+=("CONFIG_PACKAGE_${name}=m")
+      else
+        target_config_args+=("CONFIG_PACKAGE_${name}=n")
+      fi
+    done
+
+    if [[ -n "${source_target_seen[$target_path]+x}" ]]; then
+      target_config_args+=("CONFIG_PACKAGE_kmod-bluetooth=n")
+      target_config_args+=("CONFIG_PACKAGE_kmod-bluetooth-trimmed=n")
+      echo "Building AudioWRT source target: $target_path"
+      make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" -j"$jobs" V=s
+    else
+      echo "Building AudioWRT package-only target: $target_path (NO_DEPS=1)"
+      make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" NO_DEPS=1 -j"$jobs" V=s
+    fi
   done
 )
 
+# Export only the requested root outputs. Any official development dependency or
+# transitive AudioWRT provider built inside the SDK remains an internal input.
 mapfile -t output_names < <(python3 - "$source_dir/Makefile" <<'PY'
 import re, sys
 text = open(sys.argv[1], encoding='utf-8').read()
