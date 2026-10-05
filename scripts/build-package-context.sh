@@ -102,8 +102,11 @@ printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
 (
   cd "$sdk"
   ./scripts/feeds update -a
-  ./scripts/feeds install -a
-  make defconfig
+  # Install only the AudioWRT feed and its actual dependency closure. Installing
+  # every package from every official feed creates unrelated Kconfig self-cycles
+  # and is not package build intent.
+  ./scripts/feeds install -p audiowrt -a
+  make VERSION_NUMBER="$release" defconfig
 
   packageinfo="$sdk/tmp/.packageinfo"
   [[ -s "$packageinfo" ]] || {
@@ -140,10 +143,10 @@ printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
 
     if is_source_build_package "$build_package"; then
       echo "Building AudioWRT source dependency/root: $build_package"
-      make "$target_path" -j"$jobs" V=s
+      make VERSION_NUMBER="$release" "$target_path" -j"$jobs" V=s
     else
       echo "Building AudioWRT package-only dependency/root: $build_package (NO_DEPS=1)"
-      make "$target_path" NO_DEPS=1 -j"$jobs" V=s
+      make VERSION_NUMBER="$release" "$target_path" NO_DEPS=1 -j"$jobs" V=s
     fi
   done
 )
