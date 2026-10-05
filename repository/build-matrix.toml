@@ -17,7 +17,7 @@ description = "ARMv7 Cortex-A7 (Linksys IPQ40xx and Raspberry Pi 3)"
 
 [architectures.arm_cortex-a7_neon-vfpv4.versions."25.12.5"]
 sdk_target = "ipq40xx/generic"
-kernel_targets = ["ipq40xx/generic", "bcm27xx/bcm2710"]
+kernel_targets = ["ipq40xx/generic", "bcm27xx/bcm2709"]
 
 [architectures.aarch64_cortex-a72]
 description = "AArch64 Cortex-A72 (Raspberry Pi 4)"
