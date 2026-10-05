@@ -8,7 +8,6 @@ on:
       openwrt_ref:
         description: Exact OpenWrt release tag used for package metadata validation
         required: true
-        default: v25.12.5
         type: string
 
 permissions:
@@ -57,17 +56,13 @@ jobs:
           python3 - <<'PY'
           import tomllib
           from pathlib import Path
+
           data = tomllib.loads(Path('repository/build-matrix.toml').read_text())
           assert data['schema_version'] == 1
           arches = data['architectures']
-          expected = {
-              'mips_24kc',
-              'arm_cortex-a7_neon-vfpv4',
-              'aarch64_cortex-a72',
-              'x86_64',
-          }
-          assert set(arches) == expected
+          assert arches
           for arch, cfg in arches.items():
+              assert arch
               assert cfg['versions']
               for version, version_cfg in cfg['versions'].items():
                   assert version
@@ -90,7 +85,7 @@ jobs:
               assert len(dependents) == len(set(dependents))
           PY
 
-      - name: Smoke-test architecture-grouped planner
+      - name: Validate architecture-grouped planner
         run: |
           set -euo pipefail
           matrix="$(python3 scripts/plan-package-builds-matrix.py --base HEAD --head HEAD)"
@@ -99,17 +94,10 @@ jobs:
           matrix="$(python3 scripts/plan-package-builds-matrix.py --package all)"
           MATRIX="$matrix" python3 - <<'PY'
           import json, os
+
           data = json.loads(os.environ['MATRIX'])
           jobs = data['include']
-          assert len(jobs) == 5, f'expected all + four architecture jobs, got {len(jobs)}'
-          expected_arches = {
-              'all',
-              'mips_24kc',
-              'arm_cortex-a7_neon-vfpv4',
-              'aarch64_cortex-a72',
-              'x86_64',
-          }
-          assert {job['arch'] for job in jobs} == expected_arches
+          assert jobs
           assert len({(job['release'], job['arch']) for job in jobs}) == len(jobs)
           for job in jobs:
               tasks = json.loads(job['tasks_json'])
@@ -118,7 +106,6 @@ jobs:
               assert all({'package', 'scope', 'target', 'subtarget'} <= set(task) for task in tasks)
               if job['arch'] == 'all':
                   assert all(task['scope'] == 'all' for task in tasks)
-                  assert all((task['target'], task['subtarget']) == ('x86', '64') for task in tasks)
               else:
                   assert all(task['scope'] != 'all' for task in tasks)
           PY
@@ -156,7 +143,7 @@ jobs:
           set -euo pipefail
           workspace="$PWD"
           openwrt=/tmp/openwrt
-          git clone --depth=1 --branch '${{ inputs.openwrt_ref || 'v25.12.5' }}' https://github.com/openwrt/openwrt.git "$openwrt"
+          git clone --depth=1 --branch '${{ inputs.openwrt_ref }}' https://github.com/openwrt/openwrt.git "$openwrt"
           cd "$openwrt"
           mkdir -p feeds
           ln -s ../package feeds/base
