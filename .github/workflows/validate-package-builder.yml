@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           output="$RUNNER_TEMP/btctl-smoke"
           cache="$RUNNER_TEMP/audiowrt-package-sdk-cache"
-          scripts/build-package-context.sh \
+          bash scripts/build-package-context.sh \
             --package audiowrt-btctl \
             --release 25.12.5 \
             --arch mips_24kc \
