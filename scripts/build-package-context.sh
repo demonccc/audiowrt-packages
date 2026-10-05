@@ -6,13 +6,21 @@ usage() {
 Usage: build-package-context.sh --package NAME --release VERSION --arch ARCH \
   --target TARGET --subtarget SUBTARGET --output DIR [--jobs N] [--cache DIR]
 
-Build exactly one AudioWRT package source in one OpenWrt build context.
-This is a compatibility wrapper around build-package-batch.sh so SDK/feed
-preparation has one implementation only.
+Build exactly one AudioWRT package source in one clean OpenWrt SDK context.
+The package repository itself is used as an OpenWrt feed. No AudioWRT firmware
+profile, device or flavor participates in package compilation.
 EOF
 }
 
-package=""; release=""; arch=""; target=""; subtarget=""; output=""; jobs=4; cache=".cache/audiowrt-packages"
+package=""
+release=""
+arch=""
+target=""
+subtarget=""
+output=""
+jobs=4
+cache="${RUNNER_TEMP:-/tmp}/audiowrt-packages-cache"
+
 while (($#)); do
   case "$1" in
     --package) package="$2"; shift 2 ;;
@@ -33,39 +41,100 @@ for value in package release arch target subtarget output; do
 done
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-output_abs="$(mkdir -p "$output" && cd "$output" && pwd)"
-batch_root="$(mktemp -d)"
-trap 'rm -rf "$batch_root"' EXIT
+source_dir=""
+for category in audiowrt ported trimmed tailored; do
+  candidate="$repo_root/$category/$package"
+  if [[ -f "$candidate/Makefile" ]]; then
+    source_dir="$candidate"
+    break
+  fi
+done
+[[ -n "$source_dir" ]] || { echo "ERROR: unknown AudioWRT package source: $package" >&2; exit 3; }
 
-tasks_json="$(python3 - "$package" "$target" "$subtarget" <<'PY'
-import json, sys
-package, target, subtarget = sys.argv[1:]
-print(json.dumps([{
-    'package': package,
-    'scope': 'arch',
-    'target': target,
-    'subtarget': subtarget,
-}], separators=(',', ':')))
+mkdir -p "$cache" "$output/packages"
+cache="$(cd "$cache" && pwd)"
+output="$(cd "$output" && pwd)"
+
+base_url="https://downloads.openwrt.org/releases/$release/targets/$target/$subtarget"
+index="$(curl -fsSL "$base_url/")"
+archive="$(printf '%s' "$index" | grep -oE "openwrt-sdk-${release//./\.}-${target//-/_}-${subtarget//-/_}[^\"<> ]*Linux-x86_64\.tar\.(zst|xz)" | head -n1 || true)"
+if [[ -z "$archive" ]]; then
+  archive="$(printf '%s' "$index" | grep -oE "openwrt-sdk-${release//./\.}-[^\"<> ]*Linux-x86_64\.tar\.(zst|xz)" | head -n1 || true)"
+fi
+[[ -n "$archive" ]] || { echo "ERROR: unable to discover SDK at $base_url/" >&2; exit 4; }
+
+archive_path="$cache/$archive"
+if [[ ! -s "$archive_path" ]]; then
+  echo "Downloading $archive"
+  curl -fL --retry 3 -o "$archive_path.tmp" "$base_url/$archive"
+  mv "$archive_path.tmp" "$archive_path"
+fi
+
+# The archive is cached, but every package gets a clean extracted SDK. This is
+# deliberate: generated Kconfig/package state from one package must never leak
+# into another package build.
+sdk_parent="$(mktemp -d "$cache/sdk-work-${release}-${target}-${subtarget}-XXXXXX")"
+cleanup() { rm -rf "$sdk_parent"; }
+trap cleanup EXIT
+case "$archive" in
+  *.tar.zst) tar --zstd -xf "$archive_path" -C "$sdk_parent" ;;
+  *.tar.xz) tar -xJf "$archive_path" -C "$sdk_parent" ;;
+  *) echo "ERROR: unsupported SDK archive: $archive" >&2; exit 4 ;;
+esac
+sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+[[ -n "$sdk" ]] || { echo "ERROR: SDK extraction produced no directory" >&2; exit 4; }
+
+# This is the proven package-repository build model: start from the SDK's own
+# exact-release feed configuration, add only this repository as the AudioWRT
+# feed, install the feed set in the clean SDK, then build one package context.
+cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
+printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
+
+(
+  cd "$sdk"
+  ./scripts/feeds update -a
+  ./scripts/feeds install -a
+  make defconfig
+
+  target_path="package/feeds/audiowrt/$package/compile"
+  [[ -e "package/feeds/audiowrt/$package" ]] || {
+    echo "ERROR: AudioWRT feed did not register source package $package" >&2
+    exit 5
+  }
+  make "$target_path" -j"$jobs" V=s
+)
+
+mapfile -t output_names < <(python3 - "$source_dir/Makefile" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding='utf-8').read()
+for name in re.findall(r'^define Package/([^\s]+)', text, re.M):
+    print(name)
+for name in re.findall(r'^define KernelPackage/([^\s]+)', text, re.M):
+    print('kmod-' + name)
 PY
-)"
+)
 
-bash "$repo_root/scripts/build-package-batch.sh" \
-  --release "$release" \
-  --arch "$arch" \
-  --tasks-json "$tasks_json" \
-  --output "$batch_root" \
-  --jobs "$jobs" \
-  --cache "$cache"
+found=0
+for name in "${output_names[@]}"; do
+  while IFS= read -r apk; do
+    cp -f "$apk" "$output/packages/"
+    found=1
+  done < <(find "$sdk/bin" -type f -name "$name-*.apk" -print)
+done
+[[ "$found" == 1 ]] || { echo "ERROR: no APK output found for $package" >&2; exit 6; }
 
-source_path="$batch_root/$package/$release/$arch/$target/$subtarget"
-[[ -d "$source_path" ]] || {
-  echo "ERROR: batch builder produced no output for $package" >&2
-  exit 6
-}
-
-rm -rf "$output_abs/packages"
-mkdir -p "$output_abs/packages"
-cp -f "$source_path"/packages/*.apk "$output_abs/packages/"
-cp -f "$source_path/context.json" "$output_abs/context.json"
+python3 - "$output/context.json" "$package" "$release" "$arch" "$target" "$subtarget" <<'PY'
+import json, sys
+path, package, release, arch, target, subtarget = sys.argv[1:]
+with open(path, 'w', encoding='utf-8') as f:
+    json.dump({
+        'package_source': package,
+        'openwrt_version': release,
+        'arch': arch,
+        'target': target,
+        'subtarget': subtarget,
+    }, f, indent=2, sort_keys=True)
+    f.write('\n')
+PY
 
 printf 'Built %s for OpenWrt %s / %s / %s/%s\n' "$package" "$release" "$arch" "$target" "$subtarget"
