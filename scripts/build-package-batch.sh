@@ -9,13 +9,12 @@ Usage: build-package-batch.sh --release VERSION --arch ARCH --tasks-json JSON \
 Build pending package roots with the canonical AudioWRT package builder. The
 AudioWRT repository owns OpenWrt SDK preparation, exact-release feed handling,
 dependency ordering, development-interface staging and special kernel/package
-preparation. This repository only selects pending roots, captures their APKs
-and publishes successful outputs.
+preparation. This repository only selects pending roots and captures their APKs.
 EOF
 }
 
 release=""; arch=""; tasks_json=""; output_root=""; jobs=4
-cache=".cache/audiowrt-packages"; success_hook=""
+cache=""; success_hook=""
 while (($#)); do
   case "$1" in
     --release) release="$2"; shift 2 ;;
@@ -43,6 +42,12 @@ engine_dir="${AUDIOWRT_ENGINE_DIR:-$repo_root/.audiowrt-engine}"
 if [[ -n "$success_hook" ]]; then
   success_hook="$(cd "$(dirname "$success_hook")" && pwd)/$(basename "$success_hook")"
   [[ -f "$success_hook" ]] || { echo "ERROR: success hook not found: $success_hook" >&2; exit 2; }
+fi
+
+# The canonical AudioWRT builder mounts CACHE_DIR into Docker and therefore
+# requires the cache to live inside the AudioWRT checkout.
+if [[ -z "$cache" ]]; then
+  cache="$engine_dir/.cache/audiowrt-packages"
 fi
 
 mkdir -p "$cache" "$output_root"
@@ -150,6 +155,7 @@ PY
       echo "::endgroup::"
       continue
     fi
+    source_rel="${source_dir#"$repo_root"/}"
 
     package_output="$output_root/$package/$release/$arch/$target/$subtarget"
     mkdir -p "$package_output/packages"
@@ -184,9 +190,10 @@ PY
       continue
     fi
 
-    python3 - "$package_output/context.json" "$package" "$release" "$arch" "$target" "$subtarget" <<'PY'
-import json, sys
-path, package, release, arch, target, subtarget=sys.argv[1:]
+    output_names_json="$(printf '%s\n' "${output_names[@]}" | python3 -c 'import json,sys; print(json.dumps([x.rstrip("\n") for x in sys.stdin if x.strip()]))')"
+    OUTPUT_NAMES_JSON="$output_names_json" python3 - "$package_output/context.json" "$package" "$release" "$arch" "$target" "$subtarget" "$scope" "$source_commit" "$source_rel" <<'PY'
+import json, os, sys
+path, package, release, arch, target, subtarget, scope, source_commit, source_dir=sys.argv[1:]
 with open(path,'w',encoding='utf-8') as handle:
     json.dump({
         'package_source':package,
@@ -194,6 +201,10 @@ with open(path,'w',encoding='utf-8') as handle:
         'arch':arch,
         'target':target,
         'subtarget':subtarget,
+        'scope':scope,
+        'source_commit':source_commit,
+        'source_dir':source_dir,
+        'output_names':json.loads(os.environ['OUTPUT_NAMES_JSON']),
     }, handle, indent=2, sort_keys=True)
     handle.write('\n')
 PY
@@ -216,7 +227,7 @@ PY
 done
 
 if [[ -s "$failures_file" ]]; then
-  echo "Some package tasks failed; successful outputs were already preserved/published:" >&2
+  echo "Some package tasks failed; successful outputs were preserved as build artifacts:" >&2
   cat "$failures_file" >&2
   exit 1
 fi

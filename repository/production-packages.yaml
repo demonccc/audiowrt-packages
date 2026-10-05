@@ -1,0 +1,25 @@
+# Production package whitelist.
+#
+# A package release is promoted to stable only when it is listed here and this
+# file reaches main. The release must already exist in the testing repository;
+# promotion reuses the exact tested APK and never rebuilds it.
+#
+# Structure:
+# all:
+#   package-name:
+#     - release: "1.2.3-r1"
+#       openwrt_versions: ["25.12.5", "25.12.6"]
+# architectures:
+#   mips_24kc:
+#     package-name:
+#       - release: "1.2.3-r1"
+#         openwrt_versions: ["25.12.5"]
+# targets:
+#   ath79/generic:
+#     package-name:
+#       - release: "6.6.110-r1"
+#         openwrt_versions: ["25.12.5"]
+
+all: {}
+architectures: {}
+targets: {}

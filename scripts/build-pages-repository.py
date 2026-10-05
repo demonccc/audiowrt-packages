@@ -66,6 +66,40 @@ def repository_path(output: Path, key: tuple[str, str, str, str, str]) -> Path:
     return output / channel / version / "targets" / first / second / "repository.json"
 
 
+def write_html(output: Path) -> None:
+    (output / "index.html").write_text("""<!doctype html>
+<html lang=\"en\">
+<head>
+<meta charset=\"utf-8\">
+<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
+<title>AudioWRT Package Repository</title>
+<style>
+body{font-family:system-ui,-apple-system,sans-serif;max-width:1100px;margin:40px auto;padding:0 20px;color:#1f2328}h1{margin-bottom:4px}p{color:#59636e}table{border-collapse:collapse;width:100%;margin-top:24px}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid #d0d7de}th{background:#f6f8fa}code{font-size:.9em}a{color:#0969da;text-decoration:none}a:hover{text-decoration:underline}.testing{color:#9a6700}.stable{color:#1a7f37}
+</style>
+</head>
+<body>
+<h1>AudioWRT Package Repository</h1>
+<p>Published OpenWrt package repositories. Testing contains manually published build artifacts; stable contains only releases explicitly promoted through <code>production-packages.yaml</code>.</p>
+<table>
+<thead><tr><th>Channel</th><th>OpenWrt</th><th>Scope</th><th>Architecture / Target</th><th>Revision</th><th>Metadata</th></tr></thead>
+<tbody id=\"rows\"></tbody>
+</table>
+<script>
+fetch('index.json').then(r=>r.json()).then(data=>{
+  const rows=document.getElementById('rows');
+  for(const repo of data.repositories){
+    const selector=repo.scope==='all'?'all':repo.scope==='arch'?repo.architecture:`${repo.target}/${repo.subtarget}`;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td class=\"${repo.channel}\">${repo.channel}</td><td>${repo.openwrt_version}</td><td>${repo.scope}</td><td><code>${selector}</code></td><td>${repo.revision}</td><td><a href=\"${repo.path}\">repository.json</a></td>`;
+    rows.appendChild(tr);
+  }
+});
+</script>
+</body>
+</html>
+""", encoding="utf-8")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repository", required=True)
@@ -133,6 +167,8 @@ def main() -> int:
         json.dumps({"schema": 2, "repositories": catalog}, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
+    (output / ".nojekyll").write_text("\n", encoding="utf-8")
+    write_html(output)
     return 0
 
 
