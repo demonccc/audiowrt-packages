@@ -93,22 +93,30 @@ jobs:
       - name: Checkout AudioWRT packages
         uses: actions/checkout@v4
 
-      - name: Restore OpenWrt SDK archive cache
+      - name: Checkout canonical AudioWRT build engine
+        uses: actions/checkout@v4
+        with:
+          repository: demonccc/audiowrt
+          ref: f3a45ecb9682bcb4551df97ba35789e490d1b1fd
+          path: .audiowrt-engine
+
+      - name: Restore canonical builder download cache
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/audiowrt-packages-cache
-          key: audiowrt-packages-v11-isolated-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
+          path: .audiowrt-engine/.cache/audiowrt
+          key: audiowrt-engine-v1-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-f3a45ecb
           restore-keys: |
-            audiowrt-packages-v11-isolated-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
+            audiowrt-engine-v1-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
 
-      - name: Build pending packages with isolated OpenWrt SDKs
+      - name: Build pending packages with canonical AudioWRT engine
         shell: bash
         env:
           RELEASE: ${{ matrix.release }}
           ARCH: ${{ matrix.arch }}
           TASKS_JSON: ${{ matrix.tasks_json }}
           MAKE_JOBS: ${{ inputs.jobs || '4' }}
-          SDK_CACHE_DIR: ${{ runner.temp }}/audiowrt-packages-cache
+          AUDIOWRT_ENGINE_DIR: ${{ github.workspace }}/.audiowrt-engine
+          SDK_CACHE_DIR: ${{ github.workspace }}/.audiowrt-engine/.cache/audiowrt
         run: bash scripts/build-publish-incremental.sh
 
       - name: Upload architecture build artifacts
