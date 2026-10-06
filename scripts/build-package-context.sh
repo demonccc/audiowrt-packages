@@ -48,8 +48,9 @@ build_targets="$repo_root/config/build/package-build-targets"
 source_build_packages="$repo_root/config/build/source-build-packages"
 resolver="$repo_root/scripts/resolve-package-build-targets.py"
 source_dep_resolver="$repo_root/scripts/resolve-source-build-dependencies.py"
+runtime_dep_resolver="$repo_root/scripts/resolve-runtime-library-dependencies.py"
 
-for required in "$build_targets" "$source_build_packages" "$resolver" "$source_dep_resolver" "$repo_root/scripts/snapshot-sdk-staging.sh"; do
+for required in "$build_targets" "$source_build_packages" "$resolver" "$source_dep_resolver" "$runtime_dep_resolver" "$repo_root/scripts/snapshot-sdk-staging.sh"; do
   [[ -f "$required" ]] || { echo "ERROR: required build input is missing: $required" >&2; exit 3; }
 done
 
@@ -133,6 +134,7 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   kmod_btusb_url="$(json_field "$artifacts_metadata" kmod_btusb_url)"
   kmods_sha256sums_url="$(json_field "$artifacts_metadata" kmods_sha256sums_url)"
 
+  export AUDIOWRT_BLUETOOTH_SOURCE_DIR="$repo_root/trimmed/kmod-bluetooth-trimmed"
   source "$repo_root/scripts/snapshot-sdk-staging.sh"
 
   # Match AudioWRT snapshot package setup: preserve the official SDK feeds,
@@ -299,6 +301,21 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   done
 
   make VERSION_NUMBER="$release" package/toolchain/compile NO_DEPS=1 -j"$jobs"
+
+  # Package-only AudioWRT recipes still run OpenWrt's CheckDependencies. Stage
+  # SONAME provider metadata from the exact official runtime APKs instead of
+  # rebuilding those dependencies from source. Selected AudioWRT providers are
+  # filtered by the resolver, so official packages never replace trimmed/custom
+  # runtime providers.
+  target_staging="$(find "$sdk/staging_dir" -mindepth 1 -maxdepth 1 -type d -name 'target-*' | head -n1)"
+  [[ -n "$target_staging" ]] || { echo "ERROR: target staging directory not found" >&2; exit 5; }
+  runtime_dependencies_file="$work_dir/runtime-library-dependencies.txt"
+  python3 "$runtime_dep_resolver" "$build_targets" "$packageinfo" \
+    "${build_packages[@]}" --providers "${build_packages[@]}" > "$runtime_dependencies_file"
+  mapfile -t runtime_dependencies < "$runtime_dependencies_file"
+  for runtime_dependency in "${runtime_dependencies[@]}"; do
+    stage_official_runtime_provides "$runtime_dependency" "$target_staging"
+  done
 
   if (( native_player_sdk )); then
     prepare_native_player_sdk

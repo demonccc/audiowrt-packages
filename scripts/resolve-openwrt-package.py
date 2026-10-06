@@ -37,31 +37,45 @@ def main() -> None:
         fail("release must be an exact version or snapshot")
     if not re.fullmatch(r"[A-Za-z0-9_.+-]+", arch):
         fail("invalid package architecture")
-    if not re.fullmatch(r"[A-Za-z0-9_.+-]+", feed):
+    if feed != "auto" and not re.fullmatch(r"[A-Za-z0-9_.+-]+", feed):
         fail("invalid feed")
     if not re.fullmatch(r"[A-Za-z0-9_.+-]+", package):
         fail("invalid package name")
 
-    if release == "snapshot":
-        base = f"{OPENWRT_DOWNLOADS}/snapshots/packages/{arch}/{feed}/"
-    else:
-        base = f"{OPENWRT_DOWNLOADS}/releases/{release}/packages/{arch}/{feed}/"
+    feeds = [feed] if feed != "auto" else ["base", "packages", "luci", "routing", "telephony"]
+    found: list[str] = []
+    searched: list[str] = []
 
-    listing = read_listing(base)
     # OpenWrt ABI libraries append a numeric ABI to the package name, e.g.
     # libubox20260213. Require the version portion after '-' to start with a
     # digit so sibling packages such as libubox-lua are never selected.
     pattern = re.compile(
         rf'href="({re.escape(package)}(?:[0-9]+)?-[0-9][^"]*\.apk)"'
     )
-    matches = list(dict.fromkeys(unescape(value) for value in pattern.findall(listing)))
-    if len(matches) != 1:
+
+    for candidate_feed in feeds:
+        if release == "snapshot":
+            base = f"{OPENWRT_DOWNLOADS}/snapshots/packages/{arch}/{candidate_feed}/"
+        else:
+            base = f"{OPENWRT_DOWNLOADS}/releases/{release}/packages/{arch}/{candidate_feed}/"
+        searched.append(base)
+        try:
+            listing = read_listing(base)
+        except SystemExit:
+            if feed != "auto":
+                raise
+            continue
+        matches = list(dict.fromkeys(unescape(value) for value in pattern.findall(listing)))
+        found.extend(urljoin(base, value) for value in matches)
+
+    found = list(dict.fromkeys(found))
+    if len(found) != 1:
         fail(
-            f"expected one {package} APK in {base}, found {len(matches)}: "
-            + ", ".join(matches)
+            f"expected one {package} APK across {', '.join(searched)}, "
+            f"found {len(found)}: " + ", ".join(found)
         )
 
-    print(urljoin(base, matches[0]))
+    print(found[0])
 
 
 if __name__ == "__main__":
