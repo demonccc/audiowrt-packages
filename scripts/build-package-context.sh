@@ -3,17 +3,18 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: build-package-context.sh --package NAME --release VERSION --arch ARCH \
-  --target TARGET --subtarget SUBTARGET --output DIR [--jobs N] [--cache DIR]
+Usage: build-package-context.sh --package NAME [--package NAME ...] \
+  --release VERSION --arch ARCH --target TARGET --subtarget SUBTARGET \
+  --output DIR [--jobs N] [--cache DIR]
 
-Build one AudioWRT package root in a clean OpenWrt SDK context. The build uses
-OpenWrt's normal dependency traversal, matching the package-build behavior used
-for AudioWRT snapshot builds. Firmware profiles, devices and flavors do not
-participate.
+Build all requested AudioWRT roots for one release + architecture +
+target/subtarget in a single clean OpenWrt SDK context. This matches the stateful
+package build model used by AudioWRT snapshot profiles while remaining
+profile/device/flavor agnostic.
 EOF
 }
 
-package=""
+packages=()
 release=""
 arch=""
 target=""
@@ -24,7 +25,7 @@ cache="${RUNNER_TEMP:-/tmp}/audiowrt-packages-cache"
 
 while (($#)); do
   case "$1" in
-    --package) package="$2"; shift 2 ;;
+    --package) packages+=("$2"); shift 2 ;;
     --release) release="$2"; shift 2 ;;
     --arch) arch="$2"; shift 2 ;;
     --target) target="$2"; shift 2 ;;
@@ -37,7 +38,8 @@ while (($#)); do
   esac
 done
 
-for value in package release arch target subtarget output; do
+(("${#packages[@]}")) || { echo "ERROR: at least one --package is required" >&2; exit 2; }
+for value in release arch target subtarget output; do
   [[ -n "${!value}" ]] || { echo "ERROR: --${value//_/-} is required" >&2; exit 2; }
 done
 
@@ -51,18 +53,22 @@ for required in "$build_targets" "$source_build_packages" "$resolver" "$source_d
   [[ -f "$required" ]] || { echo "ERROR: required build input is missing: $required" >&2; exit 3; }
 done
 
-source_dir=""
-for category in audiowrt ported trimmed tailored; do
-  while IFS= read -r makefile; do
-    if grep -Eq "^define (Package/${package}|KernelPackage/${package#kmod-})([[:space:]]|$)" "$makefile"; then
-      source_dir="$(dirname "$makefile")"
-      break 2
-    fi
-  done < <(find "$repo_root/$category" -mindepth 2 -maxdepth 2 -name Makefile -type f | sort)
+declare -A root_source_dir=()
+for root_package in "${packages[@]}"; do
+  source_dir=""
+  for category in audiowrt ported trimmed tailored; do
+    while IFS= read -r makefile; do
+      if grep -Eq "^define (Package/${root_package}|KernelPackage/${root_package#kmod-})([[:space:]]|$)" "$makefile"; then
+        source_dir="$(dirname "$makefile")"
+        break 2
+      fi
+    done < <(find "$repo_root/$category" -mindepth 2 -maxdepth 2 -name Makefile -type f | sort)
+  done
+  [[ -n "$source_dir" ]] || { echo "ERROR: unknown AudioWRT package source: $root_package" >&2; exit 3; }
+  root_source_dir["$root_package"]="$source_dir"
 done
-[[ -n "$source_dir" ]] || { echo "ERROR: unknown AudioWRT package source: $package" >&2; exit 3; }
 
-mkdir -p "$cache" "$output/packages"
+mkdir -p "$cache" "$output"
 cache="$(cd "$cache" && pwd)"
 output="$(cd "$output" && pwd)"
 
@@ -165,9 +171,12 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
 
   make VERSION_NUMBER="$release" -s prepare-tmpinfo
 
-  # Select the requested root before resolving the AudioWRT-owned closure.
-  sed -i -E "/^(# )?CONFIG_PACKAGE_${package}(=| is not set)/d" .config 2>/dev/null || true
-  printf 'CONFIG_PACKAGE_%s=m\n' "$package" >> .config
+  # Select every requested root before resolving the shared AudioWRT-owned
+  # closure. All roots in this target/subtarget share one SDK state.
+  for root_package in "${packages[@]}"; do
+    sed -i -E "/^(# )?CONFIG_PACKAGE_${root_package}(=| is not set)/d" .config 2>/dev/null || true
+    printf 'CONFIG_PACKAGE_%s=m\n' "$root_package" >> .config
+  done
   make VERSION_NUMBER="$release" defconfig
 
   packageinfo="$sdk/tmp/.packageinfo"
@@ -177,10 +186,10 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   # when the root actually depends on the capability (alsa-lib, wpa-supplicant,
   # Bluetooth kmods, etc.).
   build_plan="$work_dir/audiowrt-build-plan.txt"
-  python3 "$resolver" "$build_targets" "$packageinfo" "$package" \
+  python3 "$resolver" "$build_targets" "$packageinfo" "${packages[@]}" \
     --providers "${owned_packages[@]}" > "$build_plan"
   mapfile -t build_specs < "$build_plan"
-  (("${#build_specs[@]}")) || { echo "ERROR: no AudioWRT build targets resolved for $package" >&2; exit 5; }
+  (("${#build_specs[@]}")) || { echo "ERROR: no AudioWRT build targets resolved for requested roots" >&2; exit 5; }
 
   declare -A source_build_package=()
   while IFS= read -r name; do
@@ -298,7 +307,7 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
     prepare_hostap_sdk
   fi
 
-  echo "AudioWRT dependency closure for $package:"
+  echo "AudioWRT shared dependency closure for: ${packages[*]}"
   printf '  %s\n' "${build_specs[@]}"
 
   download_targets=()
@@ -340,16 +349,28 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
     if [[ -n "${source_target_seen[$target_path]+x}" ]]; then
       target_config_args+=("CONFIG_PACKAGE_kmod-bluetooth=n")
       target_config_args+=("CONFIG_PACKAGE_kmod-bluetooth-trimmed=n")
-      make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" -j"$jobs" V=s
+      if ! make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" -j"$jobs" V=s; then
+        echo "ERROR: shared SDK target failed: $target_path" >&2
+        continue
+      fi
     else
-      make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" NO_DEPS=1 -j"$jobs" V=s
+      if ! make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" NO_DEPS=1 -j"$jobs" V=s; then
+        echo "ERROR: shared SDK target failed: $target_path" >&2
+        continue
+      fi
     fi
   done
 )
 
-# Export only the requested root outputs. Official dependencies and transitive
-# AudioWRT providers are internal build inputs and are not published by this task.
-mapfile -t output_names < <(python3 - "$source_dir/Makefile" <<'PY'
+# Export each requested root independently from the one shared SDK. Missing roots
+# are recorded instead of discarding APKs successfully produced for other roots.
+: > "$output/build-failures.txt"
+for root_package in "${packages[@]}"; do
+  root_output="$output/$root_package"
+  rm -rf "$root_output"
+  mkdir -p "$root_output/packages"
+
+  mapfile -t output_names < <(python3 - "${root_source_dir[$root_package]}/Makefile" <<'PY'
 import re, sys
 text = open(sys.argv[1], encoding='utf-8').read()
 for name in re.findall(r'^define Package/([^\s]+)', text, re.M):
@@ -359,16 +380,20 @@ for name in re.findall(r'^define KernelPackage/([^\s]+)', text, re.M):
 PY
 )
 
-found=0
-for name in "${output_names[@]}"; do
-  while IFS= read -r apk; do
-    cp -f "$apk" "$output/packages/"
-    found=1
-  done < <(find "$sdk/bin" -type f -name "$name-*.apk" -print)
-done
-[[ "$found" == 1 ]] || { echo "ERROR: no APK output found for $package" >&2; exit 6; }
+  found=0
+  for name in "${output_names[@]}"; do
+    while IFS= read -r apk; do
+      cp -f "$apk" "$root_output/packages/"
+      found=1
+    done < <(find "$sdk/bin" -type f -name "$name-*.apk" -print)
+  done
 
-python3 - "$output/context.json" "$package" "$release" "$arch" "$target" "$subtarget" <<'PY'
+  if [[ "$found" != 1 ]]; then
+    printf '%s|compile-failed\n' "$root_package" >> "$output/build-failures.txt"
+    continue
+  fi
+
+  python3 - "$root_output/context.json" "$root_package" "$release" "$arch" "$target" "$subtarget" <<'PY'
 import json, sys
 path, package, release, arch, target, subtarget = sys.argv[1:]
 with open(path, 'w', encoding='utf-8') as f:
@@ -381,5 +406,7 @@ with open(path, 'w', encoding='utf-8') as f:
     }, f, indent=2, sort_keys=True)
     f.write('\n')
 PY
+done
 
-printf 'Built %s for OpenWrt %s / %s / %s/%s\n' "$package" "$release" "$arch" "$target" "$subtarget"
+printf 'Shared SDK build complete for OpenWrt %s / %s / %s/%s (%s)\n' \
+  "$release" "$arch" "$target" "$subtarget" "${packages[*]}"
