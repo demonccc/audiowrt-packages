@@ -1,6 +1,48 @@
 #!/usr/bin/env bash
 # Snapshot SDK staging helpers copied from demonccc/audiowrt scripts/build.sh @ 680f766
 
+prepare_bluetooth_package() {
+bluetooth_module_source="$sdk_dir/feeds/audiowrt/kmod-bluetooth-trimmed"
+[[ -d "$bluetooth_module_source" ]] || {
+    echo "ERROR: AudioWRT minimal Bluetooth kernel package source is missing." >&2
+    exit 5
+}
+bluetooth_stage="$work_dir/prebuilt-bluetooth-modules"
+rm -rf "$bluetooth_stage"
+mkdir -p "$bluetooth_stage/apks" "$bluetooth_stage/extracted" "$bluetooth_module_source/files"
+download_file "$kmods_sha256sums_url" "$bluetooth_stage/sha256sums"
+
+for module_url in "$kmod_bluetooth_url" "$kmod_btmtk_url" "$kmod_btusb_url"; do
+    module_apk="$bluetooth_stage/apks/$(basename "$module_url")"
+    download_file "$module_url" "$module_apk"
+    module_path="${module_url#"$openwrt_base_url"}"
+    [[ "$module_path" != "$module_url" && -n "$module_path" ]] || {
+        echo "ERROR: kernel module URL is outside the OpenWrt target: $module_url" >&2
+        exit 5
+    }
+    python3 "$repo_root/scripts/verify-openwrt-checksum.py" \
+        "$bluetooth_stage/sha256sums" "$module_path" "$module_apk"
+    "$sdk_dir/staging_dir/host/bin/apk" --allow-untrusted extract \
+        --destination "$bluetooth_stage/extracted" "$module_apk"
+done
+
+for module in bluetooth.ko btmtk.ko btintel.ko btrtl.ko btusb.ko; do
+    mapfile -t module_matches < <(find "$bluetooth_stage/extracted" -type f -name "$module" -print)
+    [[ "${#module_matches[@]}" -eq 1 ]] || {
+        echo "ERROR: expected one exact-release $module, found ${#module_matches[@]}." >&2
+        exit 5
+    }
+    cp -f "${module_matches[0]}" "$bluetooth_module_source/files/$module"
+done
+
+for omitted in rfcomm.ko bnep.ko hidp.ko; do
+    [[ ! -e "$bluetooth_module_source/files/$omitted" ]] || {
+        echo "ERROR: omitted Bluetooth module leaked into AudioWRT package: $omitted" >&2
+        exit 5
+    }
+done
+}
+
 register_official_sdk_source() {
     local feed="$1" source_rel="$2"
     local source_path="$sdk_dir/feeds/$feed/$source_rel"
