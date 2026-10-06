@@ -43,9 +43,11 @@ done
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build_targets="$repo_root/config/build/package-build-targets"
+source_build_packages="$repo_root/config/build/source-build-packages"
 resolver="$repo_root/scripts/resolve-package-build-targets.py"
+source_dep_resolver="$repo_root/scripts/resolve-source-build-dependencies.py"
 
-for required in "$build_targets" "$resolver"; do
+for required in "$build_targets" "$source_build_packages" "$resolver" "$source_dep_resolver" "$repo_root/scripts/snapshot-sdk-staging.sh"; do
   [[ -f "$required" ]] || { echo "ERROR: required build input is missing: $required" >&2; exit 3; }
 done
 
