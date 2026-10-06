@@ -2,7 +2,7 @@
 # Snapshot SDK staging helpers copied from demonccc/audiowrt scripts/build.sh @ 680f766
 
 prepare_bluetooth_package() {
-bluetooth_module_source="$sdk_dir/feeds/audiowrt/kmod-bluetooth-trimmed"
+bluetooth_module_source="${AUDIOWRT_BLUETOOTH_SOURCE_DIR:-$sdk_dir/feeds/audiowrt/kmod-bluetooth-trimmed}"
 [[ -d "$bluetooth_module_source" ]] || {
     echo "ERROR: AudioWRT minimal Bluetooth kernel package source is missing." >&2
     exit 5
@@ -41,6 +41,52 @@ for omitted in rfcomm.ko bnep.ko hidp.ko; do
         exit 5
     }
 done
+}
+
+stage_official_runtime_provides() {
+    local package="$1"
+    local target_staging="$2"
+    local package_stage="$work_dir/runtime-providers/$package"
+    local package_url package_apk readelf_bin runtime_pkg soname library
+    local -a readelf_candidates=() libraries=()
+
+    package_url="$(python3 "$repo_root/scripts/resolve-openwrt-package.py" \
+        "$release" "$arch_packages" auto "$package")"
+    package_apk="$package_stage/$(basename "$package_url")"
+    rm -rf "$package_stage"
+    mkdir -p "$package_stage/extracted"
+    download_file "$package_url" "$package_apk"
+    "$sdk_dir/staging_dir/host/bin/apk" --allow-untrusted extract \
+        --destination "$package_stage/extracted" "$package_apk"
+
+    mapfile -t readelf_candidates < <(
+        find "$sdk_dir/staging_dir" -mindepth 3 -maxdepth 4 \( -type f -o -type l \) \
+            -path '*/toolchain-*/bin/*-readelf' -print 2>/dev/null | sort -u
+    )
+    [[ "${#readelf_candidates[@]}" -gt 0 ]] || {
+        echo "ERROR: target readelf not found while staging runtime provider $package." >&2
+        exit 5
+    }
+    readelf_bin="${readelf_candidates[0]}"
+
+    mapfile -t libraries < <(
+        find "$package_stage/extracted" -type f \( -name '*.so' -o -name '*.so.*' \) -print 2>/dev/null | sort
+    )
+
+    mkdir -p "$target_staging/pkginfo"
+    runtime_pkg="$(basename "$package_apk" .apk)"
+    runtime_pkg="${runtime_pkg%%-[0-9]*}"
+    : > "$target_staging/pkginfo/$package.provides"
+    : > "$target_staging/pkginfo/$runtime_pkg.provides"
+
+    for library in "${libraries[@]}"; do
+        soname="$("$readelf_bin" -d "$library" 2>/dev/null | sed -n 's/.*SONAME.*\[\(.*\)\].*/\1/p' | head -n1)"
+        [[ -n "$soname" ]] || continue
+        grep -Fxq "$soname" "$target_staging/pkginfo/$package.provides" ||
+            printf '%s\n' "$soname" >> "$target_staging/pkginfo/$package.provides"
+        grep -Fxq "$soname" "$target_staging/pkginfo/$runtime_pkg.provides" ||
+            printf '%s\n' "$soname" >> "$target_staging/pkginfo/$runtime_pkg.provides"
+    done
 }
 
 register_official_sdk_source() {
