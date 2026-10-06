@@ -50,8 +50,11 @@ stage_official_runtime_provides() {
     local package_url package_apk readelf_bin runtime_pkg soname library
     local -a readelf_candidates=() libraries=()
 
-    package_url="$(python3 "$repo_root/scripts/resolve-openwrt-package.py" \
-        "$release" "$arch_packages" auto "$package")"
+    if ! package_url="$(python3 "$repo_root/scripts/resolve-openwrt-package.py" \
+        "$release" "$arch_packages" auto "$package" 2>/dev/null)"; then
+        echo "Runtime provider metadata not required/available from global feeds: $package"
+        return 0
+    fi
     package_apk="$package_stage/$(basename "$package_url")"
     rm -rf "$package_stage"
     mkdir -p "$package_stage/extracted"
