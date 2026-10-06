@@ -95,19 +95,52 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
 (
   cd "$sdk"
 
-  # Snapshot-style dependency environment: make the complete official OpenWrt
-  # package universe visible to Kconfig and let OpenWrt traverse/stage the real
-  # dependencies while compiling. AudioWRT itself is NOT installed as a feed;
-  # its sources are linked explicitly below, which avoids the self-cycles caused
-  # by installing every AudioWRT package through feeds install -a.
-  ./scripts/feeds update -a
-  ./scripts/feeds install -a
+  sdk_dir="$sdk"
+  work_dir="$sdk/tmp/audiowrt-work"
+  arch_packages="$arch"
+  mkdir -p "$work_dir"
+
+  json_field() {
+    python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))[sys.argv[2]])' "$1" "$2"
+  }
+
+  download_file() {
+    local url="$1" destination="$2"
+    mkdir -p "$(dirname "$destination")"
+    echo "Downloading: $url"
+    curl -fL --retry 3 -o "$destination" "$url"
+  }
+
+  make_run() {
+    local cwd="$1"; shift
+    echo "+ (cd $cwd && make $*)"
+    make -C "$cwd" "$@"
+  }
+
+  artifacts_metadata="$work_dir/openwrt-artifacts.json"
+  python3 "$repo_root/scripts/resolve-openwrt-artifacts.py" "$release" "$target" "$subtarget" > "$artifacts_metadata"
+  openwrt_base_url="$(json_field "$artifacts_metadata" base_url)"
+  kmod_bluetooth_url="$(json_field "$artifacts_metadata" kmod_bluetooth_url)"
+  kmod_btmtk_url="$(json_field "$artifacts_metadata" kmod_btmtk_url)"
+  kmod_btusb_url="$(json_field "$artifacts_metadata" kmod_btusb_url)"
+  kmods_sha256sums_url="$(json_field "$artifacts_metadata" kmods_sha256sums_url)"
+
+  source "$repo_root/scripts/snapshot-sdk-staging.sh"
+
+  # Match AudioWRT snapshot package setup: preserve the official SDK feeds,
+  # update only source trees needed by AudioWRT, and expose this checkout as the
+  # audiowrt feed so include/audiowrt-*.mk resolves exactly as it does there.
+  cp feeds.conf.default feeds.conf
+  printf '\n# AudioWRT package source\nsrc-link audiowrt %s\n' "$repo_root" >> feeds.conf
+  ./scripts/feeds update packages luci audiowrt
 
   rm -rf package/feeds/audiowrt
   mkdir -p package/feeds/audiowrt
+  owned_packages=()
   while IFS='|' read -r owned target_path extra; do
     [[ -n "$owned" && "$owned" != \#* ]] || continue
     [[ -z "${extra:-}" ]] || { echo "ERROR: invalid package-build-targets entry: $owned" >&2; exit 5; }
+    owned_packages+=("$owned")
     [[ "$target_path" == package/feeds/audiowrt/*/compile ]] || continue
 
     source_path=""
@@ -129,44 +162,154 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   done < "$build_targets"
 
   make VERSION_NUMBER="$release" -s prepare-tmpinfo
+
+  # Select the requested root before resolving the AudioWRT-owned closure.
+  sed -i -E "/^(# )?CONFIG_PACKAGE_${package}(=| is not set)/d" .config 2>/dev/null || true
+  printf 'CONFIG_PACKAGE_%s=m\n' "$package" >> .config
   make VERSION_NUMBER="$release" defconfig
+
   packageinfo="$sdk/tmp/.packageinfo"
   [[ -s "$packageinfo" ]] || { echo "ERROR: OpenWrt package metadata was not generated" >&2; exit 5; }
 
-  build_plan="$sdk/tmp/audiowrt-build-plan.txt"
-  python3 "$resolver" "$build_targets" "$packageinfo" "$package" > "$build_plan"
+  # All AudioWRT-owned providers are candidates. The resolver only selects one
+  # when the root actually depends on the capability (alsa-lib, wpa-supplicant,
+  # Bluetooth kmods, etc.).
+  build_plan="$work_dir/audiowrt-build-plan.txt"
+  python3 "$resolver" "$build_targets" "$packageinfo" "$package" \
+    --providers "${owned_packages[@]}" > "$build_plan"
   mapfile -t build_specs < "$build_plan"
-  ((${#build_specs[@]})) || { echo "ERROR: no AudioWRT build targets resolved for $package" >&2; exit 5; }
+  (("${#build_specs[@]}")) || { echo "ERROR: no AudioWRT build targets resolved for $package" >&2; exit 5; }
+
+  declare -A source_build_package=()
+  while IFS= read -r name; do
+    [[ -n "$name" && "$name" != \#* ]] || continue
+    source_build_package["$name"]=1
+  done < "$source_build_packages"
 
   build_packages=()
+  package_only_packages=()
+  source_packages=()
   ordered_targets=()
+  declare -A source_target_seen=()
   declare -A ordered_target_seen=()
+
   for spec in "${build_specs[@]}"; do
     build_package="${spec%%|*}"
     target_path="${spec#*|}"
-    [[ -n "$build_package" && -n "$target_path" && "$target_path" != "$spec" ]] || {
-      echo "ERROR: invalid build plan entry: $spec" >&2
-      exit 5
-    }
     build_packages+=("$build_package")
+    if [[ -n "${source_build_package[$build_package]+x}" ]]; then
+      source_packages+=("$build_package")
+      source_target_seen["$target_path"]=1
+    else
+      package_only_packages+=("$build_package")
+    fi
     if [[ -z "${ordered_target_seen[$target_path]+x}" ]]; then
       ordered_targets+=("$target_path")
       ordered_target_seen["$target_path"]=1
     fi
   done
 
+  firmware_packages=("${build_packages[@]}")
+
+  # Keep every selected AudioWRT provider enabled while official build-only
+  # dependencies are prepared. This is what prevents official GLib/ALSA/etc.
+  # from becoming the runtime provider.
   for name in "${build_packages[@]}"; do
     sed -i -E "/^(# )?CONFIG_PACKAGE_${name}(=| is not set)/d" .config 2>/dev/null || true
     printf 'CONFIG_PACKAGE_%s=m\n' "$name" >> .config
   done
   make VERSION_NUMBER="$release" defconfig
+  packageinfo="$sdk/tmp/.packageinfo"
+
+  native_player_sdk=0
+  hostap_sdk=0
+  if [[ " ${build_packages[*]} " == *" libaudiowrt-player "* ||
+        " ${build_packages[*]} " == *" audiowrt-player-flac "* ||
+        " ${build_packages[*]} " == *" audiowrt-player-mp3 "* ||
+        " ${build_packages[*]} " == *" audiowrt-player-aac "* ||
+        " ${build_packages[*]} " == *" audiowrt-player-wav "* ||
+        " ${build_packages[*]} " == *" audiowrt-player-vorbis "* ||
+        " ${build_packages[*]} " == *" audiowrt-player-opus "* ]]; then
+    native_player_sdk=1
+  fi
+  [[ " ${build_packages[*]} " == *" hostapd-wpa-supplicant-tailored "* ]] && hostap_sdk=1
+
+  if (( native_player_sdk )); then
+    register_official_sdk_source base libs/libubox
+    register_official_sdk_source base libs/uclient
+    register_official_sdk_source base libs/ustream-ssl
+    [[ " ${build_packages[*]} " == *" audiowrt-player-flac "* ]] && register_official_sdk_source packages libs/flac
+    [[ " ${build_packages[*]} " == *" audiowrt-player-mp3 "* ]] && register_official_sdk_source packages libs/libmad
+    [[ " ${build_packages[*]} " == *" audiowrt-player-aac "* ]] && register_official_sdk_source packages libs/faad2
+    if [[ " ${build_packages[*]} " == *" audiowrt-player-vorbis "* ]]; then
+      register_official_sdk_source packages libs/libogg
+      register_official_sdk_source packages libs/libvorbis
+    fi
+    if [[ " ${build_packages[*]} " == *" audiowrt-player-opus "* ]]; then
+      register_official_sdk_source packages libs/opus
+      register_official_sdk_source packages libs/opusfile
+    fi
+  fi
+
+  if (( hostap_sdk )); then
+    register_official_sdk_source base libs/libnl-tiny
+    register_official_sdk_source base libs/libjson-c
+    register_official_sdk_source base libs/mbedtls
+    register_official_sdk_source base libs/libubox
+    register_official_sdk_source base system/ubus
+    register_official_sdk_source base utils/ucode
+    register_official_sdk_source base libs/udebug
+  fi
+
+  if [[ " ${build_packages[*]} " == *" kmod-bluetooth-trimmed "* ]]; then
+    prepare_bluetooth_package
+  fi
+
+  # Exactly like AudioWRT snapshot builds: only genuine source-build packages
+  # install official source definitions. Runtime-only dependencies remain exact
+  # OpenWrt binaries and are not rebuilt opportunistically.
+  source_dependencies=()
+  if (("${#source_packages[@]}")); then
+    source_dependencies_file="$work_dir/source-build-dependencies.txt"
+    python3 "$source_dep_resolver" "$build_targets" "$packageinfo" \
+      "${source_packages[@]}" --providers "${build_packages[@]}" > "$source_dependencies_file"
+    mapfile -t source_dependencies < "$source_dependencies_file"
+    if (("${#source_dependencies[@]}")); then
+      ./scripts/feeds update base
+      ./scripts/feeds install "${source_dependencies[@]}"
+      make VERSION_NUMBER="$release" defconfig
+      packageinfo="$sdk/tmp/.packageinfo"
+    fi
+  fi
+
+  package_config_args=()
+  for name in "${build_packages[@]}"; do
+    package_config_args+=("CONFIG_PACKAGE_${name}=m")
+  done
+
+  make VERSION_NUMBER="$release" package/toolchain/compile NO_DEPS=1 -j"$jobs"
+
+  if (( native_player_sdk )); then
+    prepare_native_player_sdk
+  fi
+  if (( hostap_sdk )); then
+    prepare_hostap_sdk
+  fi
 
   echo "AudioWRT dependency closure for $package:"
   printf '  %s\n' "${build_specs[@]}"
 
-  # Compile in the AudioWRT topological order, but deliberately do not use
-  # NO_DEPS. OpenWrt compiles/stages official dependencies exactly as it does
-  # in snapshot package builds. Only AudioWRT root outputs are exported later.
+  download_targets=()
+  for target_path in "${ordered_targets[@]}"; do
+    download_targets+=("${target_path%/compile}/download")
+  done
+  if (("${#download_targets[@]}")); then
+    make VERSION_NUMBER="$release" "${package_config_args[@]}" "${download_targets[@]}" NO_DEPS=1 -j"$jobs"
+  fi
+
+  # Compile in the same topological/source-vs-package-only order as AudioWRT.
+  # Official source dependencies are prepared before this loop, so they cannot
+  # overwrite a trimmed AudioWRT runtime provider after it has been staged.
   for target_path in "${ordered_targets[@]}"; do
     target_roots=()
     for spec in "${build_specs[@]}"; do
@@ -174,8 +317,8 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
       target_roots+=("${spec%%|*}")
     done
 
-    target_plan="$sdk/tmp/audiowrt-target-plan.txt"
-    python3 "$resolver" "$build_targets" "$sdk/tmp/.packageinfo" "${target_roots[@]}" \
+    target_plan="$work_dir/audiowrt-target-plan.txt"
+    python3 "$resolver" "$build_targets" "$packageinfo" "${target_roots[@]}" \
       --providers "${build_packages[@]}" > "$target_plan"
     mapfile -t target_specs < "$target_plan"
     declare -A target_package_seen=()
@@ -192,12 +335,13 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
       fi
     done
 
-    if [[ "$target_path" != *"/kmod-bluetooth-trimmed/compile" ]]; then
+    if [[ -n "${source_target_seen[$target_path]+x}" ]]; then
       target_config_args+=("CONFIG_PACKAGE_kmod-bluetooth=n")
+      target_config_args+=("CONFIG_PACKAGE_kmod-bluetooth-trimmed=n")
+      make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" -j"$jobs" V=s
+    else
+      make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" NO_DEPS=1 -j"$jobs" V=s
     fi
-
-    echo "Building AudioWRT target with OpenWrt dependency traversal: $target_path"
-    make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" -j"$jobs" V=s
   done
 )
 
