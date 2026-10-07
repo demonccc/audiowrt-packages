@@ -308,8 +308,17 @@ EOF
 
       case "$dependency_name" in
         glib2)
+          register_official_sdk_source packages libs/libffi
+          register_official_sdk_source packages utils/attr
           register_official_sdk_source packages libs/glib2
-          dependency_dir="package/feeds/packages/glib2"
+          source_dependency_targets+=(
+            "package/libs/zlib/compile"
+            "package/feeds/packages/libffi/compile"
+            "package/feeds/packages/attr/compile"
+            "package/libs/pcre2/compile"
+            "package/feeds/packages/glib2/compile"
+          )
+          continue
           ;;
         rust)
           register_official_sdk_source packages lang/rust
