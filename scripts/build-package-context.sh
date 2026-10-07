@@ -332,6 +332,8 @@ EOF
     done
 
     if (("${#source_dependency_targets[@]}")); then
+      make VERSION_NUMBER="$release" -s prepare-tmpinfo
+      make VERSION_NUMBER="$release" defconfig
       echo "Preparing explicit build-only dependencies (NO_DEPS=1; no feed traversal):"
       printf '  %s\n' "${source_dependency_targets[@]}"
       make VERSION_NUMBER="$release" "${source_dependency_targets[@]}" NO_DEPS=1 -j"$jobs" V=s
