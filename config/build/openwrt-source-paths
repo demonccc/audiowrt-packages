@@ -1,0 +1,18 @@
+# Exact OpenWrt source paths required by AudioWRT package recipes/build staging.
+# These are sparse source inputs only. They are not enabled feeds.
+packages|libs/alsa-lib
+packages|libs/faad2
+packages|libs/flac
+packages|libs/glib2
+packages|libs/libmad
+packages|libs/libogg
+packages|libs/libvorbis
+packages|libs/opus
+packages|libs/opusfile
+packages|libs/sbc
+packages|lang/rust
+packages|utils/bluez
+packages|utils/dbus
+luci|modules/luci-base
+luci|modules/luci-mod-status
+luci|themes/luci-theme-bootstrap
