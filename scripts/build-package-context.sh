@@ -421,10 +421,12 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
     # targets therefore compile with NO_DEPS=1, including genuine source-build
     # packages, so OpenWrt cannot rebuild an official dependency after a custom
     # runtime provider has been staged and overwrite its provider metadata.
+    printf '\n[BUILD] %s -> %s\n' "${target_roots[*]}" "$target_path"
     if ! make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" NO_DEPS=1 -j"$jobs" V=s; then
-      echo "ERROR: shared SDK target failed: $target_path" >&2
+      printf '[FAIL] %s -> %s\n' "${target_roots[*]}" "$target_path" >&2
       continue
     fi
+    printf '[ OK ] %s -> %s\n' "${target_roots[*]}" "$target_path"
   done
 )
 
