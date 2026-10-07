@@ -321,11 +321,12 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
         [[ "$dependency_spec" == */* ]] && dependency_variant="${dependency_spec#*/}"
 
         matches=()
-        while IFS= read -r makefile; do
+        for makefile in package/feeds/*/*/Makefile package/*/*/Makefile; do
+          [[ -f "$makefile" ]] || continue
           if grep -Eq "^define Package/${dependency_name}([[:space:]]|$)|^PKG_NAME[[:space:]]*[:?+]?=[[:space:]]*${dependency_name}([[:space:]]|$)" "$makefile"; then
             matches+=("$(dirname "$makefile")")
           fi
-        done < <(find package/feeds package -mindepth 2 -maxdepth 4 -name Makefile -type f -o -type l -name Makefile 2>/dev/null | sort -u)
+        done
 
         mapfile -t matches < <(printf '%s\n' "${matches[@]}" | awk 'NF && !seen[$0]++')
         [[ "${#matches[@]}" -eq 1 ]] || {
