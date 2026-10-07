@@ -19,10 +19,10 @@ KEEP_PREFIXES = (
     "libgobject-2.0.so",
     "libgmodule-2.0.so",
     "libgio-2.0.so",
+    "libgthread-2.0.so",
 )
 DROP_PREFIXES = (
     "libgirepository-2.0.so",
-    "libgthread-2.0.so",
 )
 
 

@@ -47,18 +47,42 @@ stage_official_runtime_provides() {
     local package="$1"
     local target_staging="$2"
     local package_stage="$work_dir/runtime-providers/$package"
-    local package_url package_apk readelf_bin runtime_pkg soname library
-    local -a readelf_candidates=() libraries=()
+    local repositories_file="$work_dir/runtime-repositories.list"
+    local package_apk readelf_bin runtime_pkg soname library
+    local -a readelf_candidates=() libraries=() fetched_apks=()
 
-    if ! package_url="$(python3 "$repo_root/scripts/resolve-openwrt-package.py" \
-        "$release" "$arch_packages" auto "$package" 2>/dev/null)"; then
+    if [[ ! -s "$repositories_file" ]]; then
+        : > "$repositories_file"
+        local feed base
+        for feed in base packages luci routing telephony video; do
+            if [[ "$release" == "snapshot" ]]; then
+                base="https://downloads.openwrt.org/snapshots/packages/$arch_packages/$feed"
+            else
+                base="https://downloads.openwrt.org/releases/$release/packages/$arch_packages/$feed"
+            fi
+            printf '%s/packages.adb\n' "$base" >> "$repositories_file"
+        done
+    fi
+
+    rm -rf "$package_stage"
+    mkdir -p "$package_stage/extracted" "$package_stage/cache"
+    if ! "$sdk_dir/staging_dir/host/bin/apk" \
+        --allow-untrusted \
+        --repositories-file "$repositories_file" \
+        --cache-dir "$package_stage/cache" \
+        --update-cache \
+        fetch --no-progress -o "$package_stage" "$package"; then
         echo "Runtime provider metadata not required/available from global feeds: $package"
         return 0
     fi
-    package_apk="$package_stage/$(basename "$package_url")"
-    rm -rf "$package_stage"
-    mkdir -p "$package_stage/extracted"
-    download_file "$package_url" "$package_apk"
+
+    mapfile -t fetched_apks < <(find "$package_stage" -maxdepth 1 -type f -name '*.apk' -print)
+    [[ "${#fetched_apks[@]}" -eq 1 ]] || {
+        echo "ERROR: expected one fetched APK for $package, found ${#fetched_apks[@]}." >&2
+        exit 5
+    }
+    package_apk="${fetched_apks[0]}"
+
     "$sdk_dir/staging_dir/host/bin/apk" --allow-untrusted extract \
         --destination "$package_stage/extracted" "$package_apk"
 
@@ -383,14 +407,28 @@ prepare_native_player_sdk() {
             NeAACDecInit NeAACDecDecode NeAACDecClose
     fi
 
-    if [[ " ${firmware_packages[*]} " == *" audiowrt-player-vorbis "* ]]; then
-        local ogg_src vorbis_src
-        make_run "$sdk_dir" package/feeds/packages/libogg/prepare NO_DEPS=1 -j"$jobs"
-        make_run "$sdk_dir" package/feeds/packages/libvorbis/prepare NO_DEPS=1 -j"$jobs"
+    if [[ " ${firmware_packages[*]} " == *" audiowrt-player-vorbis "* ||
+          " ${firmware_packages[*]} " == *" audiowrt-player-opus "* ]]; then
+        local ogg_src ogg_config
+        # libogg generates config_types.h during configure; prepare alone leaves
+        # os_types.h including a header that does not exist yet.
+        make_run "$sdk_dir" package/feeds/packages/libogg/configure NO_DEPS=1 -j"$jobs"
         ogg_src="$(prepared_source_dir libogg)"
-        vorbis_src="$(prepared_source_dir libvorbis)"
-        mkdir -p "$target_staging/usr/include/ogg" "$target_staging/usr/include/vorbis"
+        mkdir -p "$target_staging/usr/include/ogg"
         cp -f "$ogg_src"/include/ogg/*.h "$target_staging/usr/include/ogg/"
+        mapfile -t ogg_configs < <(find "$ogg_src" -type f -path '*/ogg/config_types.h' -print 2>/dev/null | sort)
+        [[ "${#ogg_configs[@]}" -eq 1 ]] || {
+            echo "ERROR: expected generated Ogg config_types.h, found ${#ogg_configs[@]}." >&2
+            exit 5
+        }
+        cp -f "${ogg_configs[0]}" "$target_staging/usr/include/ogg/config_types.h"
+    fi
+
+    if [[ " ${firmware_packages[*]} " == *" audiowrt-player-vorbis "* ]]; then
+        local vorbis_src
+        make_run "$sdk_dir" package/feeds/packages/libvorbis/prepare NO_DEPS=1 -j"$jobs"
+        vorbis_src="$(prepared_source_dir libvorbis)"
+        mkdir -p "$target_staging/usr/include/vorbis"
         cp -f "$vorbis_src"/include/vorbis/*.h "$target_staging/usr/include/vorbis/"
         [[ -f "$target_staging/usr/include/vorbis/vorbisfile.h" ]] || {
             echo "ERROR: Vorbis headers were not staged." >&2
