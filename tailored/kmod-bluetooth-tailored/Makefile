@@ -1,6 +1,6 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=kmod-bluetooth-trimmed
+PKG_NAME:=kmod-bluetooth-tailored
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=AudioWRT
@@ -12,9 +12,9 @@ ifneq ($(DUMP),1)
 AUDIOWRT_BLUETOOTH_PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk
 endif
 
-define KernelPackage/bluetooth-trimmed
+define KernelPackage/bluetooth-tailored
   SUBMENU:=Bluetooth Support
-  TITLE:=Trimmed Bluetooth core and USB HCI support
+  TITLE:=Tailored Bluetooth core and USB HCI support
   PROVIDES:=$(AUDIOWRT_BLUETOOTH_PROVIDES)
   DEPENDS:=@USB_SUPPORT +kmod-usb-core +kmod-crypto-hash +kmod-crypto-ecb \
 	+kmod-lib-crc16 +kmod-crypto-cmac +kmod-regmap-core +kmod-crypto-ecdh \
@@ -32,13 +32,13 @@ define KernelPackage/bluetooth-trimmed
   AUTOLOAD:=$(call AutoProbe,bluetooth btmtk btintel btrtl btusb)
 endef
 
-define KernelPackage/bluetooth-trimmed/description
+define KernelPackage/bluetooth-tailored/description
  Repackages the exact-release OpenWrt Bluetooth core and USB HCI modules used
  by the constrained Bluetooth profile. RFCOMM, BNEP and HIDP are omitted; A2DP
  uses the retained Bluetooth core and HCI transport.
 endef
 
-define Package/kmod-bluetooth-trimmed/extra_provides
+define Package/kmod-bluetooth-tailored/extra_provides
 	printf '%s\n' crc16.ko ecdh_generic.ko kpp.ko usbcore.ko
 endef
 
@@ -53,4 +53,4 @@ endef
 define Build/Compile
 endef
 
-$(eval $(call KernelPackage,bluetooth-trimmed))
+$(eval $(call KernelPackage,bluetooth-tailored))

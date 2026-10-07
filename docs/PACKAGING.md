@@ -102,7 +102,6 @@ bluez-trimmed
 dbus-trimmed
 dropbear-trimmed
 glib2-trimmed
-kmod-bluetooth-trimmed
 sbc-trimmed
 umdns-trimmed
 ```
@@ -134,6 +133,7 @@ Current packages:
 busybox-udhcpd-tailored
 hostapd-wpa-supplicant-tailored
 luci-mod-status-tailored
+kmod-bluetooth-tailored
 ```
 
 The tailored package must document:
@@ -150,6 +150,7 @@ Examples:
 - `busybox-udhcpd-tailored` provides the BusyBox runtime plus the `udhcpd` capability while pruning unused applets.
 - `hostapd-wpa-supplicant-tailored` builds one multicall binary exposing both `hostapd` and `wpa_supplicant` with the constrained AudioWRT feature set.
 - `luci-mod-status-tailored` retains the useful LuCI status views, removes conntrack/firewall-only functionality and replaces the Processes implementation so it does not require BusyBox `top`.
+- `kmod-bluetooth-tailored` recombines the exact-release kernel modules from OpenWrt's `kmod-bluetooth`, `kmod-btmtk` and `kmod-btusb` packages, retaining the Bluetooth core and USB HCI transports required by AudioWRT while omitting RFCOMM, BNEP and HIDP.
 
 ## OpenWrt-derived source contract
 
