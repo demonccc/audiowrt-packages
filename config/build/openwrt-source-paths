@@ -2,6 +2,7 @@
 # These are sparse source inputs only. They are not enabled feeds.
 packages|libs/alsa-lib
 packages|libs/faad2
+packages|libs/libffi
 packages|libs/flac
 packages|libs/glib2
 packages|libs/libmad
@@ -11,6 +12,7 @@ packages|libs/opus
 packages|libs/opusfile
 packages|libs/sbc
 packages|lang/rust
+packages|utils/attr
 packages|utils/bluez
 packages|utils/dbus
 luci|modules/luci-base
