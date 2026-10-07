@@ -106,7 +106,7 @@ for context_row in "${context_rows[@]}"; do
       --subtarget "$subtarget" \
       --output "$context_output" \
       --jobs "$jobs" \
-      --cache "$cache" >"$context_log" 2>&1; then
+      --cache "$cache" 2>&1 | tee "$context_log"; then
     echo "ERROR: shared SDK setup/build failed for $target/$subtarget; last 120 log lines:" >&2
     tail -n 120 "$context_log" >&2 || true
     for package in "${packages[@]}"; do
