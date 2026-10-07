@@ -1,5 +1,21 @@
 # Exact OpenWrt source paths required by AudioWRT package recipes/build staging.
 # These are sparse source inputs only. They are not enabled feeds.
+base|libs/libjson-c
+base|libs/libnl-tiny
+base|libs/libubox
+base|libs/mbedtls
+base|libs/openssl
+base|libs/pcre2
+base|libs/uclient
+base|libs/udebug
+base|libs/ustream-ssl
+base|libs/zlib
+base|network/services/dropbear
+base|network/services/hostapd
+base|network/services/umdns
+base|system/ubus
+base|utils/busybox
+base|utils/ucode
 packages|libs/alsa-lib
 packages|libs/faad2
 packages|libs/libffi
