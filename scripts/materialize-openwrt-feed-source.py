@@ -30,7 +30,7 @@ def run(*args: str, cwd: Path | None = None) -> None:
     subprocess.run(args, cwd=cwd, check=True)
 
 
-def read_feed_source(topdir: Path, feed: str) -> str:
+def read_feed_source(topdir: Path, feed: str) -> tuple[str, str]:
     config = topdir / "feeds.conf.default"
     if not config.is_file():
         fail(f"OpenWrt feeds.conf.default is missing under {topdir}")
@@ -40,7 +40,12 @@ def read_feed_source(topdir: Path, feed: str) -> str:
             continue
         match = FEED_RE.match(line)
         if match and match.group("name") == feed:
-            return match.group("source")
+            root = ""
+            flags = match.group("flags") or ""
+            root_match = re.search(r"(?:^|\s)--root=(\S+)(?:\s|$)", flags)
+            if root_match:
+                root = root_match.group(1)
+            return match.group("source"), root
     fail(f"feed {feed!r} not found in {config}")
 
 
@@ -129,13 +134,17 @@ def main() -> int:
     cache_root = Path(sys.argv[3]).resolve()
     source_paths_file = Path(sys.argv[4]).resolve()
 
-    source = read_feed_source(topdir, feed)
-    sparse_paths = read_paths(source_paths_file, feed)
+    source, root = read_feed_source(topdir, feed)
+    source_paths = read_paths(source_paths_file, feed)
+    sparse_paths = [f"{root}/{path}" if root else path for path in source_paths]
     target = cache_root / feed
 
     ensure_sparse_checkout(target, source, sparse_paths)
-    ensure_source_link(topdir, feed, target)
-    print(f"Materialized {feed} source paths only: {', '.join(sparse_paths)}")
+    source_root = target / root if root else target
+    if not source_root.is_dir():
+        fail(f"materialized source root is missing for {feed}: {source_root}")
+    ensure_source_link(topdir, feed, source_root)
+    print(f"Materialized {feed} source paths only: {', '.join(source_paths)}")
     return 0
 
 

@@ -158,14 +158,8 @@ stage_official_runtime_provides() {
 
 register_official_sdk_source() {
     local feed="$1" source_rel="$2"
-    local source_path destination
-
-    if [[ "$feed" == "base" ]]; then
-        source_path="$sdk_dir/package/$source_rel"
-    else
-        source_path="$sdk_dir/feeds/$feed/$source_rel"
-    fi
-    destination="$sdk_dir/package/feeds/$feed/$(basename "$source_rel")"
+    local source_path="$sdk_dir/feeds/$feed/$source_rel"
+    local destination="$sdk_dir/package/feeds/$feed/$(basename "$source_rel")"
 
     [[ -d "$source_path" ]] || {
         echo "ERROR: official OpenWrt source directory is missing: $source_path" >&2
