@@ -46,22 +46,15 @@ ifneq ($(findstring $(TOPDIR)/feeds/base/,$(AUDIOWRT_CANONICAL_RECIPE)),)
 endif
 endif
 
-# Core recipes can already be present in a full OpenWrt checkout or in some SDK
-# layouts under $(TOPDIR)/package. Prefer that tree when available.
+# Core recipes are provided as sparse exact-release source inputs by the
+# package builder under $(TOPDIR)/feeds/base. They are source material only:
+# base is not enabled in feeds.conf and is never indexed or installed.
 AUDIOWRT_CANONICAL_RECIPE_RESOLVED:=$(AUDIOWRT_CANONICAL_RECIPE)
 ifneq ($(findstring $(TOPDIR)/feeds/base/,$(AUDIOWRT_CANONICAL_RECIPE)),)
-  AUDIOWRT_CORE_RECIPE:=$(patsubst $(TOPDIR)/feeds/base/%,$(TOPDIR)/package/%,$(AUDIOWRT_CANONICAL_RECIPE))
-  ifneq ($(wildcard $(AUDIOWRT_CORE_RECIPE)),)
-    AUDIOWRT_CANONICAL_RECIPE_RESOLVED:=$(AUDIOWRT_CORE_RECIPE)
-  else
-    # Official SDKs do not necessarily ship the full core package source tree.
-    # Materialize only the exact SDK-pinned base source checkout so derived
-    # packages can read canonical recipes and patches while the AudioWRT feed is
-    # being indexed. This deliberately does NOT run `scripts/feeds update base`:
-    # no base feed index is generated and no package is installed or compiled.
-    $(shell python3 '$(TOPDIR)/feeds/audiowrt/scripts/materialize-openwrt-base.py' '$(TOPDIR)')
-    ifneq ($(wildcard $(AUDIOWRT_CANONICAL_RECIPE)),)
-      AUDIOWRT_CANONICAL_RECIPE_RESOLVED:=$(AUDIOWRT_CANONICAL_RECIPE)
+  ifeq ($(wildcard $(AUDIOWRT_CANONICAL_RECIPE)),)
+    AUDIOWRT_CORE_RECIPE:=$(patsubst $(TOPDIR)/feeds/base/%,$(TOPDIR)/package/%,$(AUDIOWRT_CANONICAL_RECIPE))
+    ifneq ($(wildcard $(AUDIOWRT_CORE_RECIPE)),)
+      AUDIOWRT_CANONICAL_RECIPE_RESOLVED:=$(AUDIOWRT_CORE_RECIPE)
     endif
   endif
 endif
