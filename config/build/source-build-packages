@@ -7,3 +7,5 @@ librespot
 bluez-trimmed
 audiowrt-btctl
 bluez-alsa
+luci-mod-status-tailored
+umdns-trimmed
