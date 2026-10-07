@@ -49,8 +49,10 @@ source_build_packages="$repo_root/config/build/source-build-packages"
 resolver="$repo_root/scripts/resolve-package-build-targets.py"
 source_dep_resolver="$repo_root/scripts/resolve-source-build-dependencies.py"
 runtime_dep_resolver="$repo_root/scripts/resolve-runtime-library-dependencies.py"
+source_paths="$repo_root/config/build/openwrt-source-paths"
+materialize_feed_source="$repo_root/scripts/materialize-openwrt-feed-source.py"
 
-for required in "$build_targets" "$source_build_packages" "$resolver" "$source_dep_resolver" "$runtime_dep_resolver" "$repo_root/scripts/snapshot-sdk-staging.sh"; do
+for required in "$build_targets" "$source_build_packages" "$resolver" "$source_dep_resolver" "$runtime_dep_resolver" "$source_paths" "$materialize_feed_source" "$repo_root/scripts/snapshot-sdk-staging.sh"; do
   [[ -f "$required" ]] || { echo "ERROR: required build input is missing: $required" >&2; exit 3; }
 done
 
@@ -99,8 +101,6 @@ esac
 sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d | head -n1)"
 [[ -n "$sdk" ]] || { echo "ERROR: SDK extraction produced no directory" >&2; exit 4; }
 
-cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
-
 (
   cd "$sdk"
 
@@ -138,12 +138,19 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   export AUDIOWRT_BLUETOOTH_CACHE_DIR="$cache/bluetooth-modules/$release/$target/$subtarget"
   source "$repo_root/scripts/snapshot-sdk-staging.sh"
 
-  # Match AudioWRT snapshot package setup: preserve the official SDK feeds,
-  # update only source trees needed by AudioWRT, and expose this checkout as the
-  # audiowrt feed so include/audiowrt-*.mk resolves exactly as it does there.
-  cp feeds.conf.default feeds.conf
-  printf '\n# AudioWRT package source\nsrc-link audiowrt %s\n' "$repo_root" >> feeds.conf
-  ./scripts/feeds update packages luci audiowrt
+  # The package repository is the only enabled feed. OpenWrt packages/LuCI
+  # sources used as canonical recipe/header inputs are sparse materialized from
+  # the exact refs pinned by the SDK, but are never indexed as feeds.
+  upstream_cache="$cache/openwrt-source/$release"
+  python3 "$materialize_feed_source" "$sdk" packages "$upstream_cache" "$source_paths"
+  python3 "$materialize_feed_source" "$sdk" luci "$upstream_cache" "$source_paths"
+
+  cat > feeds.conf <<EOF
+src-link audiowrt $repo_root
+EOF
+  echo "Enabled feeds:"
+  cat feeds.conf
+  ./scripts/feeds update audiowrt
 
   rm -rf package/feeds/audiowrt
   mkdir -p package/feeds/audiowrt
@@ -282,9 +289,10 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
     prepare_bluetooth_package
   fi
 
-  # Exactly like AudioWRT snapshot builds: only genuine source-build packages
-  # install official source definitions. Runtime-only dependencies remain exact
-  # OpenWrt binaries and are not rebuilt opportunistically.
+  # Only explicit build/host dependencies of genuine source packages are
+  # prepared. Runtime dependencies are never turned into source-build roots.
+  # No OpenWrt feed is updated/installed here and every helper target runs with
+  # NO_DEPS=1 so it cannot recursively rebuild OpenWrt packages or kernel kmods.
   source_dependencies=()
   source_dependency_targets=()
   if (("${#source_packages[@]}")); then
@@ -293,60 +301,51 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
       "${source_packages[@]}" --providers "${build_packages[@]}" > "$source_dependencies_file"
     mapfile -t source_dependencies < "$source_dependencies_file"
 
-    if (("${#source_dependencies[@]}")); then
-      ./scripts/feeds update base
+    for dependency_spec in "${source_dependencies[@]}"; do
+      dependency_name="${dependency_spec%%/*}"
+      dependency_variant=""
+      [[ "$dependency_spec" == */* ]] && dependency_variant="${dependency_spec#*/}"
 
-      # feeds install accepts package names, not build variants such as rust/host.
-      install_dependencies=()
-      declare -A install_dependency_seen=()
-      for dependency_spec in "${source_dependencies[@]}"; do
-        dependency_name="${dependency_spec%%/*}"
-        [[ -n "$dependency_name" ]] || continue
-        if [[ -z "${install_dependency_seen[$dependency_name]+x}" ]]; then
-          install_dependencies+=("$dependency_name")
-          install_dependency_seen["$dependency_name"]=1
-        fi
-      done
-      ./scripts/feeds install "${install_dependencies[@]}"
-      make VERSION_NUMBER="$release" defconfig
-      packageinfo="$sdk/tmp/.packageinfo"
-
-      # Resolve the concrete source target installed for every official
-      # development dependency and build it before any AudioWRT target. This is
-      # the key snapshot behavior: official headers/link libraries are staged
-      # first; trimmed/custom AudioWRT providers are built afterwards and are
-      # never removed again by dependency traversal.
-      for dependency_spec in "${source_dependencies[@]}"; do
-        dependency_name="${dependency_spec%%/*}"
-        dependency_variant=""
-        [[ "$dependency_spec" == */* ]] && dependency_variant="${dependency_spec#*/}"
-
-        matches=()
-        for makefile in package/feeds/*/*/Makefile package/*/*/Makefile; do
-          [[ -f "$makefile" ]] || continue
-          if grep -Eq "^define Package/${dependency_name}([[:space:]]|$)|^PKG_NAME[[:space:]]*[:?+]?=[[:space:]]*${dependency_name}([[:space:]]|$)" "$makefile"; then
-            matches+=("$(dirname "$makefile")")
-          fi
-        done
-
-        mapfile -t matches < <(printf '%s\n' "${matches[@]}" | awk 'NF && !seen[$0]++')
-        [[ "${#matches[@]}" -eq 1 ]] || {
-          echo "ERROR: expected one installed source for $dependency_spec, found ${#matches[@]}: ${matches[*]}" >&2
+      case "$dependency_name" in
+        glib2)
+          register_official_sdk_source packages libs/libffi
+          register_official_sdk_source packages utils/attr
+          register_official_sdk_source packages libs/glib2
+          source_dependency_targets+=(
+            "package/libs/zlib/compile"
+            "package/feeds/packages/libffi/compile"
+            "package/feeds/packages/attr/compile"
+            "package/libs/pcre2/compile"
+            "package/feeds/packages/glib2/compile"
+          )
+          continue
+          ;;
+        rust)
+          register_official_sdk_source packages lang/rust
+          dependency_dir="package/feeds/packages/rust"
+          ;;
+        openssl)
+          dependency_dir="package/libs/openssl"
+          ;;
+        *)
+          echo "ERROR: unsupported explicit source-build dependency without a staging rule: $dependency_spec" >&2
           exit 5
-        }
+          ;;
+      esac
 
-        dependency_target="${matches[0]}/compile"
-        if [[ "$dependency_variant" == "host" ]]; then
-          dependency_target="${matches[0]}/host/compile"
-        fi
-        source_dependency_targets+=("$dependency_target")
-      done
-
-      if (("${#source_dependency_targets[@]}")); then
-        echo "Pre-staging official development dependencies:"
-        printf '  %s\n' "${source_dependency_targets[@]}"
-        make VERSION_NUMBER="$release" "${source_dependency_targets[@]}" -j"$jobs" V=s
+      dependency_target="$dependency_dir/compile"
+      if [[ "$dependency_variant" == "host" ]]; then
+        dependency_target="$dependency_dir/host/compile"
       fi
+      source_dependency_targets+=("$dependency_target")
+    done
+
+    if (("${#source_dependency_targets[@]}")); then
+      make VERSION_NUMBER="$release" -s prepare-tmpinfo
+      make VERSION_NUMBER="$release" defconfig
+      echo "Preparing explicit build-only dependencies (NO_DEPS=1; no feed traversal):"
+      printf '  %s\n' "${source_dependency_targets[@]}"
+      make VERSION_NUMBER="$release" "${source_dependency_targets[@]}" NO_DEPS=1 -j"$jobs" V=s
     fi
   fi
 

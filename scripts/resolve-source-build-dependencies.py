@@ -124,7 +124,7 @@ def main() -> None:
         if package not in metadata:
             fail(f"source package metadata not found: {package}")
         fields = metadata[package]
-        for field in ("build", "host", "runtime"):
+        for field in ("build", "host"):
             for token in fields[field]:
                 dependency = normalize_dependency(token, preserve_variant=field in ("build", "host"))
                 if not dependency:
