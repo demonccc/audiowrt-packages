@@ -25,8 +25,8 @@ endef
 define Package/glib2-trimmed/description
  Repackages the exact official OpenWrt GLib2 APK selected for the current
  release and architecture. It keeps the GLib, GObject, GModule and GIO runtime
- libraries required by AudioWRT Bluetooth components while omitting the unused
- GIRepository and legacy GThread shared libraries. AudioWRT packages depend on
+ libraries required by AudioWRT Bluetooth components, including GThread, while
+ omitting the unused GIRepository shared library. AudioWRT packages depend on
  glib2-trimmed explicitly instead of declaring it as a virtual provider for the
  official glib2 package.
 endef
