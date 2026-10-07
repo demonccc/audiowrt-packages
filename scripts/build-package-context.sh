@@ -290,6 +290,11 @@ EOF
     prepare_bluetooth_package
   fi
 
+  # Stage the SDK toolchain package metadata before compiling any explicit
+  # build-only dependency. OpenWrt's package checker needs libc/libgcc provider
+  # metadata even when a dependency target is built with NO_DEPS=1.
+  make VERSION_NUMBER="$release" package/toolchain/compile NO_DEPS=1 -j"$jobs"
+
   # Only explicit build/host dependencies of genuine source packages are
   # prepared. Runtime dependencies are never turned into source-build roots.
   # No OpenWrt feed is updated/installed here and every helper target runs with
@@ -357,8 +362,6 @@ EOF
   for name in "${build_packages[@]}"; do
     package_config_args+=("CONFIG_PACKAGE_${name}=m")
   done
-
-  make VERSION_NUMBER="$release" package/toolchain/compile NO_DEPS=1 -j"$jobs"
 
   # Package-only AudioWRT recipes still run OpenWrt's CheckDependencies. Stage
   # SONAME provider metadata from the exact official runtime APKs instead of
