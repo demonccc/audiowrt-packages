@@ -10,7 +10,7 @@ audiowrt-provisioning|package/feeds/audiowrt/audiowrt-provisioning/compile
 luci-app-audiowrt-core|package/feeds/audiowrt/luci-app-audiowrt-core/compile
 luci-theme-audiowrt|package/feeds/audiowrt/luci-theme-audiowrt/compile
 luci-mod-status-tailored|package/feeds/audiowrt/luci-mod-status-tailored/compile
-kmod-bluetooth-trimmed|package/feeds/audiowrt/kmod-bluetooth-trimmed/compile
+kmod-bluetooth-tailored|package/feeds/audiowrt/kmod-bluetooth-tailored/compile
 busybox-udhcpd-tailored|package/feeds/audiowrt/busybox-udhcpd-tailored/compile
 dropbear-trimmed|package/feeds/audiowrt/dropbear-trimmed/compile
 dbus-trimmed|package/feeds/audiowrt/dbus-trimmed/compile
