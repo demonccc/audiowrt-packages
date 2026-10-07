@@ -2,38 +2,78 @@
 # Snapshot SDK staging helpers copied from demonccc/audiowrt scripts/build.sh @ 680f766
 
 prepare_bluetooth_package() {
-bluetooth_module_source="${AUDIOWRT_BLUETOOTH_SOURCE_DIR:-$sdk_dir/feeds/audiowrt/kmod-bluetooth-trimmed}"
+bluetooth_module_source="${AUDIOWRT_BLUETOOTH_SOURCE_DIR:-$sdk_dir/feeds/audiowrt/kmod-bluetooth-tailored}"
+bluetooth_cache="${AUDIOWRT_BLUETOOTH_CACHE_DIR:-}"
+bluetooth_modules=(bluetooth.ko btmtk.ko btintel.ko btrtl.ko btusb.ko)
+
 [[ -d "$bluetooth_module_source" ]] || {
-    echo "ERROR: AudioWRT minimal Bluetooth kernel package source is missing." >&2
+    echo "ERROR: AudioWRT tailored Bluetooth kernel package source is missing." >&2
     exit 5
 }
-bluetooth_stage="$work_dir/prebuilt-bluetooth-modules"
-rm -rf "$bluetooth_stage"
-mkdir -p "$bluetooth_stage/apks" "$bluetooth_stage/extracted" "$bluetooth_module_source/files"
-download_file "$kmods_sha256sums_url" "$bluetooth_stage/sha256sums"
+mkdir -p "$bluetooth_module_source/files"
 
-for module_url in "$kmod_bluetooth_url" "$kmod_btmtk_url" "$kmod_btusb_url"; do
-    module_apk="$bluetooth_stage/apks/$(basename "$module_url")"
-    download_file "$module_url" "$module_apk"
-    module_path="${module_url#"$openwrt_base_url"}"
-    [[ "$module_path" != "$module_url" && -n "$module_path" ]] || {
-        echo "ERROR: kernel module URL is outside the OpenWrt target: $module_url" >&2
-        exit 5
-    }
-    python3 "$repo_root/scripts/verify-openwrt-checksum.py" \
-        "$bluetooth_stage/sha256sums" "$module_path" "$module_apk"
-    "$sdk_dir/staging_dir/host/bin/apk" --allow-untrusted extract \
-        --destination "$bluetooth_stage/extracted" "$module_apk"
-done
+cache_complete=0
+if [[ -n "$bluetooth_cache" ]]; then
+    cache_complete=1
+    for module in "${bluetooth_modules[@]}"; do
+        [[ -s "$bluetooth_cache/$module" ]] || {
+            cache_complete=0
+            break
+        }
+    done
+fi
 
-for module in bluetooth.ko btmtk.ko btintel.ko btrtl.ko btusb.ko; do
-    mapfile -t module_matches < <(find "$bluetooth_stage/extracted" -type f -name "$module" -print)
-    [[ "${#module_matches[@]}" -eq 1 ]] || {
-        echo "ERROR: expected one exact-release $module, found ${#module_matches[@]}." >&2
-        exit 5
-    }
-    cp -f "${module_matches[0]}" "$bluetooth_module_source/files/$module"
-done
+if (( cache_complete )); then
+    echo "Bluetooth module cache hit: $release / $target/$subtarget"
+    cp -f "$bluetooth_cache"/*.ko "$bluetooth_module_source/files/"
+else
+    bluetooth_stage="$work_dir/prebuilt-bluetooth-modules"
+    rm -rf "$bluetooth_stage"
+    mkdir -p "$bluetooth_stage/apks" "$bluetooth_stage/extracted"
+    download_file "$kmods_sha256sums_url" "$bluetooth_stage/sha256sums"
+
+    for module_url in "$kmod_bluetooth_url" "$kmod_btmtk_url" "$kmod_btusb_url"; do
+        module_apk="$bluetooth_stage/apks/$(basename "$module_url")"
+        download_file "$module_url" "$module_apk"
+        module_path="${module_url#"$openwrt_base_url"}"
+        [[ "$module_path" != "$module_url" && -n "$module_path" ]] || {
+            echo "ERROR: kernel module URL is outside the OpenWrt target: $module_url" >&2
+            exit 5
+        }
+        python3 "$repo_root/scripts/verify-openwrt-checksum.py" \
+            "$bluetooth_stage/sha256sums" "$module_path" "$module_apk"
+        "$sdk_dir/staging_dir/host/bin/apk" --allow-untrusted extract \
+            --destination "$bluetooth_stage/extracted" "$module_apk"
+    done
+
+    for module in "${bluetooth_modules[@]}"; do
+        mapfile -t module_matches < <(find "$bluetooth_stage/extracted" -type f -name "$module" -print)
+        [[ "${#module_matches[@]}" -eq 1 ]] || {
+            echo "ERROR: expected one exact-release $module, found ${#module_matches[@]}." >&2
+            exit 5
+        }
+        cp -f "${module_matches[0]}" "$bluetooth_module_source/files/$module"
+    done
+
+    if [[ -n "$bluetooth_cache" ]]; then
+        bluetooth_cache_tmp="$bluetooth_cache.tmp.$"
+        rm -rf "$bluetooth_cache_tmp"
+        mkdir -p "$bluetooth_cache_tmp"
+        cp -f "$bluetooth_module_source/files"/*.ko "$bluetooth_cache_tmp/"
+        cat > "$bluetooth_cache_tmp/SOURCE" <<EOF
+OPENWRT_RELEASE=$release
+TARGET=$target
+SUBTARGET=$subtarget
+KMOD_BLUETOOTH_URL=$kmod_bluetooth_url
+KMOD_BTMTK_URL=$kmod_btmtk_url
+KMOD_BTUSB_URL=$kmod_btusb_url
+EOF
+        rm -rf "$bluetooth_cache"
+        mkdir -p "$(dirname "$bluetooth_cache")"
+        mv "$bluetooth_cache_tmp" "$bluetooth_cache"
+        echo "Bluetooth module cache stored: $bluetooth_cache"
+    fi
+fi
 
 for omitted in rfcomm.ko bnep.ko hidp.ko; do
     [[ ! -e "$bluetooth_module_source/files/$omitted" ]] || {
