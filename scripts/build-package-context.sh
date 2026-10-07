@@ -134,7 +134,8 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   kmod_btusb_url="$(json_field "$artifacts_metadata" kmod_btusb_url)"
   kmods_sha256sums_url="$(json_field "$artifacts_metadata" kmods_sha256sums_url)"
 
-  export AUDIOWRT_BLUETOOTH_SOURCE_DIR="$repo_root/trimmed/kmod-bluetooth-trimmed"
+  export AUDIOWRT_BLUETOOTH_SOURCE_DIR="$repo_root/tailored/kmod-bluetooth-tailored"
+  export AUDIOWRT_BLUETOOTH_CACHE_DIR="$cache/bluetooth-modules/$release/$target/$subtarget"
   source "$repo_root/scripts/snapshot-sdk-staging.sh"
 
   # Match AudioWRT snapshot package setup: preserve the official SDK feeds,
@@ -277,7 +278,7 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
     register_official_sdk_source base libs/udebug
   fi
 
-  if [[ " ${build_packages[*]} " == *" kmod-bluetooth-trimmed "* ]]; then
+  if [[ " ${build_packages[*]} " == *" kmod-bluetooth-tailored "* ]]; then
     prepare_bluetooth_package
   fi
 
@@ -414,7 +415,7 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
     target_config_args=("${package_config_args[@]}")
     if [[ -n "${source_target_seen[$target_path]+x}" ]]; then
       target_config_args+=("CONFIG_PACKAGE_kmod-bluetooth=n")
-      target_config_args+=("CONFIG_PACKAGE_kmod-bluetooth-trimmed=n")
+      target_config_args+=("CONFIG_PACKAGE_kmod-bluetooth-tailored=n")
     fi
 
     # All official development dependencies were compiled above. AudioWRT
