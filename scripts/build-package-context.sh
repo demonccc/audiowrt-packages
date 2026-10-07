@@ -142,6 +142,7 @@ sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d | head -n1)"
   # sources used as canonical recipe/header inputs are sparse materialized from
   # the exact refs pinned by the SDK, but are never indexed as feeds.
   upstream_cache="$cache/openwrt-source/$release"
+  python3 "$materialize_feed_source" "$sdk" base "$upstream_cache" "$source_paths"
   python3 "$materialize_feed_source" "$sdk" packages "$upstream_cache" "$source_paths"
   python3 "$materialize_feed_source" "$sdk" luci "$upstream_cache" "$source_paths"
 
@@ -308,14 +309,16 @@ EOF
 
       case "$dependency_name" in
         glib2)
+          register_official_sdk_source base libs/zlib
+          register_official_sdk_source base libs/pcre2
           register_official_sdk_source packages libs/libffi
           register_official_sdk_source packages utils/attr
           register_official_sdk_source packages libs/glib2
           source_dependency_targets+=(
-            "package/libs/zlib/compile"
+            "package/feeds/base/zlib/compile"
             "package/feeds/packages/libffi/compile"
             "package/feeds/packages/attr/compile"
-            "package/libs/pcre2/compile"
+            "package/feeds/base/pcre2/compile"
             "package/feeds/packages/glib2/compile"
           )
           continue
@@ -325,7 +328,8 @@ EOF
           dependency_dir="package/feeds/packages/rust"
           ;;
         openssl)
-          dependency_dir="package/libs/openssl"
+          register_official_sdk_source base libs/openssl
+          dependency_dir="package/feeds/base/openssl"
           ;;
         *)
           echo "ERROR: unsupported explicit source-build dependency without a staging rule: $dependency_spec" >&2
