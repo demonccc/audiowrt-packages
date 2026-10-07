@@ -42,7 +42,7 @@ def read_feed_source(topdir: Path, feed: str) -> tuple[str, str]:
         if match and match.group("name") == feed:
             root = ""
             flags = match.group("flags") or ""
-            root_match = re.search(r"(?:^|\\s)--root=(\\S+)(?:\\s|$)", flags)
+            root_match = re.search(r"(?:^|\s)--root=(\S+)(?:\s|$)", flags)
             if root_match:
                 root = root_match.group(1)
             return match.group("source"), root
