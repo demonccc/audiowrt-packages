@@ -254,8 +254,11 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
     [[ " ${build_packages[*]} " == *" audiowrt-player-flac "* ]] && register_official_sdk_source packages libs/flac
     [[ " ${build_packages[*]} " == *" audiowrt-player-mp3 "* ]] && register_official_sdk_source packages libs/libmad
     [[ " ${build_packages[*]} " == *" audiowrt-player-aac "* ]] && register_official_sdk_source packages libs/faad2
-    if [[ " ${build_packages[*]} " == *" audiowrt-player-vorbis "* ]]; then
+    if [[ " ${build_packages[*]} " == *" audiowrt-player-vorbis "* ||
+          " ${build_packages[*]} " == *" audiowrt-player-opus "* ]]; then
       register_official_sdk_source packages libs/libogg
+    fi
+    if [[ " ${build_packages[*]} " == *" audiowrt-player-vorbis "* ]]; then
       register_official_sdk_source packages libs/libvorbis
     fi
     if [[ " ${build_packages[*]} " == *" audiowrt-player-opus "* ]]; then
@@ -282,16 +285,66 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
   # install official source definitions. Runtime-only dependencies remain exact
   # OpenWrt binaries and are not rebuilt opportunistically.
   source_dependencies=()
+  source_dependency_targets=()
   if (("${#source_packages[@]}")); then
     source_dependencies_file="$work_dir/source-build-dependencies.txt"
     python3 "$source_dep_resolver" "$build_targets" "$packageinfo" \
       "${source_packages[@]}" --providers "${build_packages[@]}" > "$source_dependencies_file"
     mapfile -t source_dependencies < "$source_dependencies_file"
+
     if (("${#source_dependencies[@]}")); then
       ./scripts/feeds update base
-      ./scripts/feeds install "${source_dependencies[@]}"
+
+      # feeds install accepts package names, not build variants such as rust/host.
+      install_dependencies=()
+      declare -A install_dependency_seen=()
+      for dependency_spec in "${source_dependencies[@]}"; do
+        dependency_name="${dependency_spec%%/*}"
+        [[ -n "$dependency_name" ]] || continue
+        if [[ -z "${install_dependency_seen[$dependency_name]+x}" ]]; then
+          install_dependencies+=("$dependency_name")
+          install_dependency_seen["$dependency_name"]=1
+        fi
+      done
+      ./scripts/feeds install "${install_dependencies[@]}"
       make VERSION_NUMBER="$release" defconfig
       packageinfo="$sdk/tmp/.packageinfo"
+
+      # Resolve the concrete source target installed for every official
+      # development dependency and build it before any AudioWRT target. This is
+      # the key snapshot behavior: official headers/link libraries are staged
+      # first; trimmed/custom AudioWRT providers are built afterwards and are
+      # never removed again by dependency traversal.
+      for dependency_spec in "${source_dependencies[@]}"; do
+        dependency_name="${dependency_spec%%/*}"
+        dependency_variant=""
+        [[ "$dependency_spec" == */* ]] && dependency_variant="${dependency_spec#*/}"
+
+        matches=()
+        while IFS= read -r makefile; do
+          if grep -Eq "^define Package/${dependency_name}([[:space:]]|$)|^PKG_NAME[[:space:]]*[:?+]?=[[:space:]]*${dependency_name}([[:space:]]|$)" "$makefile"; then
+            matches+=("$(dirname "$makefile")")
+          fi
+        done < <(find package/feeds package -mindepth 2 -maxdepth 4 -name Makefile -type f -o -type l -name Makefile 2>/dev/null | sort -u)
+
+        mapfile -t matches < <(printf '%s\n' "${matches[@]}" | awk 'NF && !seen[$0]++')
+        [[ "${#matches[@]}" -eq 1 ]] || {
+          echo "ERROR: expected one installed source for $dependency_spec, found ${#matches[@]}: ${matches[*]}" >&2
+          exit 5
+        }
+
+        dependency_target="${matches[0]}/compile"
+        if [[ "$dependency_variant" == "host" ]]; then
+          dependency_target="${matches[0]}/host/compile"
+        fi
+        source_dependency_targets+=("$dependency_target")
+      done
+
+      if (("${#source_dependency_targets[@]}")); then
+        echo "Pre-staging official development dependencies:"
+        printf '  %s\n' "${source_dependency_targets[@]}"
+        make VERSION_NUMBER="$release" "${source_dependency_targets[@]}" -j"$jobs" V=s
+      fi
     fi
   fi
 
@@ -354,27 +407,22 @@ cp "$sdk/feeds.conf.default" "$sdk/feeds.conf"
       target_package_seen["${spec%%|*}"]=1
     done
 
-    target_config_args=()
-    for name in "${build_packages[@]}"; do
-      if [[ -n "${target_package_seen[$name]+x}" ]]; then
-        target_config_args+=("CONFIG_PACKAGE_${name}=m")
-      else
-        target_config_args+=("CONFIG_PACKAGE_${name}=n")
-      fi
-    done
-
+    # Keep the entire resolved AudioWRT closure selected for every target. The
+    # SDK is shared, so providers built earlier (for example glib2-trimmed and
+    # sbc-trimmed) must remain selected/staged for later consumers.
+    target_config_args=("${package_config_args[@]}")
     if [[ -n "${source_target_seen[$target_path]+x}" ]]; then
       target_config_args+=("CONFIG_PACKAGE_kmod-bluetooth=n")
       target_config_args+=("CONFIG_PACKAGE_kmod-bluetooth-trimmed=n")
-      if ! make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" -j"$jobs" V=s; then
-        echo "ERROR: shared SDK target failed: $target_path" >&2
-        continue
-      fi
-    else
-      if ! make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" NO_DEPS=1 -j"$jobs" V=s; then
-        echo "ERROR: shared SDK target failed: $target_path" >&2
-        continue
-      fi
+    fi
+
+    # All official development dependencies were compiled above. AudioWRT
+    # targets therefore compile with NO_DEPS=1, including genuine source-build
+    # packages, so OpenWrt cannot rebuild an official dependency after a custom
+    # runtime provider has been staged and overwrite its provider metadata.
+    if ! make VERSION_NUMBER="$release" "${target_config_args[@]}" "$target_path" NO_DEPS=1 -j"$jobs" V=s; then
+      echo "ERROR: shared SDK target failed: $target_path" >&2
+      continue
     fi
   done
 )
