@@ -29,7 +29,7 @@ def run_with_log(log_file: Path) -> int:
     env[LOG_CHILD_ENV] = "1"
     env["PYTHONUNBUFFERED"] = "1"
     command = [sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]]
-    header = f"Logging build output to: {log_file}\\n"
+    header = f"Logging build output to: {log_file}\n"
     sys.stdout.write(header)
     sys.stdout.flush()
     with log_file.open("w", encoding="utf-8", buffering=1) as handle:
@@ -46,7 +46,7 @@ def run_with_log(log_file: Path) -> int:
                 env=env,
             )
         except OSError as exc:
-            message = f"ERROR: unable to start build: {exc}\\n"
+            message = f"ERROR: unable to start build: {exc}\n"
             sys.stderr.write(message)
             handle.write(message)
             return 1
