@@ -156,12 +156,14 @@ def compile_sdk(args):
     archive = download_sdk(args.release, args.target, args.subtarget, cache)
     with tempfile.TemporaryDirectory(prefix="audiowrt-sdk-") as temp:
         sdk = sdk_root(archive, Path(temp))
-        # Official SDK feeds are retained; register local recipes as an isolated
-        # feed. The dependency resolver selects only AudioWRT package roots.
+        # Match the proven AudioWRT SDK sequence at 8eb72f8: retain the
+        # release-pinned feeds, update packages + LuCI, and use this checkout
+        # as the local AudioWRT feed without cloning the firmware repository.
         (sdk / "feeds.conf").write_text(
             (sdk / "feeds.conf.default").read_text() +
             f"\nsrc-link audiowrt {ROOT}\n"
         )
+        run("./scripts/feeds", "update", "packages", "luci", "audiowrt", cwd=sdk)
         links = sdk / "package/feeds/audiowrt"
         links.mkdir(parents=True, exist_ok=True)
         for name, target_path in targets.items():
@@ -211,32 +213,41 @@ def compile_sdk(args):
                 unexpected = {d.split("/")[0] for d in deps} - supported
                 if unexpected:
                     raise RuntimeError(f"Dependency staging needs an explicit rule: {sorted(unexpected)}")
-                # The official OpenWrt SDK only contains part of the upstream
-                # source metadata. Materialize the exact pinned recipes first,
-                # otherwise 'make package/feeds/.../compile' has no target.
-                recipes = development_recipes(deps)
-                registered = register_upstream_sdk_sources(sdk, cache, recipes)
-                run("make", f"VERSION_NUMBER={args.release}", "-s", "prepare-tmpinfo", cwd=sdk)
+                # The exact working firmware builder (8eb72f8) registers
+                # source definitions but does not compile dependency targets
+                # individually. Source targets run WITHOUT NO_DEPS so the
+                # OpenWrt SDK stages their required Build/InstallDev outputs.
+                run("./scripts/feeds", "update", "base", cwd=sdk)
+                run("./scripts/feeds", "install", *deps, cwd=sdk)
                 run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
-                # Canonical AudioWRT behavior: development dependencies are
-                # staged once per SDK, with real Build/InstallDev outputs.
-                # NO_DEPS is for package-only roots, not upstream source builds.
-                for feed, source_path in recipes:
-                    dep_target = registered[(feed, source_path)]
-                    run("make", f"VERSION_NUMBER={args.release}",
-                        "CONFIG_PACKAGE_libopenssl-devcrypto=n",
-                        dep_target, f"-j{args.jobs}", "V=s", cwd=sdk)
         errors = []
+        # Download selected packages separately with NO_DEPS, as in 8eb72f8.
+        download_targets = list(dict.fromkeys(
+            target.removesuffix("/compile") + "/download" for _, target in specs
+        ))
+        if download_targets:
+            run("make", f"VERSION_NUMBER={args.release}", *config_flags,
+                *download_targets, "NO_DEPS=1", f"-j{args.jobs}", cwd=sdk)
         for target_path in dict.fromkeys(target for _, target in specs):
             names = [name for name, path in specs if path == target_path]
             print(f"Compiling {', '.join(names)}", flush=True)
             try:
-                run("make", f"VERSION_NUMBER={args.release}", *config_flags,
-                    "CONFIG_PACKAGE_libopenssl-devcrypto=n",
+                source_target = any(name in source_set for name in names)
+                # Recompute the active dependency closure per target; selected
+                # providers unrelated to this target must not leak into it.
+                target_plan = subprocess.check_output([
+                    sys.executable, str(ROOT / "scripts/resolve-package-build-targets.py"),
+                    str(ROOT / "config/build/package-build-targets"), str(sdk / "tmp/.packageinfo"),
+                    *names, "--providers", *selected
+                ], text=True)
+                active = {row.split("|", 1)[0] for row in target_plan.splitlines() if "|" in row}
+                target_flags = [f"CONFIG_PACKAGE_{name}={'m' if name in active else 'n'}"
+                                for name in selected]
+                run("make", f"VERSION_NUMBER={args.release}", *target_flags,
                     "CONFIG_PACKAGE_kmod-bluetooth=n",
                     "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
                     target_path,
-                    *([] if any(name in source_set for name in names) else ["NO_DEPS=1"]),
+                    *([] if source_target else ["NO_DEPS=1"]),
                     f"-j{args.jobs}", "V=s", cwd=sdk)
             except subprocess.CalledProcessError:
                 errors += names
