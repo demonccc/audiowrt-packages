@@ -18,6 +18,49 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 IMAGE = "demonccc/openwrt-builder:latest"
 ROOTS = ("audiowrt", "ported", "trimmed", "tailored")
+LOG_CHILD_ENV = "AUDIOWRT_PACKAGES_LOG_CHILD"
+
+
+
+def run_with_log(log_file: Path) -> int:
+    """Mirror openwrt-builder's log-file behavior, including Docker output."""
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    env = os.environ.copy()
+    env[LOG_CHILD_ENV] = "1"
+    env["PYTHONUNBUFFERED"] = "1"
+    command = [sys.executable, str(Path(__file__).resolve()), *sys.argv[1:]]
+    header = f"Logging build output to: {log_file}\\n"
+    sys.stdout.write(header)
+    sys.stdout.flush()
+    with log_file.open("w", encoding="utf-8", buffering=1) as handle:
+        handle.write(header)
+        try:
+            proc = subprocess.Popen(
+                command,
+                cwd=ROOT,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                errors="replace",
+                env=env,
+            )
+        except OSError as exc:
+            message = f"ERROR: unable to start build: {exc}\\n"
+            sys.stderr.write(message)
+            handle.write(message)
+            return 1
+        try:
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                sys.stdout.write(line)
+                sys.stdout.flush()
+                handle.write(line)
+            return proc.wait()
+        except KeyboardInterrupt:
+            proc.terminate()
+            proc.wait()
+            return 130
 
 
 def packages() -> dict[str, Path]:
@@ -54,10 +97,21 @@ def main() -> int:
     parser.add_argument("--jobs", type=int, default=4)
     parser.add_argument("--output", default="output/local")
     parser.add_argument("--cache-dir", default=".cache/audiowrt-packages")
+    parser.add_argument("--log-file", help="Save full stdout/stderr while still printing to console")
     parser.add_argument("--target", help="Optional specific SDK target")
     parser.add_argument("--subtarget", help="Optional specific SDK subtarget")
     parser.add_argument("--inside-container", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
+    if args.command == "build" and args.log_file and os.environ.get(LOG_CHILD_ENV) != "1":
+        log_path = (ROOT / args.log_file).resolve()
+        output_path = (ROOT / args.output).resolve()
+        cache_path = (ROOT / args.cache_dir).resolve()
+        if not log_path.is_relative_to(ROOT):
+            parser.error("--log-file must be inside the repository checkout")
+        if (log_path == output_path or log_path.is_relative_to(output_path)
+                or log_path == cache_path or log_path.is_relative_to(cache_path)):
+            parser.error("--log-file must be outside --output and --cache-dir")
+        return run_with_log(log_path)
     available = packages()
     if args.command == "list":
         print("\n".join(sorted(available)))
@@ -92,6 +146,7 @@ def main() -> int:
         docker_args = [
             "docker", "run", "--rm",
             "-e", "HOME=/tmp",
+            "-e", "PYTHONUNBUFFERED=1",
             "-v", f"{ROOT}:/workspace",
             "-w", "/workspace",
         ]
