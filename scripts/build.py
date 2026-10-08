@@ -122,12 +122,19 @@ def main() -> int:
         parser.error("No matching package tasks for selected architecture")
     output.mkdir(parents=True, exist_ok=True)
     cache.mkdir(parents=True, exist_ok=True)
-    cmd = ["bash", "scripts/build-package-batch.sh",
-           "--release", args.release, "--arch", args.arch, "--tasks-json", json.dumps(tasks),
-           "--output", str(output), "--jobs", str(args.jobs), "--cache", str(cache)]
     print(f"Building {len(tasks)} package task(s) using {len(sdk_contexts)} SDK context(s)", flush=True)
-    return subprocess.call(cmd, cwd=ROOT)
-
+    failures = 0
+    for target, subtarget in sdk_contexts:
+        current = [sys.executable, "scripts/build-sdk.py",
+                   "--release", args.release, "--arch", args.arch,
+                   "--target", target, "--subtarget", subtarget,
+                   "--output", str(output), "--jobs", str(args.jobs),
+                   "--cache-dir", str(cache)]
+        for task in tasks:
+            if task["target"] == target and task["subtarget"] == subtarget:
+                current.extend(["--package", task["package"]])
+        failures |= subprocess.call(current, cwd=ROOT)
+    return 1 if failures else 0
 
 if __name__ == "__main__":
     sys.exit(main())
