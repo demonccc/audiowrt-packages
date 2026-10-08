@@ -1,31 +1,12 @@
-# Local package builder experiment
+# Local Python SDK build experiment
 
-This branch provides a profile-free Python entry point, executed inside the existing
-`demonccc/openwrt-builder:latest` Docker image. It does **not** clone or run
-`demonccc/audiowrt` and it does not build a firmware image.
-
-From this checkout on Linux:
+This branch adds standalone Python SDK compilation without firmware profiles or the AudioWRT repository.
 
 ```bash
-docker pull demonccc/openwrt-builder:latest
 python3 scripts/build.py list
-python3 scripts/build.py build --release 25.12.5 --arch mips_24kc --package bluez-trimmed --jobs 4
+python3 scripts/build.py build --release 25.12.5 --arch mips_24kc --package bluez-trimmed --target ath79 --subtarget generic --jobs 4
 ```
 
-For every package in that architecture:
+The CLI runs within `demonccc/openwrt-builder:latest` and delegates to `scripts/build-sdk.py` in this repository. The new code does not invoke the legacy `build-package-context.sh` or `build-package-batch.sh`.
 
-```bash
-python3 scripts/build.py build --release 25.12.5 --arch mips_24kc --package all --jobs 4
-```
-
-Use `--target ath79 --subtarget generic` to restrict the SDK to one target,
-otherwise the matrix also includes kernel targets where configured.
-
-Outputs are stored in `output/local/`, and persistent downloads in
-`.cache/audiowrt-packages/`.
-
-**Current limitation:** Python owns the CLI, Docker invocation, package selection,
-and target mapping. The actual package compilation still invokes the repository's
-existing `build-package-batch.sh` / `build-package-context.sh`. This is a first
-local-testing stage, not yet a full Python port of the known-good compilation code.
-No GitHub Actions publishing workflow is changed by this branch.
+This is an experimental first extraction. Package-specific Bluetooth, audio and Wi-Fi SDK staging paths have not been validated, nor has a complete package build. Do not merge to testing on the basis of CLI operation alone. GitHub Actions publishing remains untouched.
