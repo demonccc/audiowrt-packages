@@ -153,7 +153,10 @@ def compile_sdk(args):
                 unexpected = {d.split("/")[0] for d in deps} - supported
                 if unexpected:
                     raise RuntimeError(f"Dependency staging needs an explicit rule: {sorted(unexpected)}")
-                # Crucial: never select optional cryptodev without kernel headers.
+                # Use the canonical selective-source boundary: register only
+                # genuine development dependencies, never every OpenWrt feed.
+                run("./scripts/feeds", "update", "base", cwd=sdk)
+                run("./scripts/feeds", "install", *deps, cwd=sdk)
                 run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
         errors = []
         for target_path in dict.fromkeys(target for _, target in specs):
@@ -163,7 +166,8 @@ def compile_sdk(args):
                 run("make", f"VERSION_NUMBER={args.release}", *config_flags,
                     "CONFIG_PACKAGE_libopenssl-devcrypto=n",
                     "CONFIG_PACKAGE_kmod-bluetooth=n", target_path,
-                    "NO_DEPS=1", f"-j{args.jobs}", "V=s", cwd=sdk)
+                    *( [] if any(name in source_set for name in names) else ["NO_DEPS=1"] ),
+                    f"-j{args.jobs}", "V=s", cwd=sdk)
             except subprocess.CalledProcessError:
                 errors += names
         produced = {}
