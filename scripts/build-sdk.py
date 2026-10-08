@@ -158,6 +158,27 @@ def compile_sdk(args):
                 run("./scripts/feeds", "update", "base", cwd=sdk)
                 run("./scripts/feeds", "install", *deps, cwd=sdk)
                 run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
+                # Stage headers/libs explicitly; never let own package targets
+                # recursively trigger a rebuild of upstream runtime packages.
+                dep_targets = []
+                for dep in deps:
+                    base, _, variant = dep.partition("/")
+                    feed = "base" if base == "openssl" else "packages"
+                    if base == "glib2":
+                        dep_targets.extend([
+                            "package/feeds/base/zlib/compile",
+                            "package/feeds/base/pcre2/compile",
+                            "package/feeds/packages/libffi/compile",
+                            "package/feeds/packages/attr/compile",
+                            "package/feeds/packages/glib2/compile",
+                        ])
+                    else:
+                        suffix = "/host/compile" if variant == "host" else "/compile"
+                        dep_targets.append(f"package/feeds/{feed}/{base}{suffix}")
+                for dep_target in dict.fromkeys(dep_targets):
+                    run("make", f"VERSION_NUMBER={args.release}",
+                        "CONFIG_PACKAGE_libopenssl-devcrypto=n",
+                        dep_target, "NO_DEPS=1", f"-j{args.jobs}", cwd=sdk)
         errors = []
         for target_path in dict.fromkeys(target for _, target in specs):
             names = [name for name, path in specs if path == target_path]
@@ -166,8 +187,7 @@ def compile_sdk(args):
                 run("make", f"VERSION_NUMBER={args.release}", *config_flags,
                     "CONFIG_PACKAGE_libopenssl-devcrypto=n",
                     "CONFIG_PACKAGE_kmod-bluetooth=n", target_path,
-                    *( [] if any(name in source_set for name in names) else ["NO_DEPS=1"] ),
-                    f"-j{args.jobs}", "V=s", cwd=sdk)
+                    "NO_DEPS=1", f"-j{args.jobs}", "V=s", cwd=sdk)
             except subprocess.CalledProcessError:
                 errors += names
         produced = {}
