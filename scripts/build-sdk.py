@@ -85,6 +85,64 @@ def package_map():
             result[package] = target
     return result
 
+def register_upstream_sdk_sources(sdk, cache, requirements):
+    """Sparse-materialize exact SDK-pinned recipes without installing whole feeds."""
+    import importlib.util
+
+    module_path = ROOT / "scripts/materialize-openwrt-feed-source.py"
+    spec = importlib.util.spec_from_file_location("audiowrt_materialize", module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    feed_paths = {}
+    for feed, source_path in requirements:
+        feed_paths.setdefault(feed, set()).add(source_path)
+
+    recipe_targets = {}
+    for feed, paths in feed_paths.items():
+        source, subroot = module.read_feed_source(sdk, feed)
+        checkout = cache / "upstream-source" / feed
+        # The persistent cache intentionally contains all *configured sparse*
+        # source paths, matching AudioWRT's canonical SDK preparation.
+        configured = module.read_paths(ROOT / "config/build/openwrt-source-paths", feed)
+        sparse = [f"{subroot}/{p}" if subroot else p for p in configured]
+        module.ensure_sparse_checkout(checkout, source, sparse)
+        source_root = checkout / subroot if subroot else checkout
+        module.ensure_source_link(sdk, feed, source_root)
+        for path in sorted(paths):
+            recipe = source_root / path
+            if not (recipe / "Makefile").is_file():
+                raise RuntimeError(f"Missing upstream recipe {feed}/{path}")
+            dest = sdk / "package" / "feeds" / feed / recipe.name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            if dest.is_symlink() or dest.is_file():
+                dest.unlink()
+            elif dest.is_dir():
+                shutil.rmtree(dest)
+            dest.symlink_to(recipe, target_is_directory=True)
+            recipe_targets[(feed, path)] = f"package/feeds/{feed}/{recipe.name}/compile"
+    return recipe_targets
+
+
+def development_recipes(dependencies):
+    recipes = []
+    for dep in dependencies:
+        name = dep.split("/", 1)[0]
+        if name == "glib2":
+            recipes += [
+                ("base", "libs/zlib"), ("base", "libs/pcre2"),
+                ("packages", "libs/libffi"), ("packages", "utils/attr"),
+                ("packages", "libs/glib2"),
+            ]
+        elif name == "openssl":
+            recipes.append(("base", "libs/openssl"))
+        elif name == "rust":
+            recipes.append(("packages", "lang/rust"))
+        else:
+            raise RuntimeError(f"Unsupported build dependency: {dep}")
+    return list(dict.fromkeys(recipes))
+
+
 def compile_sdk(args):
     sources = package_sources()
     targets = package_map()
@@ -153,32 +211,18 @@ def compile_sdk(args):
                 unexpected = {d.split("/")[0] for d in deps} - supported
                 if unexpected:
                     raise RuntimeError(f"Dependency staging needs an explicit rule: {sorted(unexpected)}")
-                # Use the canonical selective-source boundary: register only
-                # genuine development dependencies, never every OpenWrt feed.
-                run("./scripts/feeds", "update", "base", cwd=sdk)
-                run("./scripts/feeds", "install", *deps, cwd=sdk)
+                # The official OpenWrt SDK only contains part of the upstream
+                # source metadata. Materialize the exact pinned recipes first,
+                # otherwise 'make package/feeds/.../compile' has no target.
+                recipes = development_recipes(deps)
+                registered = register_upstream_sdk_sources(sdk, cache, recipes)
+                run("make", f"VERSION_NUMBER={args.release}", "-s", "prepare-tmpinfo", cwd=sdk)
                 run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
-                # Stage headers/libs explicitly; never let own package targets
-                # recursively trigger a rebuild of upstream runtime packages.
-                dep_targets = []
-                for dep in deps:
-                    base, _, variant = dep.partition("/")
-                    feed = "base" if base == "openssl" else "packages"
-                    if base == "glib2":
-                        dep_targets.extend([
-                            "package/feeds/base/zlib/compile",
-                            "package/feeds/base/pcre2/compile",
-                            "package/feeds/packages/libffi/compile",
-                            "package/feeds/packages/attr/compile",
-                            "package/feeds/packages/glib2/compile",
-                        ])
-                    else:
-                        suffix = "/host/compile" if variant == "host" else "/compile"
-                        dep_targets.append(f"package/feeds/{feed}/{base}{suffix}")
-                for dep_target in dict.fromkeys(dep_targets):
+                for feed, source_path in recipes:
+                    dep_target = registered[(feed, source_path)]
                     run("make", f"VERSION_NUMBER={args.release}",
                         "CONFIG_PACKAGE_libopenssl-devcrypto=n",
-                        dep_target, "NO_DEPS=1", f"-j{args.jobs}", cwd=sdk)
+                        dep_target, "NO_DEPS=1", f"-j{args.jobs}", "V=s", cwd=sdk)
         errors = []
         for target_path in dict.fromkeys(target for _, target in specs):
             names = [name for name, path in specs if path == target_path]
