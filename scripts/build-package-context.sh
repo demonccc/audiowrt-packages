@@ -76,7 +76,7 @@ cache="$(cd "$cache" && pwd)"
 output="$(cd "$output" && pwd)"
 
 base_url="https://downloads.openwrt.org/releases/$release/targets/$target/$subtarget"
-index="$(curl -fsSL "$base_url/")"
+index="$(curl --http1.1 -fsSL --retry 8 --retry-all-errors --retry-delay 3 "$base_url/")"
 archive="$(printf '%s' "$index" | grep -oE "openwrt-sdk-${release//./\.}-${target//-/_}-${subtarget//-/_}[^\"<> ]*Linux-x86_64\.tar\.(zst|xz)" | head -n1 || true)"
 if [[ -z "$archive" ]]; then
   archive="$(printf '%s' "$index" | grep -oE "openwrt-sdk-${release//./\.}-[^\"<> ]*Linux-x86_64\.tar\.(zst|xz)" | head -n1 || true)"
@@ -86,7 +86,9 @@ fi
 archive_path="$cache/$archive"
 if [[ ! -s "$archive_path" ]]; then
   echo "Downloading $archive"
-  curl -fL --retry 3 -o "$archive_path.tmp" "$base_url/$archive"
+  # OpenWrt mirrors can reset large transfers. Resume the partial archive.
+  curl --http1.1 -fL --retry 10 --retry-all-errors --retry-delay 3 \
+    -C - -o "$archive_path.tmp" "$base_url/$archive"
   mv "$archive_path.tmp" "$archive_path"
 fi
 
@@ -117,7 +119,7 @@ sdk="$(find "$sdk_parent" -mindepth 1 -maxdepth 1 -type d | head -n1)"
     local url="$1" destination="$2"
     mkdir -p "$(dirname "$destination")"
     echo "Downloading: $url"
-    curl -fL --retry 3 -o "$destination" "$url"
+    curl --http1.1 -fL --retry 8 --retry-all-errors --retry-delay 3 -C - -o "$destination" "$url"
   }
 
   make_run() {
