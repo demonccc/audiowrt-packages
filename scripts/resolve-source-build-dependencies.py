@@ -35,7 +35,7 @@ def load_owned_packages(path: Path) -> set[str]:
     return packages
 
 
-def normalize_dependency(token: str, preserve_variant: bool = False) -> str:
+def normalize_dependency(token: str) -> str:
     token = token.strip()
     if not token or token.startswith("@"):
         return ""
@@ -44,12 +44,12 @@ def normalize_dependency(token: str, preserve_variant: bool = False) -> str:
         token = token.rsplit(":", 1)[1]
     token = token.lstrip("+")
     token = re.split(r"[<>= ]", token, maxsplit=1)[0]
-    base, sep, variant = token.partition("/")
-    if base.startswith("kmod-") or base == "kernel":
+    token = token.split("/", 1)[0]
+    # Kernel packages are runtime requirements, not headers or libraries that
+    # an AudioWRT userspace source package needs staged for compilation.
+    if token.startswith("kmod-") or token == "kernel":
         return ""
-    if preserve_variant and sep and variant:
-        return f"{base}/{variant}"
-    return base
+    return token
 
 
 def load_metadata(path: Path):
@@ -124,17 +124,12 @@ def main() -> None:
         if package not in metadata:
             fail(f"source package metadata not found: {package}")
         fields = metadata[package]
-        for field in ("build", "host"):
+        for field in ("build", "host", "runtime"):
             for token in fields[field]:
-                dependency = normalize_dependency(token, preserve_variant=field in ("build", "host"))
+                dependency = normalize_dependency(token)
                 if not dependency:
                     continue
-                dependency_base = dependency.split("/", 1)[0]
-                if (
-                    dependency_base in owned
-                    or dependency_base in selected_provides
-                    or dependency_base in TOOLCHAIN_PROVIDED
-                ):
+                if dependency in owned or dependency in selected_provides or dependency in TOOLCHAIN_PROVIDED:
                     continue
                 if dependency not in seen:
                     seen.add(dependency)
