@@ -218,11 +218,30 @@ def compile_sdk(args):
                 registered = register_upstream_sdk_sources(sdk, cache, recipes)
                 run("make", f"VERSION_NUMBER={args.release}", "-s", "prepare-tmpinfo", cwd=sdk)
                 run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
-                for feed, source_path in recipes:
-                    dep_target = registered[(feed, source_path)]
-                    run("make", f"VERSION_NUMBER={args.release}",
-                        "CONFIG_PACKAGE_libopenssl-devcrypto=n",
-                        dep_target, "NO_DEPS=1", f"-j{args.jobs}", "V=s", cwd=sdk)
+                # Registering a recipe is NOT permission to compile it.
+                # Official development libraries must already be available in
+                # the SDK; otherwise fail before initiating expensive builds.
+                staging = next((x for x in (sdk / "staging_dir").glob("target-*")
+                                if x.is_dir()), None)
+                if staging is None:
+                    raise RuntimeError("Official SDK target staging directory is missing")
+                required = {}
+                if "glib2" in [d.split("/", 1)[0] for d in deps]:
+                    required["glib2"] = [
+                        staging / "usr/include/glib-2.0/glib.h",
+                        staging / "usr/lib/glib-2.0/include/glibconfig.h",
+                        staging / "usr/lib/libglib-2.0.so",
+                    ]
+                for dependency, paths in required.items():
+                    missing = [str(path) for path in paths if not path.exists()]
+                    if missing:
+                        raise RuntimeError(
+                            f"Missing development artifacts for {dependency}: " +
+                            ", ".join(missing) +
+                            ". Refusing to rebuild official OpenWrt dependencies. "
+                            "A dedicated binary/header staging step is required."
+                        )
+                print("Official development dependencies available; no upstream compilation", flush=True)
         errors = []
         for target_path in dict.fromkeys(target for _, target in specs):
             names = [name for name, path in specs if path == target_path]
