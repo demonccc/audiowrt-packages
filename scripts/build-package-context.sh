@@ -101,8 +101,8 @@ printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
 
 (
   cd "$sdk"
-  ./scripts/feeds update -a
-  ./scripts/feeds install -a
+  ./scripts/feeds update packages luci audiowrt
+  ./scripts/feeds install -p audiowrt -a
   make defconfig
 
   packageinfo="$sdk/tmp/.packageinfo"
@@ -122,6 +122,38 @@ printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
   echo "AudioWRT dependency closure for $package:"
   printf '  %s\n' "${build_specs[@]}"
 
+  # Match the canonical AudioWRT SDK preparation: stage only required
+  # development dependency sources, rather than installing every official feed.
+  source_roots=()
+  selected_providers=()
+  for spec in "${build_specs[@]}"; do
+    build_package="${spec%%|*}"
+    selected_providers+=("$build_package")
+    if is_source_build_package "$build_package"; then
+      source_roots+=("$build_package")
+    fi
+  done
+  if (( ${#source_roots[@]} > 0 )); then
+    dependencies_file="$sdk/tmp/audiowrt-source-dependencies.txt"
+    python3 "$repo_root/scripts/resolve-source-build-dependencies.py" \
+      "$build_targets" "$packageinfo" "${source_roots[@]}" \
+      --providers "${selected_providers[@]}" > "$dependencies_file"
+    mapfile -t source_dependencies < "$dependencies_file"
+    if (( ${#source_dependencies[@]} > 0 )); then
+      ./scripts/feeds update base
+      ./scripts/feeds install "${source_dependencies[@]}"
+      make defconfig
+    fi
+  fi
+
+  # Keep the selected AudioWRT providers enabled without enabling every
+  # unrelated official dependency as a build root.
+  selected_config=()
+  for selected in "${selected_providers[@]}"; do
+    selected_config+=("CONFIG_PACKAGE_${selected}=m")
+  done
+  make package/toolchain/compile NO_DEPS=1 -j"$jobs"
+
   # Compile dependencies first, then the requested root. Package-only recipes
   # stay behind NO_DEPS=1 so official OpenWrt runtime dependencies are not
   # rebuilt. The small explicit source-build set may traverse its development
@@ -140,10 +172,10 @@ printf '\nsrc-link audiowrt %s\n' "$repo_root" >> "$sdk/feeds.conf"
 
     if is_source_build_package "$build_package"; then
       echo "Building AudioWRT source dependency/root: $build_package"
-      make "$target_path" -j"$jobs" V=s
+      make "${selected_config[@]}" CONFIG_PACKAGE_kmod-bluetooth=n CONFIG_PACKAGE_kmod-bluetooth-tailored=n "$target_path" -j"$jobs" V=s
     else
       echo "Building AudioWRT package-only dependency/root: $build_package (NO_DEPS=1)"
-      make "$target_path" NO_DEPS=1 -j"$jobs" V=s
+      make "${selected_config[@]}" "$target_path" NO_DEPS=1 -j"$jobs" V=s
     fi
   done
 )
