@@ -37,3 +37,7 @@ The same container command is suitable for CI.
 This branch contains an experimental extracted compilation implementation:
 package-specific Bluetooth, audio and Wi-Fi dependencies have not all been
 validated. No GitHub Actions publishing workflow is changed.
+
+## GitHub Actions
+
+`.github/workflows/build-packages.yml` keeps its existing pending-package planner and independent release/architecture matrix. Each build job declares `container: image: demonccc/openwrt-builder:latest` (no nested `docker run`) and invokes `python3 scripts/build.py build --tasks-json "$TASKS_JSON"` to build precisely the planned package/SDK contexts. Cache is restored from `.cache/audiowrt-packages`; APKs and per-architecture logs are uploaded separately from each job. `workflow_dispatch` can run this experimental workflow on the feature branch; pushes only auto-trigger on `testing`. Publishing remains a separate manual workflow.
