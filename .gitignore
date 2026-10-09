@@ -1,0 +1,12 @@
+# Local OpenWrt SDK downloads and intermediate cache
+.cache/
+
+# Local build diagnostics (CI archives these as artifacts)
+logs/
+
+# Local Python build products
+output/local/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
