@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Profile-free package build entry point, usable locally and in CI.
 
-Host mode enters the canonical openwrt-builder container; container mode
-selects an SDK context and invokes this repository's package compilation stage.
+Run directly inside the OpenWrt builder container, both locally and in CI.
+Select SDK contexts and invoke this repository's package compilation stage.
 No AudioWRT firmware checkout or firmware profile is involved.
 """
 from __future__ import annotations
@@ -16,7 +16,6 @@ import sys
 import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
-IMAGE = "demonccc/openwrt-builder:latest"
 ROOTS = ("audiowrt", "ported", "trimmed", "tailored")
 LOG_CHILD_ENV = "AUDIOWRT_PACKAGES_LOG_CHILD"
 
@@ -100,7 +99,6 @@ def main() -> int:
     parser.add_argument("--log-file", help="Save full stdout/stderr while still printing to console")
     parser.add_argument("--target", help="Optional specific SDK target")
     parser.add_argument("--subtarget", help="Optional specific SDK subtarget")
-    parser.add_argument("--inside-container", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.command == "build" and args.log_file and os.environ.get(LOG_CHILD_ENV) != "1":
         log_path = (ROOT / args.log_file).resolve()
@@ -142,26 +140,6 @@ def main() -> int:
             parser.error("Output and cache must be inside the repository checkout")
     if output == cache or cache.is_relative_to(output) or output.is_relative_to(cache):
         parser.error("Output and cache directories must be separate")
-    if not args.inside_container:
-        docker_args = [
-            "docker", "run", "--rm",
-            "-e", "HOME=/tmp",
-            "-e", "PYTHONUNBUFFERED=1",
-            "-v", f"{ROOT}:/workspace",
-            "-w", "/workspace",
-        ]
-        if hasattr(os, "getuid"):
-            docker_args += ["--user", f"{os.getuid()}:{os.getgid()}"]
-        docker_args += [IMAGE, "python3", "scripts/build.py", "build",
-                        "--inside-container", "--release", args.release, "--arch", args.arch,
-                        "--jobs", str(args.jobs), "--output", str(output.relative_to(ROOT)),
-                        "--cache-dir", str(cache.relative_to(ROOT))]
-        for pkg in selected:
-            docker_args.extend(["--package", pkg])
-        if args.target:
-            docker_args.extend(["--target", args.target, "--subtarget", args.subtarget])
-        print("Running package build in", IMAGE, flush=True)
-        return subprocess.call(docker_args, cwd=ROOT)
     # Preserve existing source-category / scope detection.
     tasks = []
     for target, subtarget in sdk_contexts:
