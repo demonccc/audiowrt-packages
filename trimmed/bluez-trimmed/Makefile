@@ -6,7 +6,7 @@ include $(TOPDIR)/feeds/audiowrt/include/audiowrt-openwrt-derived.mk
 
 PKG_MAINTAINER:=AudioWRT
 PKG_RELEASE:=2
-PKG_BUILD_DEPENDS:=glib2
+PKG_BUILD_DEPENDS:=glib2 dbus
 
 include $(INCLUDE_DIR)/package.mk
 
