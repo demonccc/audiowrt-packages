@@ -209,17 +209,26 @@ def compile_sdk(args):
             # dependency expansion rather than rebuilding arbitrary official feeds.
             if deps:
                 print("Explicit development dependencies:", deps, flush=True)
-                supported = {"glib2", "openssl", "rust"}
+                supported = {"glib2", "dbus", "openssl", "rust"}
                 unexpected = {d.split("/")[0] for d in deps} - supported
                 if unexpected:
                     raise RuntimeError(f"Dependency staging needs an explicit rule: {sorted(unexpected)}")
-                # The exact working firmware builder (8eb72f8) registers
-                # source definitions but does not compile dependency targets
-                # individually. Source targets run WITHOUT NO_DEPS so the
-                # OpenWrt SDK stages their required Build/InstallDev outputs.
+                # Stage official development providers and pkginfo metadata
+                # before compiling package-only trimmed runtime packages.
+                # BlueZ requires dbus-1.pc and glib2-trimmed's dependency
+                # checker needs libffi/pcre2/zlib .provides entries.
                 run("./scripts/feeds", "update", "base", cwd=sdk)
                 run("./scripts/feeds", "install", *deps, cwd=sdk)
                 run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
+                # Allow OpenWrt to resolve the development closure. Running
+                # NO_DEPS here would suppress Build/InstallDev metadata.
+                for dep in dict.fromkeys(d.split("/", 1)[0] for d in deps):
+                    feed = "base" if dep == "openssl" else "packages"
+                    target = f"package/feeds/{feed}/{dep}/compile"
+                    run("make", f"VERSION_NUMBER={args.release}",
+                        "CONFIG_PACKAGE_kmod-bluetooth=n",
+                        "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
+                        target, f"-j{args.jobs}", cwd=sdk)
         errors = []
         # Download selected packages separately with NO_DEPS, as in 8eb72f8.
         download_targets = list(dict.fromkeys(
