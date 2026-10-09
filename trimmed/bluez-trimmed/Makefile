@@ -14,8 +14,7 @@ define Package/bluez-trimmed
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=Trimmed BlueZ audio daemon
-  DEPENDS:=+bluez-libs +dbus
-  EXTRA_DEPENDS:=glib2-trimmed (>=0)
+  DEPENDS:=+bluez-libs +dbus +glib2-trimmed
   URL:=https://www.bluez.org/
 endef
 
