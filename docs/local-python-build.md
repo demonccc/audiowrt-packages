@@ -1,26 +1,39 @@
-# Local Python SDK build experiment
+# Container-native Python SDK package builder
 
-This branch adds standalone Python SDK compilation without firmware profiles or the AudioWRT repository.
+`scripts/build.py` is an in-container entrypoint. It never starts Docker.
+The caller (laptop or GitHub Actions) starts the canonical Docker image
+and mounts the repository at `/workspace`.
 
-```bash
-python3 scripts/build.py list
-python3 scripts/build.py build --release 25.12.5 --arch mips_24kc --package bluez-trimmed --target ath79 --subtarget generic --jobs 4
-```
-
-The CLI runs within `demonccc/openwrt-builder:latest` and delegates to `scripts/build-sdk.py` in this repository. The new code does not invoke the legacy `build-package-context.sh` or `build-package-batch.sh`.
-
-This is an experimental first extraction. Package-specific Bluetooth, audio and Wi-Fi SDK staging paths have not been validated, nor has a complete package build. Do not merge to testing on the basis of CLI operation alone. GitHub Actions publishing remains untouched.
-
-To save the complete build log while keeping console output:
+List packages:
 
 ```bash
-python3 scripts/build.py build \
-  --release 25.12.5 --arch mips_24kc \
-  --target ath79 --subtarget generic \
-  --package bluez-trimmed --jobs 4 \
-  --log-file logs/bluez-trimmed.log
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp -e PYTHONUNBUFFERED=1 \
+  -v "$PWD:/workspace" -w /workspace \
+  demonccc/openwrt-builder:latest \
+  python3 scripts/build.py list
 ```
 
-Logs live on the host under the checkout, survive Docker removal, include stderr
-and stdout, and remain available after unsuccessful builds. Use a log path
-outside `output/local` and `.cache/audiowrt-packages`.
+Build a single package with a full log saved on the host:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp -e PYTHONUNBUFFERED=1 \
+  -v "$PWD:/workspace" -w /workspace \
+  demonccc/openwrt-builder:latest \
+  python3 scripts/build.py build \
+    --release 25.12.5 --arch mips_24kc \
+    --target ath79 --subtarget generic \
+    --package bluez-trimmed --jobs 4 \
+    --log-file logs/bluez-trimmed.log
+```
+
+Replace `--package bluez-trimmed` with `--package all` to select
+all packages. The `--log-file` option writes both stdout and stderr to a
+file under the mounted checkout while streaming the same output to the terminal.
+The log persists after the container exits, even if compilation fails.
+The same container command is suitable for CI.
+
+This branch contains an experimental extracted compilation implementation:
+package-specific Bluetooth, audio and Wi-Fi dependencies have not all been
+validated. No GitHub Actions publishing workflow is changed.
