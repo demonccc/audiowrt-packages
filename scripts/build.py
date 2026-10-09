@@ -97,6 +97,7 @@ def main() -> int:
     parser.add_argument("--output", default="output/local")
     parser.add_argument("--cache-dir", default=".cache/audiowrt-packages")
     parser.add_argument("--log-file", help="Save full stdout/stderr while still printing to console")
+    parser.add_argument("--tasks-json", help="Exact planner task list (CI matrix)")
     parser.add_argument("--target", help="Optional specific SDK target")
     parser.add_argument("--subtarget", help="Optional specific SDK subtarget")
     args = parser.parse_args()
@@ -115,24 +116,48 @@ def main() -> int:
         print("\n".join(sorted(available)))
         return 0
     selected = [name.strip() for entry in args.package for name in entry.replace(",", " ").split()]
-    if not selected or "all" in selected:
-        if selected and selected != ["all"]:
-            parser.error("'all' cannot be combined with named packages")
-        selected = sorted(available)
-    unknown = set(selected) - available.keys()
-    if unknown:
-        parser.error("Unknown package(s): " + ", ".join(sorted(unknown)))
     if args.jobs < 1:
         parser.error("--jobs must be >= 1")
-    selected = list(dict.fromkeys(selected))
-    try:
-        sdk_contexts = contexts(args.release, args.arch)
-    except ValueError as error:
-        parser.error(str(error))
-    if args.target or args.subtarget:
-        if not args.target or not args.subtarget:
-            parser.error("--target and --subtarget must be supplied together")
-        sdk_contexts = [(args.target, args.subtarget)]
+    planned_tasks = None
+    if args.tasks_json:
+        if selected:
+            parser.error("--tasks-json and --package are mutually exclusive")
+        try:
+            planned_tasks = json.loads(args.tasks_json)
+            if not isinstance(planned_tasks, list) or not planned_tasks:
+                raise ValueError("expected a nonempty task list")
+            for task in planned_tasks:
+                if not isinstance(task, dict) or not all(
+                    isinstance(task.get(key), str) and task[key]
+                    for key in ("package", "scope", "target", "subtarget")
+                ):
+                    raise ValueError("each task must contain package, scope, target and subtarget")
+                if task["scope"] not in ("arch", "all", "kernel"):
+                    raise ValueError("invalid scope")
+                if task["package"] not in available:
+                    raise ValueError("unknown package " + task["package"])
+        except (ValueError, TypeError) as error:
+            parser.error(f"Invalid --tasks-json: {error}")
+        sdk_contexts = list(dict.fromkeys(
+            (task["target"], task["subtarget"]) for task in planned_tasks
+        ))
+    else:
+        if not selected or "all" in selected:
+            if selected and selected != ["all"]:
+                parser.error("'all' cannot be combined with named packages")
+            selected = sorted(available)
+        unknown = set(selected) - available.keys()
+        if unknown:
+            parser.error("Unknown package(s): " + ", ".join(sorted(unknown)))
+        selected = list(dict.fromkeys(selected))
+        try:
+            sdk_contexts = contexts(args.release, args.arch)
+        except ValueError as error:
+            parser.error(str(error))
+        if args.target or args.subtarget:
+            if not args.target or not args.subtarget:
+                parser.error("--target and --subtarget must be supplied together")
+            sdk_contexts = [(args.target, args.subtarget)]
     output = (ROOT / args.output).resolve()
     cache = (ROOT / args.cache_dir).resolve()
     for path in (output, cache):
@@ -141,8 +166,8 @@ def main() -> int:
     if output == cache or cache.is_relative_to(output) or output.is_relative_to(cache):
         parser.error("Output and cache directories must be separate")
     # Preserve existing source-category / scope detection.
-    tasks = []
-    for target, subtarget in sdk_contexts:
+    tasks = list(planned_tasks) if planned_tasks is not None else []
+    for target, subtarget in ([] if planned_tasks is not None else sdk_contexts):
         for pkg in selected:
             source = available[pkg].read_text()
             scope = "kernel" if "define KernelPackage/" in source else (
