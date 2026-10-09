@@ -31,7 +31,7 @@ jobs:
 
   plan:
     needs: validate
-    if: github.ref_name == 'testing'
+    if: github.ref_name == 'testing' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -85,6 +85,8 @@ jobs:
     if: needs.plan.outputs.should_build == 'true'
     name: ${{ matrix.release }} / ${{ matrix.arch }} / ${{ matrix.task_count }} pending task(s)
     runs-on: ubuntu-24.04
+    container:
+      image: demonccc/openwrt-builder:latest
     timeout-minutes: 240
     strategy:
       fail-fast: false
@@ -96,26 +98,38 @@ jobs:
       - name: Restore OpenWrt SDK archive cache
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/audiowrt-packages-cache
+          path: .cache/audiowrt-packages
           key: audiowrt-packages-v11-isolated-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
           restore-keys: |
             audiowrt-packages-v11-isolated-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
 
-      - name: Build pending packages with isolated OpenWrt SDKs
+      - name: Build selected packages using the Python SDK builder
         shell: bash
         env:
           RELEASE: ${{ matrix.release }}
           ARCH: ${{ matrix.arch }}
           TASKS_JSON: ${{ matrix.tasks_json }}
           MAKE_JOBS: ${{ inputs.jobs || '4' }}
-          SDK_CACHE_DIR: ${{ runner.temp }}/audiowrt-packages-cache
-        run: bash scripts/build-publish-incremental.sh
+          PYTHONUNBUFFERED: '1'
+          HOME: /tmp
+        run: |
+          set -euo pipefail
+          python3 scripts/build.py build \
+            --release "$RELEASE" \
+            --arch "$ARCH" \
+            --tasks-json "$TASKS_JSON" \
+            --jobs "$MAKE_JOBS" \
+            --output output \
+            --cache-dir .cache/audiowrt-packages \
+            --log-file "logs/build-${RELEASE}-${ARCH}.log"
 
       - name: Upload architecture build artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: packages-${{ matrix.release }}-${{ matrix.arch }}
-          path: output/
+          path: |
+            output/
+            logs/
           if-no-files-found: warn
           retention-days: 30
