@@ -406,6 +406,25 @@ def compile_sdk(args):
                     matches = [h for root in build_sources for h in root.rglob("ustream-ssl.h")]
                     if matches:
                         shutil.copy2(matches[0], destination / "ustream-ssl.h")
+                elif package_name == "ucode" and hostap_selected:
+                    # Ported from prepare_hostap_sdk() in AudioWRT 8eb72f8:
+                    # libucode exports its API in include/ucode, not at the
+                    # source root. Merely running prepare never stages it.
+                    candidates = [root / "include/ucode" for root in build_sources
+                                  if (root / "include/ucode/lib.h").is_file()]
+                    if len(candidates) != 1:
+                        raise RuntimeError(f"Cannot stage ucode/lib.h: {candidates}")
+                    dest = headers / "ucode"
+                    dest.mkdir(parents=True, exist_ok=True)
+                    for header in candidates[0].glob("*.h"):
+                        shutil.copy2(header, dest / header.name)
+                elif package_name == "udebug" and hostap_selected:
+                    candidates = [root / "udebug.h" for root in build_sources
+                                  if (root / "udebug.h").is_file()]
+                    if len(candidates) != 1:
+                        raise RuntimeError(f"Cannot stage udebug.h: {candidates}")
+                    headers.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(candidates[0], headers / "udebug.h")
                 elif package_name == "ubus" and hostap_selected:
                     candidates = [h for root in build_sources
                                   for h in root.glob("libubus.h")]
