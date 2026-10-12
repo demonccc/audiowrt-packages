@@ -157,9 +157,20 @@ def stage_official_link_libraries(sdk, cache, release, arch, packages):
         extract.mkdir()
         run(apk_tool, "--allow-untrusted", "extract",
             "--destination", extract, archive)
-        matches = list(extract.rglob(pattern))
+        matches = [candidate for candidate in extract.rglob(pattern)
+                   if candidate.is_file()]
+        if not matches and pattern.endswith(".so.*"):
+            # Some OpenWrt ABI libraries ship an unversioned ELF filename.
+            matches = [candidate for candidate in
+                       extract.rglob(pattern.removesuffix(".*"))
+                       if candidate.is_file()]
         if len(matches) != 1:
-            raise RuntimeError(f"Expected exactly one {pattern} in {archive}: {matches}")
+            available = sorted(str(candidate.relative_to(extract))
+                               for candidate in extract.rglob("*.so*")
+                               if candidate.is_file())
+            raise RuntimeError(
+                f"Expected exactly one {pattern} in {archive}: {matches}; "
+                f"available shared libraries: {available}")
         lib = matches[0]
         dynamic = subprocess.check_output([str(readelf), "-d", str(lib)], text=True)
         soname_match = re.search(r"\(SONAME\).*?\[([^]]+)\]", dynamic)
