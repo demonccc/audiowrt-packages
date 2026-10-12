@@ -222,9 +222,16 @@ def compile_sdk(args):
                 run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
                 # Allow OpenWrt to resolve the development closure. Running
                 # NO_DEPS here would suppress Build/InstallDev metadata.
-                for dep in dict.fromkeys(d.split("/", 1)[0] for d in deps):
-                    feed = "base" if dep == "openssl" else "packages"
-                    target = f"package/feeds/{feed}/{dep}/compile"
+                for dep in dict.fromkeys(deps):
+                    # OpenWrt's rust/host is a host build dependency, NOT a
+                    # target package. The known-good firmware builder installs
+                    # its recipe and lets the source package's dependency
+                    # graph compile it. Never invoke rust/compile directly.
+                    if dep.endswith("/host"):
+                        continue
+                    name = dep.split("/", 1)[0]
+                    feed = "base" if name == "openssl" else "packages"
+                    target = f"package/feeds/{feed}/{name}/compile"
                     run("make", f"VERSION_NUMBER={args.release}",
                         "CONFIG_PACKAGE_kmod-bluetooth=n",
                         "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
