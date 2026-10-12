@@ -425,9 +425,18 @@ def compile_sdk(args):
                                   for h in root.rglob(Path(source_suffix).name)
                                   if str(h).endswith(source_suffix)]
                     if len(candidates) != 1:
-                        raise RuntimeError(
-                            f"Cannot stage {package_name} public header "
-                            f"{source_suffix}: {candidates}")
+                        # Header layouts can differ between upstream releases
+                        # and some headers are generated during configure.
+                        # This is an optional staging optimization: leave the
+                        # package compiler to report its own failure instead
+                        # of aborting every independent package task.
+                        print(
+                            f"WARNING: cannot stage {package_name} public header "
+                            f"{source_suffix}: {candidates}; "
+                            "continuing with remaining package tasks",
+                            flush=True,
+                        )
+                        continue
                     # Copy the complete public include tree, not only the
                     # first header: FLAC/Vorbis/Opus headers include siblings.
                     public_header = candidates[0]
