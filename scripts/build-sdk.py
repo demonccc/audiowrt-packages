@@ -124,6 +124,59 @@ def register_upstream_sdk_sources(sdk, cache, requirements):
     return recipe_targets
 
 
+
+def stage_official_link_libraries(sdk, cache, release, arch, packages):
+    """Stage link-only stubs built from exact official release APK symbols."""
+    target_dirs = list((sdk / "staging_dir").glob("target-*"))
+    tools = list((sdk / "staging_dir").glob("toolchain-*/bin/*-readelf"))
+    pairs = {}
+    for readelf in tools:
+        cc = readelf.with_name(readelf.name.removesuffix("readelf") + "gcc")
+        if cc.exists():
+            pairs[(str(readelf.resolve()), str(cc.resolve()))] = (readelf, cc)
+    if len(target_dirs) != 1 or len(pairs) != 1:
+        raise RuntimeError("Cannot unambiguously identify target SDK staging/toolchain")
+    stage = target_dirs[0]
+    readelf, cc = next(iter(pairs.values()))
+    apk_tool = sdk / "staging_dir/host/bin/apk"
+    libdir = stage / "usr/lib"
+    libdir.mkdir(parents=True, exist_ok=True)
+    for package, feed, pattern, linker_name in packages:
+        url = subprocess.check_output(
+            [sys.executable, str(ROOT / "scripts/resolve-openwrt-package.py"),
+             release, arch, feed, package], text=True).strip()
+        location = cache / "official-link-libraries" / release / arch / package
+        location.mkdir(parents=True, exist_ok=True)
+        archive = location / url.rsplit("/", 1)[-1]
+        if not archive.exists():
+            run("curl", "--fail", "--location", "--retry", "5",
+                "--output", archive, url)
+        extract = location / "extracted"
+        if extract.exists():
+            shutil.rmtree(extract)
+        extract.mkdir()
+        run(apk_tool, "--allow-untrusted", "extract",
+            "--destination", extract, archive)
+        matches = list(extract.rglob(pattern))
+        if len(matches) != 1:
+            raise RuntimeError(f"Expected exactly one {pattern} in {archive}: {matches}")
+        lib = matches[0]
+        dynamic = subprocess.check_output([str(readelf), "-d", str(lib)], text=True)
+        soname_match = re.search(r"\\(SONAME\\).*?\\[([^]]+)\\]", dynamic)
+        soname = soname_match.group(1) if soname_match else lib.name
+        run(sys.executable, ROOT / "scripts/create-elf-link-stub.py",
+            readelf, cc, lib, libdir / linker_name, soname)
+        if soname != linker_name:
+            alias = libdir / soname
+            if alias.exists() or alias.is_symlink():
+                alias.unlink()
+            alias.symlink_to(linker_name)
+        for name in {package, re.sub(r"-[0-9].*$", "", archive.stem)}:
+            provides = stage / "pkginfo" / f"{name}.provides"
+            provides.parent.mkdir(parents=True, exist_ok=True)
+            with provides.open("a") as out:
+                out.write(soname + "\\n")
+
 def development_recipes(dependencies):
     recipes = []
     for dep in dependencies:
@@ -337,6 +390,11 @@ def compile_sdk(args):
                     matches = [h for root in build_sources for h in root.rglob("ustream-ssl.h")]
                     if matches:
                         shutil.copy2(matches[0], destination / "ustream-ssl.h")
+        if native_selected:
+            stage_official_link_libraries(sdk, cache, args.release, args.arch, [
+                ("libubox", "base", "libubox.so.*", "libubox.so"),
+                ("libuclient", "base", "libuclient.so.*", "libuclient.so"),
+            ])
         errors = []
         # Download selected packages separately with NO_DEPS, as in 8eb72f8.
         download_targets = list(dict.fromkeys(
