@@ -162,7 +162,7 @@ def stage_official_link_libraries(sdk, cache, release, arch, packages):
             raise RuntimeError(f"Expected exactly one {pattern} in {archive}: {matches}")
         lib = matches[0]
         dynamic = subprocess.check_output([str(readelf), "-d", str(lib)], text=True)
-        soname_match = re.search(r"\\(SONAME\\).*?\\[([^]]+)\\]", dynamic)
+        soname_match = re.search(r"\(SONAME\).*?\[([^]]+)\]", dynamic)
         soname = soname_match.group(1) if soname_match else lib.name
         run(sys.executable, ROOT / "scripts/create-elf-link-stub.py",
             readelf, cc, lib, libdir / linker_name, soname)
@@ -175,7 +175,7 @@ def stage_official_link_libraries(sdk, cache, release, arch, packages):
             provides = stage / "pkginfo" / f"{name}.provides"
             provides.parent.mkdir(parents=True, exist_ok=True)
             with provides.open("a") as out:
-                out.write(soname + "\\n")
+                out.write(soname + "\n")
 
 def development_recipes(dependencies):
     recipes = []
