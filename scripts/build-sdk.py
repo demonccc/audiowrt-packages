@@ -401,6 +401,36 @@ def compile_sdk(args):
                     matches = [h for root in build_sources for h in root.rglob("ustream-ssl.h")]
                     if matches:
                         shutil.copy2(matches[0], destination / "ustream-ssl.h")
+                elif package_name == "ubus" and hostap_selected:
+                    candidates = [h for root in build_sources
+                                  for h in root.glob("libubus.h")]
+                    if len(candidates) != 1:
+                        raise RuntimeError(f"Cannot stage libubus.h: {candidates}")
+                    headers.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(candidates[0], headers / "libubus.h")
+                elif package_name in {"faad2", "flac", "libmad",
+                                      "opusfile", "libvorbis"}:
+                    # The SDK does not install public headers for packages
+                    # whose source we only prepare. Stage the public API
+                    # paths required by the native decoder recipes.
+                    public = {
+                        "faad2": ("neaacdec.h", "neaacdec.h"),
+                        "flac": ("include/FLAC/stream_decoder.h", "FLAC/stream_decoder.h"),
+                        "libmad": ("mad.h", "mad.h"),
+                        "opusfile": ("include/opus/opusfile.h", "opus/opusfile.h"),
+                        "libvorbis": ("include/vorbis/vorbisfile.h", "vorbis/vorbisfile.h"),
+                    }
+                    source_suffix, destination_suffix = public[package_name]
+                    candidates = [h for root in build_sources
+                                  for h in root.rglob(Path(source_suffix).name)
+                                  if str(h).endswith(source_suffix)]
+                    if len(candidates) != 1:
+                        raise RuntimeError(
+                            f"Cannot stage {package_name} public header "
+                            f"{source_suffix}: {candidates}")
+                    dest = headers / destination_suffix
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(candidates[0], dest)
         if native_selected:
             stage_official_link_libraries(sdk, cache, args.release, args.arch, [
                 ("libubox", "base", "libubox.so.*", "libubox.so"),
