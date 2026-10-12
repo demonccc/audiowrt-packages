@@ -410,7 +410,7 @@ def compile_sdk(args):
                     for sibling in candidates[0].parent.glob("*.h"):
                         shutil.copy2(sibling, headers / sibling.name)
                 elif package_name in {"faad2", "flac", "libmad",
-                                      "opusfile", "libvorbis", "libogg", "opus", "libogg", "opus"}:
+                                      "opusfile", "libvorbis", "libogg", "opus"}:
                     # The SDK does not install public headers for packages
                     # whose source we only prepare. Stage the public API
                     # paths required by the native decoder recipes.
