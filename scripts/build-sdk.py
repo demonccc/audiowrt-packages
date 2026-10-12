@@ -164,14 +164,19 @@ def stage_official_link_libraries(sdk, cache, release, arch, packages):
             matches = [candidate for candidate in
                        extract.rglob(pattern.removesuffix(".*"))
                        if candidate.is_file()]
-        if len(matches) != 1:
+        # Versioned libraries often contain both the SONAME symlink
+        # (libfaad.so.2) and its real ELF (libfaad.so.2.11.1).
+        # Resolve those aliases before enforcing a unique library.
+        resolved = {candidate.resolve() for candidate in matches}
+        if len(resolved) != 1:
             available = sorted(str(candidate.relative_to(extract))
                                for candidate in extract.rglob("*.so*")
                                if candidate.is_file())
             raise RuntimeError(
-                f"Expected exactly one {pattern} in {archive}: {matches}; "
+                f"Expected one ELF behind {pattern} in {archive}: {matches}; "
+                f"resolved paths: {sorted(map(str, resolved))}; "
                 f"available shared libraries: {available}")
-        lib = matches[0]
+        lib = next(iter(resolved))
         dynamic = subprocess.check_output([str(readelf), "-d", str(lib)], text=True)
         soname_match = re.search(r"\(SONAME\).*?\[([^]]+)\]", dynamic)
         soname = soname_match.group(1) if soname_match else lib.name
