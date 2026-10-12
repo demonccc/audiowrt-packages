@@ -428,9 +428,20 @@ def compile_sdk(args):
                         raise RuntimeError(
                             f"Cannot stage {package_name} public header "
                             f"{source_suffix}: {candidates}")
-                    dest = headers / destination_suffix
-                    dest.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(candidates[0], dest)
+                    # Copy the complete public include tree, not only the
+                    # first header: FLAC/Vorbis/Opus headers include siblings.
+                    public_header = candidates[0]
+                    if package_name in {"flac", "opusfile", "libvorbis"}:
+                        relative_dir = Path(destination_suffix).parent
+                        src_dir = public_header.parent
+                        dest_dir = headers / relative_dir
+                        dest_dir.mkdir(parents=True, exist_ok=True)
+                        for sibling in src_dir.glob("*.h"):
+                            shutil.copy2(sibling, dest_dir / sibling.name)
+                    else:
+                        dest = headers / destination_suffix
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(public_header, dest)
         if native_selected:
             stage_official_link_libraries(sdk, cache, args.release, args.arch, [
                 ("libubox", "base", "libubox.so.*", "libubox.so"),
