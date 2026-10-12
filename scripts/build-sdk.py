@@ -283,11 +283,26 @@ def compile_sdk(args):
             print("Preparing SDK development providers:", sdk_providers, flush=True)
             recipe_targets = register_upstream_sdk_sources(sdk, cache, sdk_providers)
             run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
-            # Build/InstallDev stages headers and link libraries required by
-            # AudioWRT consumers. Resolve providers once, before their targets.
+            # The proven AudioWRT builder prepares official sources without
+            # recompiling firmware runtime libraries (libubox, uclient, etc).
+            # Do not blindly compile every provider: SDK source builds can
+            # fail or change the ABI relative to the official release APKs.
+            # Only compile the two development packages explicitly compiled
+            # by the original hostap preparation path.
             for provider in sdk_providers:
+                feed, source_path = provider
+                target = recipe_targets[provider]
+                if provider in {("base", "libs/libnl-tiny"),
+                                ("base", "libs/libjson-c")}:
+                    action = "compile"
+                elif provider in {("packages", "libs/libmad"),
+                                  ("base", "libs/mbedtls")}:
+                    action = "configure"
+                else:
+                    action = "prepare"
                 run("make", f"VERSION_NUMBER={args.release}",
-                    recipe_targets[provider], f"-j{args.jobs}", cwd=sdk)
+                    target.removesuffix("/compile") + "/" + action,
+                    "NO_DEPS=1", f"-j{args.jobs}", cwd=sdk)
         errors = []
         # Download selected packages separately with NO_DEPS, as in 8eb72f8.
         download_targets = list(dict.fromkeys(
