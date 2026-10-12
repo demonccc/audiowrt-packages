@@ -407,9 +407,10 @@ def compile_sdk(args):
                     if len(candidates) != 1:
                         raise RuntimeError(f"Cannot stage libubus.h: {candidates}")
                     headers.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(candidates[0], headers / "libubus.h")
+                    for sibling in candidates[0].parent.glob("*.h"):
+                        shutil.copy2(sibling, headers / sibling.name)
                 elif package_name in {"faad2", "flac", "libmad",
-                                      "opusfile", "libvorbis"}:
+                                      "opusfile", "libvorbis", "libogg", "opus", "libogg", "opus"}:
                     # The SDK does not install public headers for packages
                     # whose source we only prepare. Stage the public API
                     # paths required by the native decoder recipes.
@@ -419,11 +420,13 @@ def compile_sdk(args):
                         "libmad": ("mad.h", "mad.h"),
                         "opusfile": ("include/opus/opusfile.h", "opus/opusfile.h"),
                         "libvorbis": ("include/vorbis/vorbisfile.h", "vorbis/vorbisfile.h"),
+                        "libogg": ("include/ogg/ogg.h", "ogg/ogg.h"),
+                        "opus": ("include/opus/opus.h", "opus/opus.h"),
                     }
                     source_suffix, destination_suffix = public[package_name]
                     candidates = [h for root in build_sources
                                   for h in root.rglob(Path(source_suffix).name)
-                                  if str(h).endswith(source_suffix)]
+                                  if h.is_file()]
                     if len(candidates) != 1:
                         # Header layouts can differ between upstream releases
                         # and some headers are generated during configure.
@@ -440,7 +443,7 @@ def compile_sdk(args):
                     # Copy the complete public include tree, not only the
                     # first header: FLAC/Vorbis/Opus headers include siblings.
                     public_header = candidates[0]
-                    if package_name in {"flac", "opusfile", "libvorbis"}:
+                    if package_name in {"flac", "opusfile", "libvorbis", "libogg", "opus"}:
                         relative_dir = Path(destination_suffix).parent
                         src_dir = public_header.parent
                         dest_dir = headers / relative_dir
@@ -456,6 +459,18 @@ def compile_sdk(args):
                 ("libubox", "base", "libubox.so.*", "libubox.so"),
                 ("libuclient", "base", "libuclient.so.*", "libuclient.so"),
             ])
+            codec_libraries = {
+                "audiowrt-player-aac": [("libfaad2", "packages", "libfaad.so*", "libfaad.so")],
+                "audiowrt-player-flac": [("libflac", "packages", "libFLAC.so*", "libFLAC.so")],
+                "audiowrt-player-mp3": [("libmad", "packages", "libmad.so*", "libmad.so")],
+                "audiowrt-player-vorbis": [("libvorbis", "packages", "libvorbisfile.so*", "libvorbisfile.so")],
+                "audiowrt-player-opus": [("libopusfile", "packages", "libopusfile.so*", "libopusfile.so")],
+            }
+            requested_libraries = [library for package, libraries in codec_libraries.items()
+                                   if package in native_selected for library in libraries]
+            if requested_libraries:
+                stage_official_link_libraries(sdk, cache, args.release, args.arch,
+                                              requested_libraries)
         errors = []
         # Download selected packages separately with NO_DEPS, as in 8eb72f8.
         download_targets = list(dict.fromkeys(
