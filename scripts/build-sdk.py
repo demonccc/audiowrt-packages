@@ -303,6 +303,40 @@ def compile_sdk(args):
                 run("make", f"VERSION_NUMBER={args.release}",
                     target.removesuffix("/compile") + "/" + action,
                     "NO_DEPS=1", f"-j{args.jobs}", cwd=sdk)
+        # Match the header staging step of the known-good firmware builder.
+        # 'prepare' only unpacks sources; it does NOT install headers into
+        # staging_dir/target-*/usr/include on its own.
+        if sdk_providers:
+            staging_candidates = list((sdk / "staging_dir").glob("target-*"))
+            if len(staging_candidates) != 1:
+                raise RuntimeError(f"Expected exactly one target staging directory: {staging_candidates}")
+            staging = staging_candidates[0]
+            headers = staging / "usr/include"
+            for feed, source_path in sdk_providers:
+                package_name = Path(source_path).name
+                build_sources = list((sdk / "build_dir").glob(f"target-*/{package_name}-*"))
+                if package_name == "libubox":
+                    destination = headers / "libubox"
+                    destination.mkdir(parents=True, exist_ok=True)
+                    candidates = [h for root in build_sources for h in root.glob("*.h")]
+                    if not candidates:
+                        raise RuntimeError("libubox prepared source headers not found")
+                    for header in candidates:
+                        shutil.copy2(header, destination / header.name)
+                    if not (destination / "avl.h").is_file() or not (destination / "uloop.h").is_file():
+                        raise RuntimeError("libubox SDK headers incomplete")
+                elif package_name == "uclient":
+                    destination = headers / "libubox"
+                    destination.mkdir(parents=True, exist_ok=True)
+                    for root in build_sources:
+                        for header in root.glob("*.h"):
+                            shutil.copy2(header, destination / header.name)
+                elif package_name == "ustream-ssl":
+                    destination = headers / "libubox"
+                    destination.mkdir(parents=True, exist_ok=True)
+                    matches = [h for root in build_sources for h in root.rglob("ustream-ssl.h")]
+                    if matches:
+                        shutil.copy2(matches[0], destination / "ustream-ssl.h")
         errors = []
         # Download selected packages separately with NO_DEPS, as in 8eb72f8.
         download_targets = list(dict.fromkeys(
