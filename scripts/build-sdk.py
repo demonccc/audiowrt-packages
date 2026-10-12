@@ -236,6 +236,58 @@ def compile_sdk(args):
                         "CONFIG_PACKAGE_kmod-bluetooth=n",
                         "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
                         target, f"-j{args.jobs}", cwd=sdk)
+        # Prepare SDK development interfaces for native players and WPA.
+        # The original AudioWRT builder 8eb72f8 explicitly staged these
+        # providers before compiling consumers. The standalone SDK does not
+        # ship their public headers by default.
+        native_players = {
+            "libaudiowrt-player", "audiowrt-player-flac",
+            "audiowrt-player-mp3", "audiowrt-player-aac",
+            "audiowrt-player-m4a", "audiowrt-player-vorbis",
+            "audiowrt-player-opus", "audiowrt-player-wav",
+            "audiowrt-player-aiff", "audiowrt-player-lpcm",
+            "audiowrt-player-ffmpeg",
+        }
+        hostap_packages = {"hostapd-wpa-supplicant-tailored"}
+        native_selected = native_players.intersection(selected)
+        hostap_selected = hostap_packages.intersection(selected)
+        sdk_providers = []
+        if native_selected or hostap_selected:
+            sdk_providers += [
+                ("base", "libs/libubox"), ("base", "libs/uclient"),
+                ("base", "libs/ustream-ssl"),
+            ]
+        if hostap_selected:
+            sdk_providers += [
+                ("base", "libs/libnl-tiny"), ("base", "libs/libjson-c"),
+                ("base", "libs/mbedtls"), ("base", "system/ubus"),
+                ("base", "utils/ucode"), ("base", "libs/udebug"),
+            ]
+        player_sources = {
+            "audiowrt-player-flac": ("packages", "libs/flac"),
+            "audiowrt-player-mp3": ("packages", "libs/libmad"),
+            "audiowrt-player-aac": ("packages", "libs/faad2"),
+            "audiowrt-player-m4a": ("packages", "libs/faad2"),
+            "audiowrt-player-vorbis": ("packages", "libs/libvorbis"),
+            "audiowrt-player-opus": ("packages", "libs/opusfile"),
+        }
+        for player, source in player_sources.items():
+            if player in native_selected:
+                sdk_providers.append(source)
+                if player == "audiowrt-player-vorbis":
+                    sdk_providers.append(("packages", "libs/libogg"))
+                if player == "audiowrt-player-opus":
+                    sdk_providers.append(("packages", "libs/opus"))
+        if sdk_providers:
+            sdk_providers = list(dict.fromkeys(sdk_providers))
+            print("Preparing SDK development providers:", sdk_providers, flush=True)
+            recipe_targets = register_upstream_sdk_sources(sdk, cache, sdk_providers)
+            run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
+            # Build/InstallDev stages headers and link libraries required by
+            # AudioWRT consumers. Resolve providers once, before their targets.
+            for provider in sdk_providers:
+                run("make", f"VERSION_NUMBER={args.release}",
+                    recipe_targets[provider], f"-j{args.jobs}", cwd=sdk)
         errors = []
         # Download selected packages separately with NO_DEPS, as in 8eb72f8.
         download_targets = list(dict.fromkeys(
