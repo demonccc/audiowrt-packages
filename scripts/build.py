@@ -63,10 +63,27 @@ def run_with_log(log_file: Path) -> int:
 
 
 def packages() -> dict[str, Path]:
-    found = {}
+    """Use canonical package names, not directory names (which may differ)."""
+    recipes = {}
     for category in ROOTS:
         for item in sorted((ROOT / category).glob("*/Makefile")):
-            found[item.parent.name] = item
+            recipes[item.parent.name] = item
+    found = {}
+    mapping = ROOT / "config/build/package-build-targets"
+    for number, raw in enumerate(mapping.read_text().splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        package, separator, target = line.partition("|")
+        if not separator or not package or not target:
+            raise ValueError(f"Invalid package-build-targets line {number}")
+        directory = target.removeprefix("package/feeds/audiowrt/").removesuffix("/compile")
+        recipe = recipes.get(directory)
+        if recipe is None:
+            raise ValueError(f"Missing recipe for {package}: {directory}")
+        if package in found:
+            raise ValueError(f"Duplicate canonical package: {package}")
+        found[package] = recipe
     return found
 
 
