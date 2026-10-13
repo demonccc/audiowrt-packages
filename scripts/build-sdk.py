@@ -193,6 +193,51 @@ def stage_official_link_libraries(sdk, cache, release, arch, packages):
             with provides.open("a") as out:
                 out.write(soname + "\n")
 
+def stage_official_bluetooth_modules(sdk, cache, release, target, subtarget):
+    """Reuse exact-release signed Bluetooth kernel modules; never rebuild Linux."""
+    metadata = json.loads(subprocess.check_output([
+        sys.executable, str(ROOT / "scripts/resolve-openwrt-artifacts.py"),
+        release, target, subtarget,
+    ], text=True))
+    workspace = cache / "official-bluetooth" / release / target / subtarget
+    workspace.mkdir(parents=True, exist_ok=True)
+    manifest = workspace / "sha256sums"
+    if not manifest.is_file():
+        run("curl", "--fail", "--location", "--retry", "5",
+            "--output", manifest, metadata["kmods_sha256sums_url"])
+    module_dir = sdk / "feeds/audiowrt/tailored/kmod-bluetooth-tailored/files"
+    module_dir.mkdir(parents=True, exist_ok=True)
+    for existing in module_dir.glob("*.ko"):
+        existing.unlink()
+    extracted = workspace / "extracted"
+    if extracted.exists():
+        shutil.rmtree(extracted)
+    extracted.mkdir()
+    apk_tool = sdk / "staging_dir/host/bin/apk"
+    for key in ("kmod_bluetooth_url", "kmod_btmtk_url", "kmod_btusb_url"):
+        url = metadata[key]
+        archive = workspace / url.rsplit("/", 1)[-1]
+        if not archive.is_file():
+            run("curl", "--fail", "--location", "--retry", "5",
+                "--output", archive, url)
+        relative = url.removeprefix(metadata["base_url"])
+        if relative == url:
+            raise RuntimeError(f"Bluetooth APK outside release target: {url}")
+        run(sys.executable, ROOT / "scripts/verify-openwrt-checksum.py",
+            manifest, relative, archive)
+        run(apk_tool, "--allow-untrusted", "extract",
+            "--destination", extracted, archive)
+    for name in ("bluetooth.ko", "btmtk.ko", "btintel.ko", "btrtl.ko", "btusb.ko"):
+        matches = [p for p in extracted.rglob(name) if p.is_file()]
+        if len(matches) != 1:
+            raise RuntimeError(f"Expected exactly one official {name}; found {len(matches)}")
+        shutil.copy2(matches[0], module_dir / name)
+    for forbidden in ("rfcomm.ko", "bnep.ko", "hidp.ko"):
+        if (module_dir / forbidden).exists():
+            raise RuntimeError(f"Disallowed Bluetooth module: {forbidden}")
+    print("Staged five verified, exact-release Bluetooth .ko modules", flush=True)
+
+
 def development_recipes(dependencies):
     recipes = []
     for dep in dependencies:
@@ -309,6 +354,8 @@ def compile_sdk(args):
                         "CONFIG_PACKAGE_kmod-bluetooth=n",
                         "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
                         target, f"-j{args.jobs}", cwd=sdk)
+        if "kmod-bluetooth-tailored" in selected:
+            stage_official_bluetooth_modules(sdk, cache, args.release, args.target, args.subtarget)
         # Prepare SDK development interfaces for native players and WPA.
         # The original AudioWRT builder 8eb72f8 explicitly staged these
         # providers before compiling consumers. The standalone SDK does not
