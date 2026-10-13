@@ -350,26 +350,10 @@ def compile_sdk(args):
                 run("./scripts/feeds", "update", "base", cwd=sdk)
                 run("./scripts/feeds", "install", *deps, cwd=sdk)
                 run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
-                # Allow OpenWrt to resolve the development closure. Running
-                # NO_DEPS here would suppress Build/InstallDev metadata.
-                for dep in dict.fromkeys(deps):
-                    # OpenWrt's rust/host is a host build dependency, NOT a
-                    # target package. The known-good firmware builder installs
-                    # its recipe and lets the source package's dependency
-                    # graph compile it. Never invoke rust/compile directly.
-                    if dep.endswith("/host"):
-                        # Feed host-tool recipes may not expose a direct
-                        # package/.../host/compile target in an SDK. Do not
-                        # fail the entire batch before compiling its other
-                        # independent packages.
-                        continue
-                    name = dep.split("/", 1)[0]
-                    feed = "base" if name == "openssl" else "packages"
-                    target = f"package/feeds/{feed}/{name}/compile"
-                    run("make", f"VERSION_NUMBER={args.release}",
-                        "CONFIG_PACKAGE_kmod-bluetooth=n",
-                        "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
-                        target, f"-j{args.jobs}", cwd=sdk)
+                # Canonical AudioWRT 8eb72f8 registers these development
+                # recipes but does NOT compile them unconditionally here.
+                # Genuine source targets resolve their Build/InstallDev needs;
+                # package-only targets use NO_DEPS=1 below.
         # Prepare SDK development interfaces for native players and WPA.
         # The original AudioWRT builder 8eb72f8 explicitly staged these
         # providers before compiling consumers. The standalone SDK does not
@@ -715,8 +699,7 @@ def compile_sdk(args):
                     "CONFIG_PACKAGE_kmod-bluetooth=n",
                     "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
                     target_path,
-                    *([] if source_target and not ({"bluez-trimmed", "bluez-alsa"} & set(names))
-                       else ["NO_DEPS=1"]),
+                    *([] if source_target else ["NO_DEPS=1"]),
                     f"-j{args.jobs}", "V=s", cwd=sdk)
             except subprocess.CalledProcessError:
                 errors += names
