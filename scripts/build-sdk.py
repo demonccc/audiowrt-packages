@@ -726,10 +726,11 @@ def compile_sdk(args):
                     # Never rebuild official D-Bus/OpenSSL transitively.
                     # BlueZ/BlueALSA use staged official SDK interfaces;
                     # librespot still requires its host Rust toolchain.
-                    # All package recipes consume explicitly prepared SDK
-                    # interfaces. Never let a Rust package transitively pull
-                    # kernel/firmware builds into this packages-only job.
-                    "NO_DEPS=1",
+                    # Match AudioWRT@8eb72f8: only the four explicit source
+                    # targets follow their development dependency graph.
+                    # Disable official/custom Bluetooth kmods for source builds
+                    # without disabling their own userspace package symbols.
+                    *([] if source_target else ["NO_DEPS=1"]),
                     f"-j{args.jobs}", "V=s", cwd=sdk)
             except subprocess.CalledProcessError:
                 errors += names
