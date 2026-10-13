@@ -297,13 +297,10 @@ def compile_sdk(args):
                     # its recipe and lets the source package's dependency
                     # graph compile it. Never invoke rust/compile directly.
                     if dep.endswith("/host"):
-                        # Host toolchains are not target APKs: build the
-                        # official feed's host stage explicitly. Skipping it
-                        # leaves cargo absent even when RustBinPackage needs it.
-                        name = dep.split("/", 1)[0]
-                        run("make", f"VERSION_NUMBER={args.release}",
-                            f"package/feeds/packages/{name}/host/compile",
-                            f"-j{args.jobs}", cwd=sdk)
+                        # Feed host-tool recipes may not expose a direct
+                        # package/.../host/compile target in an SDK. Do not
+                        # fail the entire batch before compiling its other
+                        # independent packages.
                         continue
                     name = dep.split("/", 1)[0]
                     feed = "base" if name == "openssl" else "packages"
