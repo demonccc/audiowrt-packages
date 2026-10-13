@@ -499,6 +499,12 @@ def compile_sdk(args):
                         dest_dir.mkdir(parents=True, exist_ok=True)
                         for sibling in src_dir.glob("*.h"):
                             shutil.copy2(sibling, dest_dir / sibling.name)
+                        if package_name == "opus":
+                            # opusfile.h includes <opus_multistream.h> without
+                            # the opus/ prefix. OpenWrt's native decoder also
+                            # expects the plain opus include search path.
+                            for header in dest_dir.glob("*.h"):
+                                shutil.copy2(header, headers / header.name)
                         if package_name == "libogg":
                             generated = [h for root in build_sources
                                          for h in root.rglob("config_types.h")]
