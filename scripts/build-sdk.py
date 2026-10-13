@@ -414,7 +414,19 @@ def compile_sdk(args):
                         if h.is_file() and "host" not in h.parts
                     ))
                     if len(candidates) == 1:
-                        shutil.copy2(candidates[0], headers / "iwinfo.h")
+                        source_header = candidates[0]
+                        shutil.copy2(source_header, headers / "iwinfo.h")
+                        # iwinfo.h includes <iwinfo/utils.h>; staging only
+                        # the top-level header is insufficient.
+                        source_subdir = source_header.parent / "iwinfo"
+                        if source_subdir.is_dir():
+                            destination = headers / "iwinfo"
+                            destination.mkdir(parents=True, exist_ok=True)
+                            for header in source_subdir.rglob("*.h"):
+                                relative = header.relative_to(source_subdir)
+                                target = destination / relative
+                                target.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copy2(header, target)
                     elif not candidates:
                         # LuCI may still fail, but missing optional development
                         # headers must not abort the other 42 package builds.
