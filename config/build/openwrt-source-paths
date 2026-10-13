@@ -15,6 +15,7 @@ base|network/services/hostapd
 base|network/services/umdns
 base|network/utils/iwinfo
 base|system/ubus
+base|system/uci
 base|utils/busybox
 base|utils/ucode
 packages|libs/alsa-lib
