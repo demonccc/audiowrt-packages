@@ -326,6 +326,10 @@ def compile_sdk(args):
                 ("base", "libs/libubox"), ("base", "libs/uclient"),
                 ("base", "libs/ustream-ssl"),
             ]
+        if "bluez-alsa" in selected:
+            sdk_providers.append(("packages", "utils/bluez"))
+        if "luci-mod-status-tailored" in selected:
+            sdk_providers.append(("base", "network/utils/iwinfo"))
         if hostap_selected:
             sdk_providers += [
                 ("base", "libs/libnl-tiny"), ("base", "libs/libjson-c"),
@@ -385,7 +389,25 @@ def compile_sdk(args):
             for feed, source_path in sdk_providers:
                 package_name = Path(source_path).name
                 build_sources = list((sdk / "build_dir").glob(f"target-*/{package_name}-*"))
-                if package_name == "libubox":
+                if package_name == "bluez":
+                    # BlueZ public API headers live under lib/ in its source,
+                    # but consumers include them as <bluetooth/*.h>.
+                    candidates = [root / "lib" for root in build_sources
+                                  if (root / "lib/bluetooth.h").is_file()]
+                    if len(candidates) != 1:
+                        raise RuntimeError(f"Cannot locate BlueZ public headers: {candidates}")
+                    dest = headers / "bluetooth"
+                    dest.mkdir(parents=True, exist_ok=True)
+                    for header in candidates[0].glob("*.h"):
+                        shutil.copy2(header, dest / header.name)
+                elif package_name == "iwinfo":
+                    # LuCI status' luci-bwc.c needs the iwinfo public API.
+                    candidates = [h for root in build_sources
+                                  for h in root.rglob("iwinfo.h") if h.is_file()]
+                    if len(candidates) != 1:
+                        raise RuntimeError(f"Cannot locate iwinfo.h: {candidates}")
+                    shutil.copy2(candidates[0], headers / "iwinfo.h")
+                elif package_name == "libubox":
                     destination = headers / "libubox"
                     destination.mkdir(parents=True, exist_ok=True)
                     candidates = [h for root in build_sources for h in root.glob("*.h")]
@@ -546,6 +568,10 @@ def compile_sdk(args):
             if requested_libraries:
                 stage_official_link_libraries(sdk, cache, args.release, args.arch,
                                               requested_libraries)
+        if "bluez-alsa" in selected:
+            stage_official_link_libraries(sdk, cache, args.release, args.arch, [
+                ("bluez-libs", "packages", "libbluetooth.so.*", "libbluetooth.so"),
+            ])
         if hostap_selected:
             stage_official_link_libraries(sdk, cache, args.release, args.arch, [
                 ("libblobmsg-json", "base", "libblobmsg_json.so.*", "libblobmsg_json.so"),
