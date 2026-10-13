@@ -378,7 +378,8 @@ def compile_sdk(args):
         if "bluez-alsa" in selected:
             sdk_providers.append(("packages", "utils/bluez"))
         if "luci-mod-status-tailored" in selected:
-            sdk_providers.append(("base", "network/utils/iwinfo"))
+            sdk_providers += [("base", "network/utils/iwinfo"),
+                              ("base", "system/uci")]
         if hostap_selected:
             sdk_providers += [
                 ("base", "libs/libnl-tiny"), ("base", "libs/libjson-c"),
@@ -479,6 +480,15 @@ def compile_sdk(args):
                               "luci-mod-status-tailored may fail", flush=True)
                     else:
                         raise RuntimeError(f"Ambiguous iwinfo headers: {candidates}")
+                elif package_name == "uci":
+                    # The iwinfo public API includes <uci.h>. Extract it
+                    # from the pinned official UCI sources, without rebuilding
+                    # the UCI runtime package.
+                    candidates = [h for root in build_sources
+                                  for h in root.rglob("uci.h") if h.is_file()]
+                    if len(candidates) != 1:
+                        raise RuntimeError(f"Expected one official uci.h: {candidates}")
+                    shutil.copy2(candidates[0], headers / "uci.h")
                 elif package_name == "libubox":
                     destination = headers / "libubox"
                     destination.mkdir(parents=True, exist_ok=True)
