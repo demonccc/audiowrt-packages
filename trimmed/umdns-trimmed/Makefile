@@ -16,7 +16,7 @@ define Package/umdns-trimmed
   SECTION:=net
   CATEGORY:=AudioWRT
   TITLE:=Trimmed mDNS daemon
-  DEPENDS:=+libubox +libubus +libblobmsg-json +libudebug
+  DEPENDS:=+libubox +libubus +libblobmsg-json +libudebug +libjson-c
   PROVIDES:=umdns
   CONFLICTS:=umdns
 endef
