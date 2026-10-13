@@ -8,38 +8,25 @@ PKG_MAINTAINER:=AudioWRT
 include $(INCLUDE_DIR)/kernel.mk
 include $(INCLUDE_DIR)/package.mk
 
-ifneq ($(DUMP),1)
-AUDIOWRT_BLUETOOTH_PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk
-endif
+# Package already-built, checksum-verified official kernel objects. Unlike
+# KernelPackage, this recipe never invokes the SDK kernel build system.
+PKG_VERSION:=$(LINUX_VERSION)
+PKG_BUILD_DEPENDS:=
+PKG_BUILD_PARALLEL:=1
 
-define KernelPackage/bluetooth-tailored
+define Package/kmod-bluetooth-tailored
+  SECTION:=kernel
+  CATEGORY:=Kernel modules
   SUBMENU:=Bluetooth Support
-  TITLE:=Tailored Bluetooth core and USB HCI support
-  PROVIDES:=$(AUDIOWRT_BLUETOOTH_PROVIDES)
-  DEPENDS:=@USB_SUPPORT +kmod-usb-core +kmod-crypto-hash +kmod-crypto-ecb \
-	+kmod-lib-crc16 +kmod-crypto-cmac +kmod-regmap-core +kmod-crypto-ecdh \
-	+USE_RFKILL:kmod-rfkill
-  KCONFIG:=CONFIG_BT=m CONFIG_BT_BREDR=y CONFIG_BT_LE=y \
-	CONFIG_BT_RFCOMM=n CONFIG_BT_BNEP=n CONFIG_BT_HIDP=n \
-	CONFIG_BT_HCIBTUSB=m CONFIG_BT_HCIBTUSB_BCM=n \
-	CONFIG_BT_HCIBTUSB_MTK=y CONFIG_BT_HCIBTUSB_RTL=y CONFIG_BT_MTK=m
-  FILES:= \
-	$(PKG_BUILD_DIR)/bluetooth.ko \
-	$(PKG_BUILD_DIR)/btmtk.ko \
-	$(PKG_BUILD_DIR)/btintel.ko \
-	$(PKG_BUILD_DIR)/btrtl.ko \
-	$(PKG_BUILD_DIR)/btusb.ko
-  AUTOLOAD:=$(call AutoProbe,bluetooth btmtk btintel btrtl btusb)
+  TITLE:=Tailored official Bluetooth core and USB HCI modules
+  PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk
+  DEPENDS:=+kernel +kmod-usb-core +kmod-crypto-hash +kmod-crypto-ecb \\
+    +kmod-lib-crc16 +kmod-crypto-cmac +kmod-regmap-core +kmod-crypto-ecdh
 endef
 
-define KernelPackage/bluetooth-tailored/description
- Repackages the exact-release OpenWrt Bluetooth core and USB HCI modules used
- by the constrained Bluetooth profile. RFCOMM, BNEP and HIDP are omitted; A2DP
- uses the retained Bluetooth core and HCI transport.
-endef
-
-define Package/kmod-bluetooth-tailored/extra_provides
-	printf '%s\n' crc16.ko ecdh_generic.ko kpp.ko usbcore.ko
+define Package/kmod-bluetooth-tailored/description
+ Repackage the exact-release OpenWrt kernel modules for Bluetooth A2DP,
+ omitting RFCOMM, BNEP and HIDP without rebuilding any kernel source.
 endef
 
 define Build/Prepare
@@ -53,4 +40,10 @@ endef
 define Build/Compile
 endef
 
-$(eval $(call KernelPackage,bluetooth-tailored))
+define Package/kmod-bluetooth-tailored/install
+	$(INSTALL_DIR) $(1)/lib/modules/$(LINUX_VERSION) $(1)/etc/modules.d
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/*.ko $(1)/lib/modules/$(LINUX_VERSION)/
+	printf '%s\\n' bluetooth btmtk btintel btrtl btusb >$(1)/etc/modules.d/40-bluetooth-tailored
+endef
+
+$(eval $(call BuildPackage,kmod-bluetooth-tailored))
