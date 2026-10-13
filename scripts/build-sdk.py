@@ -365,7 +365,8 @@ def compile_sdk(args):
                                 ("base", "libs/libjson-c")}:
                     action = "compile"
                 elif provider in {("packages", "libs/libmad"),
-                                  ("base", "libs/mbedtls")}:
+                                  ("base", "libs/mbedtls"),
+                                  ("packages", "libs/libogg")}:
                     action = "configure"
                 else:
                     action = "prepare"
@@ -406,6 +407,17 @@ def compile_sdk(args):
                     matches = [h for root in build_sources for h in root.rglob("ustream-ssl.h")]
                     if matches:
                         shutil.copy2(matches[0], destination / "ustream-ssl.h")
+                elif package_name == "mbedtls" and hostap_selected:
+                    candidates = [root / "include" for root in build_sources
+                                  if (root / "include/mbedtls/version.h").is_file()
+                                  and (root / "include/psa/crypto.h").is_file()]
+                    if len(candidates) != 1:
+                        raise RuntimeError(f"Cannot stage MbedTLS public headers: {candidates}")
+                    for subdir in ("mbedtls", "psa"):
+                        dest = headers / subdir
+                        dest.mkdir(parents=True, exist_ok=True)
+                        for header in (candidates[0] / subdir).glob("*.h"):
+                            shutil.copy2(header, dest / header.name)
                 elif package_name == "ucode" and hostap_selected:
                     # Ported from prepare_hostap_sdk() in AudioWRT 8eb72f8:
                     # libucode exports its API in include/ucode, not at the
@@ -450,7 +462,20 @@ def compile_sdk(args):
                     source_suffix, destination_suffix = public[package_name]
                     candidates = [h for root in build_sources
                                   for h in root.rglob(Path(source_suffix).name)
-                                  if h.is_file()]
+                                  if h.is_file() and (source_suffix == h.name or
+                                      h.as_posix().endswith("/" + source_suffix))]
+                    # Some upstream trees generate public headers in their
+                    # CMake build directory; prioritize the canonical include
+                    # path instead of same-named private implementation files.
+                    if not candidates:
+                        candidates = [h for root in build_sources
+                                      for h in root.rglob(Path(source_suffix).name)
+                                      if h.is_file()]
+                    if len(candidates) > 1:
+                        candidates = sorted(candidates, key=lambda h: (
+                            not h.as_posix().endswith("/" + source_suffix),
+                            len(h.parts)))
+                        candidates = candidates[:1]
                     if len(candidates) != 1:
                         # Header layouts can differ between upstream releases
                         # and some headers are generated during configure.
@@ -474,6 +499,11 @@ def compile_sdk(args):
                         dest_dir.mkdir(parents=True, exist_ok=True)
                         for sibling in src_dir.glob("*.h"):
                             shutil.copy2(sibling, dest_dir / sibling.name)
+                        if package_name == "libogg":
+                            generated = [h for root in build_sources
+                                         for h in root.rglob("config_types.h")]
+                            if generated:
+                                shutil.copy2(generated[0], dest_dir / "config_types.h")
                     else:
                         dest = headers / destination_suffix
                         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -495,6 +525,16 @@ def compile_sdk(args):
             if requested_libraries:
                 stage_official_link_libraries(sdk, cache, args.release, args.arch,
                                               requested_libraries)
+        if hostap_selected:
+            stage_official_link_libraries(sdk, cache, args.release, args.arch, [
+                ("libblobmsg-json", "base", "libblobmsg_json.so.*", "libblobmsg_json.so"),
+                ("libubus", "base", "libubus.so.*", "libubus.so"),
+                ("libucode", "base", "libucode.so.*", "libucode.so"),
+                ("libudebug", "base", "libudebug.so*", "libudebug.so"),
+                ("libmbedtls21", "base", "libmbedcrypto.so.*", "libmbedcrypto.so"),
+                ("libmbedtls21", "base", "libmbedx509.so.*", "libmbedx509.so"),
+                ("libmbedtls21", "base", "libmbedtls.so.*", "libmbedtls.so"),
+            ])
         errors = []
         # Download selected packages separately with NO_DEPS, as in 8eb72f8.
         download_targets = list(dict.fromkeys(
