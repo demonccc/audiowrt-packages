@@ -505,6 +505,21 @@ def compile_sdk(args):
                             # expects the plain opus include search path.
                             for header in dest_dir.glob("*.h"):
                                 shutil.copy2(header, headers / header.name)
+                            # Some Opus releases put secondary public API
+                            # headers outside the directory containing opus.h.
+                            required = ("opus.h", "opus_types.h",
+                                        "opus_defines.h", "opus_multistream.h")
+                            for name in required:
+                                if not (dest_dir / name).is_file():
+                                    matches = [h for root in build_sources
+                                               for h in root.rglob(name)
+                                               if h.is_file() and "include" in h.parts]
+                                    if len(matches) == 1:
+                                        shutil.copy2(matches[0], dest_dir / name)
+                                        shutil.copy2(matches[0], headers / name)
+                                if not (dest_dir / name).is_file():
+                                    raise RuntimeError(
+                                        f"Opus public development header missing: {name}")
                         if package_name == "libogg":
                             generated = [h for root in build_sources
                                          for h in root.rglob("config_types.h")]
@@ -541,6 +556,24 @@ def compile_sdk(args):
                 ("libmbedtls21", "base", "libmbedx509.so.*", "libmbedx509.so"),
                 ("libmbedtls21", "base", "libmbedtls.so.*", "libmbedtls.so"),
             ])
+        # This SDK stages link-only ELF stubs. Packaging still checks every
+        # binary's DT_NEEDED libraries against the provider metadata. Record
+        # the SONAMEs against their real runtime packages; never disable the
+        # dependency checker or pretend they are bundled in AudioWRT APKs.
+        staging_dir = next(iter((sdk / "staging_dir").glob("target-*")))
+        pkginfo = staging_dir / "pkginfo"
+        pkginfo.mkdir(parents=True, exist_ok=True)
+        required_sonames = {
+            "libmbedtls": ("libmbedcrypto.so.16", "libmbedtls.so.21",
+                           "libmbedx509.so.7"),
+            "libjson-c": ("libjson-c.so.5",),
+            "glib2-trimmed": ("libgio-2.0.so.0", "libglib-2.0.so.0",
+                             "libgobject-2.0.so.0"),
+        }
+        for provider, sonames in required_sonames.items():
+            provide_file = pkginfo / f"{provider}.provides"
+            existing = set(provide_file.read_text().splitlines()) if provide_file.exists() else set()
+            provide_file.write_text("\n".join(sorted(existing.union(sonames))) + "\n")
         errors = []
         # Download selected packages separately with NO_DEPS, as in 8eb72f8.
         download_targets = list(dict.fromkeys(
