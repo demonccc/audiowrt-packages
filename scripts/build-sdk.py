@@ -301,6 +301,10 @@ def compile_sdk(args):
             entry = links / target_path.split("/")[3]
             if not entry.exists() and not entry.is_symlink():
                 entry.symlink_to(source, target_is_directory=True)
+        if "kmod-bluetooth-tailored" in args.package:
+            # Register the SDK-local binary-repackaging recipe before Make
+            # generates .packageinfo and make targets.
+            stage_official_bluetooth_modules(sdk, cache, args.release, args.target, args.subtarget)
         run("make", f"VERSION_NUMBER={args.release}", "-s", "prepare-tmpinfo", cwd=sdk)
         config = sdk / ".config"
         with config.open("a") as stream:
@@ -366,8 +370,6 @@ def compile_sdk(args):
                         "CONFIG_PACKAGE_kmod-bluetooth=n",
                         "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
                         target, f"-j{args.jobs}", cwd=sdk)
-        if "kmod-bluetooth-tailored" in selected:
-            stage_official_bluetooth_modules(sdk, cache, args.release, args.target, args.subtarget)
         # Prepare SDK development interfaces for native players and WPA.
         # The original AudioWRT builder 8eb72f8 explicitly staged these
         # providers before compiling consumers. The standalone SDK does not
