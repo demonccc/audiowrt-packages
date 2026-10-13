@@ -674,8 +674,12 @@ def compile_sdk(args):
             provide_file.write_text("\n".join(sorted(existing.union(sonames))) + "\n")
         errors = []
         # Download selected packages separately with NO_DEPS, as in 8eb72f8.
+        # The Bluetooth kernel modules were already downloaded from the
+        # exact-release official APKs and checksum-verified above. There is
+        # no upstream source archive to fetch for this repackaging recipe.
         download_targets = list(dict.fromkeys(
-            target.removesuffix("/compile") + "/download" for _, target in specs
+            target.removesuffix("/compile") + "/download"
+            for name, target in specs if name != "kmod-bluetooth-tailored"
         ))
         if download_targets:
             run("make", f"VERSION_NUMBER={args.release}", *config_flags,
