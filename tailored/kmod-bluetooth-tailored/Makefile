@@ -43,7 +43,7 @@ endef
 define Package/kmod-bluetooth-tailored/install
 	$(INSTALL_DIR) $(1)/lib/modules/$(LINUX_VERSION) $(1)/etc/modules.d
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/*.ko $(1)/lib/modules/$(LINUX_VERSION)/
-	printf '%s\\n' bluetooth btmtk btintel btrtl btusb >$(1)/etc/modules.d/40-bluetooth-tailored
+	printf '%s\n' bluetooth btmtk btintel btrtl btusb >$(1)/etc/modules.d/40-bluetooth-tailored
 endef
 
 $(eval $(call BuildPackage,kmod-bluetooth-tailored))
