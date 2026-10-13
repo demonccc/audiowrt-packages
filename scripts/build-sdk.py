@@ -667,6 +667,13 @@ def compile_sdk(args):
             "libjson-c": ("libjson-c.so.5",),
             "glib2-trimmed": ("libgio-2.0.so.0", "libglib-2.0.so.0",
                              "libgobject-2.0.so.0"),
+            # ABI names are from the exact OpenWrt release APKs; record
+            # them for OpenWrt's package dependency scanner without building
+            # official libraries just for the trimmed APK repackaging.
+            "libffi": ("libffi.so.8",),
+            "libpcre2": ("libpcre2-8.so.0",),
+            "zlib": ("libz.so.1",),
+            "libdbus": ("libdbus-1.so.3",),
         }
         for provider, sonames in required_sonames.items():
             provide_file = pkginfo / f"{provider}.provides"
@@ -701,7 +708,9 @@ def compile_sdk(args):
                                 for name in selected]
                 run("make", f"VERSION_NUMBER={args.release}", *target_flags,
                     "CONFIG_PACKAGE_kmod-bluetooth=n",
-                    "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
+                    *(["CONFIG_PACKAGE_kmod-bluetooth-tailored=m"]
+                      if "kmod-bluetooth-tailored" in names
+                      else ["CONFIG_PACKAGE_kmod-bluetooth-tailored=n"]),
                     target_path,
                     # Never rebuild official D-Bus/OpenSSL transitively.
                     # BlueZ/BlueALSA use staged official SDK interfaces;
