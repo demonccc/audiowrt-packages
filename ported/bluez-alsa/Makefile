@@ -26,6 +26,8 @@ define Build/Prepare
 endef
 
 CONFIGURE_VARS += \
+	BLUEZ_CFLAGS="-I$(STAGING_DIR)/usr/include" \
+	BLUEZ_LIBS="-L$(STAGING_DIR)/usr/lib -lbluetooth" \
 	GDBUS_CODEGEN="$(PKG_BUILD_DIR)/host-tools/gdbus-codegen" \
 	PATH="$(PKG_BUILD_DIR)/host-tools:$$$$PATH"
 
