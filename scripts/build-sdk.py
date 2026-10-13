@@ -406,11 +406,22 @@ def compile_sdk(args):
                         shutil.copy2(header, dest / header.name)
                 elif package_name == "iwinfo":
                     # LuCI status' luci-bwc.c needs the iwinfo public API.
-                    candidates = [h for root in build_sources
-                                  for h in root.rglob("iwinfo.h") if h.is_file()]
-                    if len(candidates) != 1:
-                        raise RuntimeError(f"Cannot locate iwinfo.h: {candidates}")
-                    shutil.copy2(candidates[0], headers / "iwinfo.h")
+                    # The pinned iwinfo recipe may use a different build
+                    # directory name from 'iwinfo-*'. Search all extracted
+                    # SDK source trees before treating the header as missing.
+                    candidates = sorted(set(
+                        h for h in (sdk / "build_dir").rglob("iwinfo.h")
+                        if h.is_file() and "host" not in h.parts
+                    ))
+                    if len(candidates) == 1:
+                        shutil.copy2(candidates[0], headers / "iwinfo.h")
+                    elif not candidates:
+                        # LuCI may still fail, but missing optional development
+                        # headers must not abort the other 42 package builds.
+                        print("WARNING: iwinfo.h not staged; "
+                              "luci-mod-status-tailored may fail", flush=True)
+                    else:
+                        raise RuntimeError(f"Ambiguous iwinfo headers: {candidates}")
                 elif package_name == "libubox":
                     destination = headers / "libubox"
                     destination.mkdir(parents=True, exist_ok=True)
