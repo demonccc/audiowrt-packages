@@ -703,7 +703,12 @@ def compile_sdk(args):
                     "CONFIG_PACKAGE_kmod-bluetooth=n",
                     "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
                     target_path,
-                    *([] if source_target else ["NO_DEPS=1"]),
+                    # Never rebuild official D-Bus/OpenSSL transitively.
+                    # BlueZ/BlueALSA use staged official SDK interfaces;
+                    # librespot still requires its host Rust toolchain.
+                    *([] if source_target and not
+                       ({"bluez-trimmed", "bluez-alsa"} & set(names))
+                       else ["NO_DEPS=1"]),
                     f"-j{args.jobs}", "V=s", cwd=sdk)
             except subprocess.CalledProcessError:
                 errors += names
