@@ -13,6 +13,7 @@ base|libs/zlib
 base|network/services/dropbear
 base|network/services/hostapd
 base|network/services/umdns
+base|network/utils/iwinfo
 base|system/ubus
 base|utils/busybox
 base|utils/ucode
