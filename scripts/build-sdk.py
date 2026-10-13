@@ -684,6 +684,7 @@ def compile_sdk(args):
             "libpcre2": ("libpcre2-8.so.0",),
             "zlib": ("libz.so.1",),
             "libdbus": ("libdbus-1.so.3",),
+            "libexpat": ("libexpat.so.1",),
         }
         for provider, sonames in required_sonames.items():
             provide_file = pkginfo / f"{provider}.provides"
