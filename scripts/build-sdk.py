@@ -205,7 +205,19 @@ def stage_official_bluetooth_modules(sdk, cache, release, target, subtarget):
     if not manifest.is_file():
         run("curl", "--fail", "--location", "--retry", "5",
             "--output", manifest, metadata["kmods_sha256sums_url"])
-    module_dir = sdk / "feeds/audiowrt/tailored/kmod-bluetooth-tailored/files"
+    # The feed is a src-link to the checked-out repository. Materialize a
+    # private SDK-local recipe so build preparation never modifies the checkout.
+    recipe = sdk / "package/feeds/audiowrt/kmod-bluetooth-tailored"
+    source = ROOT / "tailored/kmod-bluetooth-tailored"
+    private_recipe = sdk / "audiowrt-generated/kmod-bluetooth-tailored"
+    private_recipe.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(source, private_recipe, dirs_exist_ok=True)
+    if recipe.is_symlink() or recipe.is_file():
+        recipe.unlink()
+    elif recipe.is_dir():
+        shutil.rmtree(recipe)
+    recipe.symlink_to(private_recipe, target_is_directory=True)
+    module_dir = private_recipe / "files"
     module_dir.mkdir(parents=True, exist_ok=True)
     for existing in module_dir.glob("*.ko"):
         existing.unlink()
