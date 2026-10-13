@@ -20,7 +20,7 @@ define Package/kmod-bluetooth-tailored
   SUBMENU:=Bluetooth Support
   TITLE:=Tailored official Bluetooth core and USB HCI modules
   PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk
-  DEPENDS:=+kernel +kmod-usb-core +kmod-crypto-hash +kmod-crypto-ec\
+  DEPENDS:=+kernel +kmod-usb-core +kmod-crypto-hash +kmod-crypto-ecb \
     +kmod-lib-crc16 +kmod-crypto-cmac +kmod-regmap-core +kmod-crypto-ecdh
 endef
 
