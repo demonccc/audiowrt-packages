@@ -489,6 +489,15 @@ def compile_sdk(args):
                     if len(candidates) != 1:
                         raise RuntimeError(f"Expected one official uci.h: {candidates}")
                     shutil.copy2(candidates[0], headers / "uci.h")
+                    # OpenWrt's uci.h directly includes its generated config.
+                    # Use the exact pinned source's config header.
+                    config_headers = [h for root in build_sources
+                                      for h in root.rglob("uci_config.h")
+                                      if h.is_file()]
+                    if len(config_headers) != 1:
+                        raise RuntimeError(
+                            f"Expected one pinned uci_config.h: {config_headers}")
+                    shutil.copy2(config_headers[0], headers / "uci_config.h")
                 elif package_name == "libubox":
                     destination = headers / "libubox"
                     destination.mkdir(parents=True, exist_ok=True)
