@@ -420,7 +420,8 @@ def compile_sdk(args):
                     action = "compile"
                 elif provider in {("packages", "libs/libmad"),
                                   ("base", "libs/mbedtls"),
-                                  ("packages", "libs/libogg")}:
+                                  ("packages", "libs/libogg"),
+                                  ("base", "system/uci")}:
                     action = "configure"
                 else:
                     action = "prepare"
