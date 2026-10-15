@@ -11,6 +11,9 @@ include $(INCLUDE_DIR)/package.mk
 # Package already-built, checksum-verified official kernel objects. Unlike
 # KernelPackage, this recipe never invokes the SDK kernel build system.
 PKG_VERSION:=$(LINUX_VERSION)
+# kernel.mk sets a linux-scoped build directory; BuildPackage uses the
+# standard target build root. Keep preparation and .built stamps together.
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 PKG_BUILD_DEPENDS:=
 PKG_BUILD_PARALLEL:=1
 
