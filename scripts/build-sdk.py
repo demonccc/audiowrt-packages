@@ -420,8 +420,7 @@ def compile_sdk(args):
                     action = "compile"
                 elif provider in {("packages", "libs/libmad"),
                                   ("base", "libs/mbedtls"),
-                                  ("packages", "libs/libogg"),
-                                  ("base", "system/uci")}:
+                                  ("packages", "libs/libogg")}:
                     action = "configure"
                 else:
                     action = "prepare"
@@ -490,15 +489,25 @@ def compile_sdk(args):
                     if len(candidates) != 1:
                         raise RuntimeError(f"Expected one official uci.h: {candidates}")
                     shutil.copy2(candidates[0], headers / "uci.h")
-                    # OpenWrt's uci.h directly includes its generated config.
-                    # Use the exact pinned source's config header.
-                    config_headers = [h for root in build_sources
-                                      for h in root.rglob("uci_config.h")
-                                      if h.is_file()]
-                    if len(config_headers) != 1:
+                    # OpenWrt UCI uses CMake configure_file(uci_config.h.in).
+                    # Both UCI_DEBUG and UCI_DEBUG_TYPECAST are OFF by default.
+                    # Generate the matching header without configuring or
+                    # compiling the official UCI runtime package.
+                    templates = [h for root in build_sources
+                                 for h in root.rglob("uci_config.h.in")
+                                 if h.is_file()]
+                    if len(templates) != 1:
                         raise RuntimeError(
-                            f"Expected one pinned uci_config.h: {config_headers}")
-                    shutil.copy2(config_headers[0], headers / "uci_config.h")
+                            f"Expected one pinned uci_config.h.in: {templates}")
+                    generated = templates[0].read_text()
+                    generated = generated.replace("#cmakedefine UCI_DEBUG 1",
+                                                  "/* #undef UCI_DEBUG */")
+                    generated = generated.replace(
+                        "#cmakedefine UCI_DEBUG_TYPECAST 1",
+                        "/* #undef UCI_DEBUG_TYPECAST */")
+                    if "#cmakedefine" in generated:
+                        raise RuntimeError("Unknown UCI CMake configuration directive")
+                    (headers / "uci_config.h").write_text(generated)
                 elif package_name == "libubox":
                     destination = headers / "libubox"
                     destination.mkdir(parents=True, exist_ok=True)
