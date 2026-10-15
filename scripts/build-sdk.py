@@ -740,7 +740,13 @@ def compile_sdk(args):
                     # targets follow their development dependency graph.
                     # Disable official/custom Bluetooth kmods for source builds
                     # without disabling their own userspace package symbols.
-                    *([] if source_target else ["NO_DEPS=1"]),
+                    # BlueZ/BlueALSA and the Rust host toolchain must never
+                    # force the full Linux kernel build through a prebuilt
+                    # Bluetooth kmod dependency. The SDK has explicit
+                    # development-interface preparation above.
+                    *([] if source_target and not
+                       ({"bluez-alsa", "bluez-trimmed", "librespot"} & set(names))
+                       else ["NO_DEPS=1"]),
                     f"-j{args.jobs}", "V=s", cwd=sdk)
             except subprocess.CalledProcessError:
                 errors += names
