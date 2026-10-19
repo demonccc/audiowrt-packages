@@ -379,7 +379,8 @@ def compile_sdk(args):
             sdk_providers.append(("packages", "utils/bluez"))
         if "luci-mod-status-tailored" in selected:
             sdk_providers += [("base", "network/utils/iwinfo"),
-                              ("base", "system/uci")]
+                              ("base", "system/uci"),
+                              ("base", "system/ubus")]
         if hostap_selected:
             sdk_providers += [
                 ("base", "libs/libnl-tiny"), ("base", "libs/libjson-c"),
@@ -560,7 +561,7 @@ def compile_sdk(args):
                         raise RuntimeError(f"Cannot stage udebug.h: {candidates}")
                     headers.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(candidates[0], headers / "udebug.h")
-                elif package_name == "ubus" and hostap_selected:
+                elif package_name == "ubus" and (hostap_selected or "luci-mod-status-tailored" in selected):
                     candidates = [h for root in build_sources
                                   for h in root.glob("libubus.h")]
                     if len(candidates) != 1:
