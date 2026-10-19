@@ -33,6 +33,7 @@ define Package/kmod-bluetooth-tailored/description
 endef
 
 define Build/Prepare
+	$(INSTALL_DIR) $(KERNEL_BUILD_DIR)/$(PKG_NAME)
 	mkdir -p $(PKG_BUILD_DIR)
 	$(CP) ./files/*.ko $(PKG_BUILD_DIR)/
 endef
