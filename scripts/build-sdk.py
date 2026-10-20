@@ -729,6 +729,13 @@ def compile_sdk(args):
             "zlib": ("libz.so.1",),
             "libdbus": ("libdbus-1.so.3",),
             "libexpat": ("libexpat.so.1",),
+            # The five verified official Bluetooth objects depend on these
+            # separate official kmods. Their APKs remain external runtime
+            # dependencies; pkginfo only tells the SDK package scanner which
+            # package supplies each imported kernel object.
+            "kmod-lib-crc16": ("crc16.ko",),
+            "kmod-crypto-ecdh": ("ecdh_generic.ko",),
+            "kmod-crypto-kpp": ("kpp.ko",),
         }
         for provider, sonames in required_sonames.items():
             provide_file = pkginfo / f"{provider}.provides"
