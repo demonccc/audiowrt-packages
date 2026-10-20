@@ -367,10 +367,15 @@ def compile_sdk(args):
                     if target is None:
                         raise RuntimeError(f"No development target for {dep}")
                     print(f"Preparing real SDK development dependency: {dep}", flush=True)
+                    # Host Rust builds are unusually large and SDK's top-level
+                    # parallel make hides the underlying failure. Force a
+                    # single verbose invocation for actionable diagnostics.
+                    extra = ["-j1", "V=s"] if dep == "rust/host" else [
+                        f"-j{args.jobs}"]
                     run("make", f"VERSION_NUMBER={args.release}",
                         "CONFIG_PACKAGE_kmod-bluetooth=n",
                         "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
-                        target, f"-j{args.jobs}", cwd=sdk)
+                        target, *extra, cwd=sdk)
                 if "rust/host" in deps:
                     cargo = sdk / "staging_dir/host/bin/cargo"
                     if not cargo.is_file():
