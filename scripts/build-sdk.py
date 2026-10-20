@@ -350,10 +350,33 @@ def compile_sdk(args):
                 run("./scripts/feeds", "update", "base", cwd=sdk)
                 run("./scripts/feeds", "install", *deps, cwd=sdk)
                 run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
-                # Canonical AudioWRT 8eb72f8 registers these development
-                # recipes but does NOT compile them unconditionally here.
-                # Genuine source targets resolve their Build/InstallDev needs;
-                # package-only targets use NO_DEPS=1 below.
+                # The SDK contains runtime toolchains, not the build-time
+                # development interfaces for GLib/D-Bus or host Rust/Cargo.
+                # Build only explicitly requested development providers,
+                # before building their AudioWRT consumers. The SDK controls
+                # the target ABI; do not replace Cargo with the host distro
+                # version or fake .pc files lacking headers/libraries.
+                development_targets = {
+                    "glib2": "package/feeds/packages/glib2/compile",
+                    "dbus": "package/feeds/packages/dbus/compile",
+                    "rust/host": "package/feeds/packages/rust/host/compile",
+                    "openssl": "package/feeds/base/openssl/compile",
+                }
+                for dep in dict.fromkeys(deps):
+                    target = development_targets.get(dep)
+                    if target is None:
+                        raise RuntimeError(f"No development target for {dep}")
+                    print(f"Preparing real SDK development dependency: {dep}", flush=True)
+                    run("make", f"VERSION_NUMBER={args.release}",
+                        "CONFIG_PACKAGE_kmod-bluetooth=n",
+                        "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
+                        target, f"-j{args.jobs}", cwd=sdk)
+                if "rust/host" in deps:
+                    cargo = sdk / "staging_dir/host/bin/cargo"
+                    if not cargo.is_file():
+                        raise RuntimeError(
+                            "OpenWrt Rust host recipe finished but Cargo is absent: "
+                            + str(cargo))
         # Prepare SDK development interfaces for native players and WPA.
         # The original AudioWRT builder 8eb72f8 explicitly staged these
         # providers before compiling consumers. The standalone SDK does not
