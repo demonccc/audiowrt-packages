@@ -380,7 +380,8 @@ def compile_sdk(args):
         if "luci-mod-status-tailored" in selected:
             sdk_providers += [("base", "network/utils/iwinfo"),
                               ("base", "system/uci"),
-                              ("base", "system/ubus")]
+                              ("base", "system/ubus"),
+                              ("base", "libs/libubox")]
         if hostap_selected:
             sdk_providers += [
                 ("base", "libs/libnl-tiny"), ("base", "libs/libjson-c"),
