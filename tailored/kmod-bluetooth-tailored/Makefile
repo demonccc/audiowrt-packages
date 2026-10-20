@@ -24,7 +24,8 @@ define Package/kmod-bluetooth-tailored
   TITLE:=Tailored official Bluetooth core and USB HCI modules
   PROVIDES:=kmod-bluetooth kmod-btusb kmod-btmtk
   DEPENDS:=+kernel +kmod-usb-core +kmod-crypto-hash +kmod-crypto-ecb \
-    +kmod-lib-crc16 +kmod-crypto-cmac +kmod-regmap-core +kmod-crypto-ecdh
+    +kmod-lib-crc16 +kmod-crypto-cmac +kmod-regmap-core \
+    +kmod-crypto-kpp +kmod-crypto-ecdh
 endef
 
 define Package/kmod-bluetooth-tailored/description
