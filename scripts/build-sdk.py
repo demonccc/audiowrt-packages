@@ -348,7 +348,13 @@ def compile_sdk(args):
                 # BlueZ requires dbus-1.pc and glib2-trimmed's dependency
                 # checker needs libffi/pcre2/zlib .provides entries.
                 run("./scripts/feeds", "update", "base", cwd=sdk)
-                run("./scripts/feeds", "install", *deps, cwd=sdk)
+                # rust/host is a build dependency identifier, not a feed
+                # package name. Register the actual Rust recipe and regenerate
+                # package metadata before invoking its host build target.
+                feed_packages = [d.split("/", 1)[0] for d in deps]
+                run("./scripts/feeds", "install", *dict.fromkeys(feed_packages), cwd=sdk)
+                run("make", f"VERSION_NUMBER={args.release}", "-s",
+                    "prepare-tmpinfo", cwd=sdk)
                 run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
                 # The SDK contains runtime toolchains, not the build-time
                 # development interfaces for GLib/D-Bus or host Rust/Cargo.
