@@ -392,8 +392,17 @@ def compile_sdk(args):
                 # rust/host is a build dependency identifier, not a feed
                 # package name. Register the actual Rust recipe and regenerate
                 # package metadata before invoking its host build target.
-                feed_packages = [d.split("/", 1)[0] for d in deps]
-                run("./scripts/feeds", "install", *dict.fromkeys(feed_packages), cwd=sdk)
+                feed_packages = [d.split("/", 1)[0] for d in deps
+                                 if d.split("/", 1)[0] != "openssl"]
+                if feed_packages:
+                    run("./scripts/feeds", "install", *dict.fromkeys(feed_packages), cwd=sdk)
+                # Base OpenSSL is an SDK source recipe, not a packages-feed
+                # entry. Stage its real development files for openssl-sys.
+                if "openssl" in deps:
+                    openssl_recipe = ("base", "libs/openssl")
+                    openssl_targets = register_upstream_sdk_sources(
+                        sdk, cache, [openssl_recipe])
+                    openssl_target = openssl_targets[openssl_recipe]
                 run("make", f"VERSION_NUMBER={args.release}", "-s",
                     "prepare-tmpinfo", cwd=sdk)
                 run("make", f"VERSION_NUMBER={args.release}", "defconfig", cwd=sdk)
@@ -407,7 +416,7 @@ def compile_sdk(args):
                     "glib2": "package/feeds/packages/glib2/compile",
                     "dbus": "package/feeds/packages/dbus/compile",
                     "rust/host": "package/feeds/packages/rust/host/compile",
-                    "openssl": "package/feeds/base/openssl/compile",
+                    "openssl": openssl_target if "openssl" in deps else None,
                 }
                 for dep in dict.fromkeys(deps):
                     target = development_targets.get(dep)
@@ -422,7 +431,13 @@ def compile_sdk(args):
                     run("make", f"VERSION_NUMBER={args.release}",
                         "CONFIG_PACKAGE_kmod-bluetooth=n",
                         "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
-                        target, *extra, cwd=sdk)
+                        target, *(["NO_DEPS=1"] if dep == "openssl" else []),
+                        *extra, cwd=sdk)
+                    if dep == "openssl":
+                        stages = list((sdk / "staging_dir").glob("target-*/usr/lib/pkgconfig/openssl.pc"))
+                        if len(stages) != 1 or not stages[0].is_file():
+                            raise RuntimeError("OpenSSL compiled but openssl.pc was not staged: "
+                                               + str(stages))
                 if "rust/host" in deps:
                     # Rust's OpenWrt host recipe installs into target-*/host,
                     # not staging_dir/host (the generic SDK host tools).
