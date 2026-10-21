@@ -424,11 +424,14 @@ def compile_sdk(args):
                         "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
                         target, *extra, cwd=sdk)
                 if "rust/host" in deps:
-                    cargo = sdk / "staging_dir/host/bin/cargo"
-                    if not cargo.is_file():
+                    # Rust's OpenWrt host recipe installs into target-*/host,
+                    # not staging_dir/host (the generic SDK host tools).
+                    rust_hosts = list((sdk / "staging_dir").glob("target-*/host/bin/cargo"))
+                    if len(rust_hosts) != 1 or not rust_hosts[0].is_file():
                         raise RuntimeError(
-                            "OpenWrt Rust host recipe finished but Cargo is absent: "
-                            + str(cargo))
+                            "OpenWrt Rust host recipe finished but expected exactly "
+                            f"one Cargo under staging_dir/target-*/host/bin: {rust_hosts}")
+                    print(f"Using OpenWrt Cargo: {rust_hosts[0]}", flush=True)
         # Prepare SDK development interfaces for native players and WPA.
         # The original AudioWRT builder 8eb72f8 explicitly staged these
         # providers before compiling consumers. The standalone SDK does not
