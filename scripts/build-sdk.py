@@ -8,6 +8,8 @@ and only requested package roots are compiled. No AudioWRT checkout is used.
 from __future__ import annotations
 
 import argparse
+import fcntl
+from contextlib import contextmanager
 import json
 import re
 import shutil
@@ -269,6 +271,40 @@ def development_recipes(dependencies):
     return list(dict.fromkeys(recipes))
 
 
+@contextmanager
+def sdk_workspace(archive, cache, persistent=False):
+    """Keep expensive host Rust/Cargo and target artifacts across invocations.
+
+    A per-SDK lock prevents parallel writers corrupting the same staging tree.
+    Other packages keep their previous isolated temporary SDK behavior.
+    """
+    if not persistent:
+        with tempfile.TemporaryDirectory(prefix="audiowrt-sdk-") as temp:
+            yield sdk_root(archive, Path(temp))
+        return
+
+    workspace = cache / "sdk-workspaces" / archive.name
+    workspace.mkdir(parents=True, exist_ok=True)
+    with (workspace / ".lock").open("w") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        ready = workspace / ".ready"
+        if not ready.exists():
+            # Do not reuse a partial extraction after an interrupted build.
+            for path in workspace.iterdir():
+                if path.name == ".lock":
+                    continue
+                if path.is_dir():
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
+            sdk_root(archive, workspace)
+            ready.touch()
+        roots = [p for p in workspace.iterdir() if p.is_dir()]
+        if len(roots) != 1:
+            raise RuntimeError(f"Unexpected SDK workspace layout: {workspace}")
+        yield roots[0]
+
+
 def compile_sdk(args):
     sources = package_sources()
     targets = package_map()
@@ -280,8 +316,7 @@ def compile_sdk(args):
     cache.mkdir(parents=True, exist_ok=True)
     output.mkdir(parents=True, exist_ok=True)
     archive = download_sdk(args.release, args.target, args.subtarget, cache)
-    with tempfile.TemporaryDirectory(prefix="audiowrt-sdk-") as temp:
-        sdk = sdk_root(archive, Path(temp))
+    with sdk_workspace(archive, cache, persistent="librespot" in args.package) as sdk:
         # Match the proven AudioWRT SDK sequence at 8eb72f8: retain the
         # release-pinned feeds, update packages + LuCI, and use this checkout
         # as the local AudioWRT feed without cloning the firmware repository.
@@ -289,7 +324,12 @@ def compile_sdk(args):
             (sdk / "feeds.conf.default").read_text() +
             f"\nsrc-link audiowrt {ROOT}\n"
         )
-        run("./scripts/feeds", "update", "packages", "luci", "audiowrt", cwd=sdk)
+        feeds_to_update = [
+            feed for feed in ("packages", "luci", "audiowrt")
+            if not (sdk / "feeds" / feed).exists()
+        ]
+        if feeds_to_update:
+            run("./scripts/feeds", "update", *feeds_to_update, cwd=sdk)
         links = sdk / "package/feeds/audiowrt"
         links.mkdir(parents=True, exist_ok=True)
         for name, target_path in targets.items():
@@ -347,7 +387,8 @@ def compile_sdk(args):
                 # before compiling package-only trimmed runtime packages.
                 # BlueZ requires dbus-1.pc and glib2-trimmed's dependency
                 # checker needs libffi/pcre2/zlib .provides entries.
-                run("./scripts/feeds", "update", "base", cwd=sdk)
+                if not (sdk / "feeds/base").exists():
+                    run("./scripts/feeds", "update", "base", cwd=sdk)
                 # rust/host is a build dependency identifier, not a feed
                 # package name. Register the actual Rust recipe and regenerate
                 # package metadata before invoking its host build target.
