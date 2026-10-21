@@ -426,7 +426,7 @@ def compile_sdk(args):
                     # Host Rust builds are unusually large and SDK's top-level
                     # parallel make hides the underlying failure. Force a
                     # single verbose invocation for actionable diagnostics.
-                    extra = ["-j1", "V=s"] if dep == "rust/host" else [
+                    extra = ["-j1", "V=s"] if dep in {"rust/host", "openssl"} else [
                         f"-j{args.jobs}"]
                     run("make", f"VERSION_NUMBER={args.release}",
                         "CONFIG_PACKAGE_kmod-bluetooth=n",
