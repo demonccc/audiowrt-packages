@@ -428,11 +428,31 @@ def compile_sdk(args):
                     # single verbose invocation for actionable diagnostics.
                     extra = ["-j1", "V=s"] if dep in {"rust/host", "openssl"} else [
                         f"-j{args.jobs}"]
+                    openssl_flags = [
+                        # OpenWrt's recipe enables devcryptoeng when any of
+                        # these options is nonempty. Librespot needs only the
+                        # SSL/crypto libraries, not optional kernel engines.
+                        "CONFIG_OPENSSL_ENGINE=",
+                        "CONFIG_OPENSSL_ENGINE_BUILTIN_DEVCRYPTO=",
+                        "CONFIG_PACKAGE_libopenssl-devcrypto=",
+                    ] if dep == "openssl" else []
+                    if dep == "openssl":
+                        # The persistent SDK may already contain an OpenSSL
+                        # configure stamp with devcryptoeng enabled. Clean
+                        # that package only, once, before changing options.
+                        marker = sdk / ".audiowrt-openssl-no-engines"
+                        if not marker.exists():
+                            run("make", f"VERSION_NUMBER={args.release}",
+                                target.removesuffix("/compile") + "/clean",
+                                "NO_DEPS=1", "-j1", cwd=sdk)
                     run("make", f"VERSION_NUMBER={args.release}",
                         "CONFIG_PACKAGE_kmod-bluetooth=n",
                         "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
-                        target, *(["NO_DEPS=1"] if dep == "openssl" else []),
+                        *openssl_flags, target,
+                        *(["NO_DEPS=1"] if dep == "openssl" else []),
                         *extra, cwd=sdk)
+                    if dep == "openssl":
+                        marker.touch()
                     if dep == "openssl":
                         stages = list((sdk / "staging_dir").glob("target-*/usr/lib/pkgconfig/openssl.pc"))
                         if len(stages) != 1 or not stages[0].is_file():
