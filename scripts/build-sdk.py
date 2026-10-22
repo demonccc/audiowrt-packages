@@ -396,6 +396,17 @@ def compile_sdk(args):
                                  if d.split("/", 1)[0] != "openssl"]
                 if feed_packages:
                     run("./scripts/feeds", "install", *dict.fromkeys(feed_packages), cwd=sdk)
+                # The SDK does not provide package recipes for base
+                # libraries. GLib needs these real target/host providers,
+                # including pcre2/host and libiconv-full/host. Register their
+                # pinned base recipes before resolving Make dependencies.
+                if "glib2" in deps:
+                    register_upstream_sdk_sources(sdk, cache, [
+                        ("base", "libs/zlib"),
+                        ("base", "libs/pcre2"),
+                        ("base", "libs/libiconv-full"),
+                        ("base", "libs/gettext-full"),
+                    ])
                 # Base OpenSSL is an SDK source recipe, not a packages-feed
                 # entry. Stage its real development files for openssl-sys.
                 if "openssl" in deps:
@@ -426,7 +437,7 @@ def compile_sdk(args):
                     # Host Rust builds are unusually large and SDK's top-level
                     # parallel make hides the underlying failure. Force a
                     # single verbose invocation for actionable diagnostics.
-                    extra = ["-j1", "V=s"] if dep in {"rust/host", "openssl"} else [
+                    extra = ["-j1", "V=s"] if dep in {"rust/host", "openssl", "glib2", "dbus"} else [
                         f"-j{args.jobs}"]
                     openssl_flags = [
                         # OpenWrt's recipe enables devcryptoeng when any of
