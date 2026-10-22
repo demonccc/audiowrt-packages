@@ -16,10 +16,13 @@ PKG_BUILD_PARALLEL:=1
 PKG_BUILD_FLAGS:=no-mips16
 
 RUST_PKG_FEATURES:=rustls-tls-webpki-roots alsa-backend with-libmdns
-CARGO_PKG_ARGS+=--no-default-features
 
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/rust/rust-package.mk
+
+# rust-package.mk initializes CARGO_PKG_ARGS with '='. Set this AFTER
+# including it, otherwise --no-default-features is silently discarded.
+CARGO_PKG_ARGS+= --no-default-features
 
 define Package/librespot
   SECTION:=sound
