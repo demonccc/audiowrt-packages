@@ -264,13 +264,12 @@ def sanitize_cross_meson_includes(sdk):
         raise RuntimeError(f"Expected one configured target GLib Ninja build: {builds}")
     ninja = builds[0]
     original = ninja.read_text()
-    import shlex
     # Only delete the exact absolute host include argument.
-    sanitized = re.sub(r"(?<!\\S)-I/usr/include(?=\\s|$)", "", original, flags=re.M)
+    sanitized = re.sub(r"(?<!\S)-I/usr/include(?=\s|$)", "", original, flags=re.M)
     if sanitized != original:
         ninja.write_text(sanitized)
         print(f"Removed unsafe host /usr/include from {ninja}", flush=True)
-    if re.search(r"(?<!\\S)-I/usr/include(?=\\s|$)", ninja.read_text(), re.M):
+    if re.search(r"(?<!\S)-I/usr/include(?=\s|$)", ninja.read_text(), re.M):
         raise RuntimeError("Host /usr/include leaked into the GLib cross build")
 
 def development_recipes(dependencies):
