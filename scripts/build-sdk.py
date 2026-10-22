@@ -435,6 +435,8 @@ def compile_sdk(args):
                         "CONFIG_OPENSSL_ENGINE=",
                         "CONFIG_OPENSSL_ENGINE_BUILTIN_DEVCRYPTO=",
                         "CONFIG_PACKAGE_libopenssl-devcrypto=",
+                        "CONFIG_PACKAGE_libopenssl-afalg=",
+                        "CONFIG_PACKAGE_libopenssl-padlock=",
                     ] if dep == "openssl" else []
                     if dep == "openssl":
                         # The persistent SDK may already contain an OpenSSL
