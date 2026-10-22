@@ -252,6 +252,27 @@ def stage_official_bluetooth_modules(sdk, cache, release, target, subtarget):
     print("Staged five verified, exact-release Bluetooth .ko modules", flush=True)
 
 
+def sanitize_cross_meson_includes(sdk):
+    """Reject host libc headers leaking into a cross-compiled Meson build.
+
+    The official GLib 2.82 recipe can inherit -I/usr/include from an
+    incorrectly resolved .pc dependency. Meson's generated Ninja file is
+    SDK-local; remove just that unsafe include, not target SDK headers.
+    """
+    builds = list((sdk / "build_dir").glob("target-*/glib-*/openwrt-build/build.ninja"))
+    if len(builds) != 1:
+        raise RuntimeError(f"Expected one configured target GLib Ninja build: {builds}")
+    ninja = builds[0]
+    original = ninja.read_text()
+    import shlex
+    # Only delete the exact absolute host include argument.
+    sanitized = re.sub(r"(?<!\\S)-I/usr/include(?=\\s|$)", "", original, flags=re.M)
+    if sanitized != original:
+        ninja.write_text(sanitized)
+        print(f"Removed unsafe host /usr/include from {ninja}", flush=True)
+    if re.search(r"(?<!\\S)-I/usr/include(?=\\s|$)", ninja.read_text(), re.M):
+        raise RuntimeError("Host /usr/include leaked into the GLib cross build")
+
 def development_recipes(dependencies):
     recipes = []
     for dep in dependencies:
@@ -458,6 +479,15 @@ def compile_sdk(args):
                             run("make", f"VERSION_NUMBER={args.release}",
                                 target.removesuffix("/compile") + "/clean",
                                 "NO_DEPS=1", "-j1", cwd=sdk)
+                    if dep == "glib2":
+                        # Configure first, so Meson's Ninja output can be
+                        # checked before any MIPS compiler invocation.
+                        run("make", f"VERSION_NUMBER={args.release}",
+                            "CONFIG_PACKAGE_kmod-bluetooth=n",
+                            "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
+                            target.removesuffix("/compile") + "/configure",
+                            "-j1", "V=s", cwd=sdk)
+                        sanitize_cross_meson_includes(sdk)
                     run("make", f"VERSION_NUMBER={args.release}",
                         "CONFIG_PACKAGE_kmod-bluetooth=n",
                         "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
