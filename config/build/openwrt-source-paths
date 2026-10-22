@@ -1,5 +1,7 @@
 # Exact OpenWrt source paths required by AudioWRT package recipes/build staging.
 # These are sparse source inputs only. They are not enabled feeds.
+base|libs/gettext-full
+base|libs/libiconv-full
 base|libs/libjson-c
 base|libs/libnl-tiny
 base|libs/libubox
