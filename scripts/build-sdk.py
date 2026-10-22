@@ -253,24 +253,31 @@ def stage_official_bluetooth_modules(sdk, cache, release, target, subtarget):
 
 
 def sanitize_cross_meson_includes(sdk):
-    """Reject host libc headers leaking into a cross-compiled Meson build.
+    """Keep host headers and host ELF objects out of GLib's MIPS build.
 
-    The official GLib 2.82 recipe can inherit -I/usr/include from an
-    incorrectly resolved .pc dependency. Meson's generated Ninja file is
-    SDK-local; remove just that unsafe include, not target SDK headers.
+    Meson's generated Ninja rules may resolve zlib through the SDK host's
+    pkg-config data, even though the actual target zlib was compiled and
+    staged. Correct both leaks using the SDK target development library.
     """
     builds = list((sdk / "build_dir").glob("target-*/glib-*/openwrt-build/build.ninja"))
     if len(builds) != 1:
         raise RuntimeError(f"Expected one configured target GLib Ninja build: {builds}")
+    targets = list((sdk / "staging_dir").glob("target-*/usr/lib/libz.so"))
+    if len(targets) != 1 or not targets[0].exists():
+        raise RuntimeError(f"Expected one staged MIPS zlib development library: {targets}")
     ninja = builds[0]
     original = ninja.read_text()
-    # Only delete the exact absolute host include argument.
-    sanitized = re.sub(r"(?<!\S)-I/usr/include(?=\s|$)", "", original, flags=re.M)
+    sanitized = re.sub(r"(?<!\\S)-I/usr/include(?=\\s|$)", "", original, flags=re.M)
+    host_zlib = str(sdk / "staging_dir/host/lib/libz.a")
+    if host_zlib in sanitized:
+        sanitized = sanitized.replace(host_zlib, str(targets[0]))
     if sanitized != original:
         ninja.write_text(sanitized)
-        print(f"Removed unsafe host /usr/include from {ninja}", flush=True)
-    if re.search(r"(?<!\S)-I/usr/include(?=\s|$)", ninja.read_text(), re.M):
+        print(f"Sanitized host headers and zlib linkage in {ninja}", flush=True)
+    if re.search(r"(?<!\\S)-I/usr/include(?=\\s|$)", sanitized, re.M):
         raise RuntimeError("Host /usr/include leaked into the GLib cross build")
+    if host_zlib in sanitized:
+        raise RuntimeError("Host x86 zlib archive leaked into the MIPS linker")
 
 def development_recipes(dependencies):
     recipes = []
