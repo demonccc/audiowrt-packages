@@ -39,8 +39,8 @@ define Package/bluez-alsa
   SECTION:=sound
   CATEGORY:=Sound
   TITLE:=BlueALSA Bluetooth audio backend
-  DEPENDS:=+alsa-lib +bluez-libs +dbus
-  EXTRA_DEPENDS:=bluez-trimmed (>=0), glib2-trimmed (>=0), sbc-trimmed (>=0)
+  DEPENDS:=+alsa-lib +bluez-libs +dbus +glib2-trimmed +sbc-trimmed
+  EXTRA_DEPENDS:=bluez-trimmed (>=0)
   URL:=https://github.com/arkq/bluez-alsa
 endef
 
