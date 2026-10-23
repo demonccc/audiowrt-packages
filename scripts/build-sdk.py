@@ -860,6 +860,8 @@ def compile_sdk(args):
             "libjson-c": ("libjson-c.so.5",),
             "glib2-trimmed": ("libgio-2.0.so.0", "libglib-2.0.so.0",
                              "libgobject-2.0.so.0"),
+            "sbc-trimmed": ("libsbc.so.1",),
+            "kmod-usb-core": ("usbcore.ko",),
             # ABI names are from the exact OpenWrt release APKs; record
             # them for OpenWrt's package dependency scanner without building
             # official libraries just for the trimmed APK repackaging.
