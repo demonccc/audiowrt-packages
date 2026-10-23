@@ -493,6 +493,22 @@ def compile_sdk(args):
                             "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
                             target.removesuffix("/compile") + "/configure",
                             "-j1", "V=s", cwd=sdk)
+                        # OpenWrt may retain .configured stamps after its
+                        # autoremove step deletes the Meson build directory.
+                        # A no-op /configure is then not a valid configuration.
+                        ninja_files = list((sdk / "build_dir").glob(
+                            "target-*/glib-*/openwrt-build/build.ninja"))
+                        if len(ninja_files) != 1:
+                            print("GLib configuration stamp is stale; "
+                                  "cleaning only GLib and configuring again", flush=True)
+                            run("make", f"VERSION_NUMBER={args.release}",
+                                target.removesuffix("/compile") + "/clean",
+                                "NO_DEPS=1", "-j1", cwd=sdk)
+                            run("make", f"VERSION_NUMBER={args.release}",
+                                "CONFIG_PACKAGE_kmod-bluetooth=n",
+                                "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
+                                target.removesuffix("/compile") + "/configure",
+                                "-j1", "V=s", cwd=sdk)
                         sanitize_cross_meson_includes(sdk)
                     run("make", f"VERSION_NUMBER={args.release}",
                         "CONFIG_PACKAGE_kmod-bluetooth=n",
