@@ -1,0 +1,34 @@
+schema_version = 1
+
+# Build configuration is architecture-first. Every architecture and OpenWrt
+# version listed here participates automatically in incremental package builds.
+# Userspace packages are built once per architecture/version using sdk_target.
+# Kernel packages are built once for every kernel_targets entry.
+
+[architectures.mips_24kc]
+description = "MIPS 24Kc big-endian (TP-Link TL-WDR4300 family)"
+
+[architectures.mips_24kc.versions."25.12.5"]
+sdk_target = "ath79/generic"
+kernel_targets = ["ath79/generic"]
+
+[architectures.arm_cortex-a7_neon-vfpv4]
+description = "ARMv7 Cortex-A7 (Linksys IPQ40xx and Raspberry Pi 3)"
+
+[architectures.arm_cortex-a7_neon-vfpv4.versions."25.12.5"]
+sdk_target = "ipq40xx/generic"
+kernel_targets = ["ipq40xx/generic", "bcm27xx/bcm2709"]
+
+[architectures.aarch64_cortex-a72]
+description = "AArch64 Cortex-A72 (Raspberry Pi 4)"
+
+[architectures.aarch64_cortex-a72.versions."25.12.5"]
+sdk_target = "bcm27xx/bcm2711"
+kernel_targets = ["bcm27xx/bcm2711"]
+
+[architectures.x86_64]
+description = "x86-64"
+
+[architectures.x86_64.versions."25.12.5"]
+sdk_target = "x86/64"
+kernel_targets = ["x86/64"]

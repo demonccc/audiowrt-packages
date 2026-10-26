@@ -1,0 +1,36 @@
+name: Promote Production Packages
+run-name: Promote approved packages to stable
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - repository/production-packages.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: package-promotion-stable
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout production manifest
+        uses: actions/checkout@v4
+
+      - name: Install YAML parser
+        run: python3 -m pip install --disable-pip-version-check --quiet PyYAML
+
+      - name: Validate production package manifest
+        run: python3 scripts/promote-production-packages.py --validate-only
+
+      - name: Promote exact tested artifacts to stable
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/promote-production-packages.py --repository "$GITHUB_REPOSITORY"

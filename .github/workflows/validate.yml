@@ -2,14 +2,12 @@ name: Validate AudioWRT packages
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  workflow_call:
   workflow_dispatch:
     inputs:
       openwrt_ref:
         description: Exact OpenWrt release tag used for package metadata validation
         required: true
-        default: v25.12.5
         type: string
 
 permissions:
@@ -23,17 +21,94 @@ jobs:
     steps:
       - name: Checkout AudioWRT packages
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Validate shell scripts
+      - name: Compile Python tooling
+        run: python3 -m py_compile scripts/*.py tests/*.py
+
+      - name: Install validation dependencies
+        run: python3 -m pip install --disable-pip-version-check --quiet PyYAML
+
+      - name: Validate production package manifest
+        run: python3 scripts/promote-production-packages.py --validate-only
+
+      - name: Validate planner state helpers
+        run: python3 tests/test-package-planner-state.py
+
+      - name: Validate package build dependency closure
+        run: python3 tests/test-package-build-resolver-extra-deps.py
+
+      - name: Validate shell tooling
         shell: bash
         run: |
           set -euo pipefail
+          bash -n scripts/build-package-context.sh
           while IFS= read -r -d '' script; do
             case "$(head -n 1 "$script")" in
               '#!'*bash*) bash -n "$script" ;;
               '#!'*/sh*) sh -n "$script" ;;
             esac
           done < <(find . -path './.git' -prune -o -type f -print0)
+
+      - name: Validate architecture matrix
+        run: |
+          python3 - <<'PY'
+          import tomllib
+          from pathlib import Path
+
+          data = tomllib.loads(Path('repository/build-matrix.toml').read_text())
+          assert data['schema_version'] == 1
+          arches = data['architectures']
+          assert arches
+          for arch, cfg in arches.items():
+              assert arch
+              assert cfg['versions']
+              for version, version_cfg in cfg['versions'].items():
+                  assert version
+                  assert '/' in version_cfg['sdk_target']
+                  assert version_cfg['kernel_targets']
+                  assert all('/' in item for item in version_cfg['kernel_targets'])
+          PY
+
+      - name: Validate rebuild rules
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('repository/rebuild-dependents.json').read_text())
+          assert data['schema'] == 1
+          assert isinstance(data['rebuild_dependents'], dict)
+          for package, dependents in data['rebuild_dependents'].items():
+              assert package
+              assert isinstance(dependents, list)
+              assert len(dependents) == len(set(dependents))
+          PY
+
+      - name: Validate architecture-grouped planner
+        run: |
+          set -euo pipefail
+          matrix="$(python3 scripts/plan-package-builds-matrix.py --base HEAD --head HEAD)"
+          python3 -c 'import json,sys; assert json.load(sys.stdin) == {"include": []}' <<<"$matrix"
+
+          matrix="$(python3 scripts/plan-package-builds-matrix.py --package all)"
+          MATRIX="$matrix" python3 - <<'PY'
+          import json, os
+
+          data = json.loads(os.environ['MATRIX'])
+          jobs = data['include']
+          assert jobs
+          assert len({(job['release'], job['arch']) for job in jobs}) == len(jobs)
+          for job in jobs:
+              tasks = json.loads(job['tasks_json'])
+              assert tasks
+              assert job['task_count'] == len(tasks)
+              assert all({'package', 'scope', 'target', 'subtarget'} <= set(task) for task in tasks)
+              if job['arch'] == 'all':
+                  assert all(task['scope'] == 'all' for task in tasks)
+              else:
+                  assert all(task['scope'] != 'all' for task in tasks)
+          PY
 
       - name: Validate wpad syslog patch
         shell: bash
@@ -68,75 +143,20 @@ jobs:
           set -euo pipefail
           workspace="$PWD"
           openwrt=/tmp/openwrt
-
-          git clone --depth=1 --branch '${{ inputs.openwrt_ref || 'v25.12.5' }}' https://github.com/openwrt/openwrt.git "$openwrt"
+          git clone --depth=1 --branch '${{ inputs.openwrt_ref }}' https://github.com/openwrt/openwrt.git "$openwrt"
           cd "$openwrt"
-
           mkdir -p feeds
           ln -s ../package feeds/base
-
           cp feeds.conf.default feeds.conf
           printf '\nsrc-link audiowrt %s\n' "$workspace" >> feeds.conf
           ./scripts/feeds update -a
-
-          if [[ -d logs/feeds/audiowrt ]]; then
-            while IFS= read -r -d '' dump; do
-              if [[ -s "$dump" ]]; then
-                echo "::group::${dump}"
-                cat "$dump"
-                echo "::endgroup::"
-              fi
-            done < <(find logs/feeds/audiowrt -name dump.txt -type f -print0 | sort -z)
-          fi
-
           ./scripts/feeds install -a
           make -s prepare-tmpinfo
-
-          for package in \
-            audiowrt-airplay \
-            audiowrt-audio \
-            audiowrt-bluetooth \
-            audiowrt-distro-branding \
-            audiowrt-btctl \
-            audiowrt-config \
-            audiowrt-core \
-            audiowrt-dlna-renderer \
-            audiowrt-network-client \
-            audiowrt-player-mpd \
-            audiowrt-player-aac \
-            audiowrt-player-aiff \
-            audiowrt-player-ffmpeg \
-            audiowrt-player-flac \
-            audiowrt-player-lpcm \
-            audiowrt-player-m4a \
-            audiowrt-player-mp3 \
-            audiowrt-player-opus \
-            audiowrt-player-vorbis \
-            audiowrt-player-wav \
-            audiowrt-provisioning \
-            audiowrt-spotify \
-            audiowrt-usb-audio \
-            audiowrt-wifi-client \
-            libaudiowrt-player \
-            luci-app-audiowrt \
-            luci-app-audiowrt-core \
-            luci-app-audiowrt-dlna \
-            luci-app-audiowrt-network-client \
-            luci-theme-audiowrt \
-            bluez-alsa \
-            librespot \
-            alsa-lib-trimmed \
-            bluez-trimmed \
-            dbus-trimmed \
-            dropbear-trimmed \
-            kmod-bluetooth-trimmed \
-            sbc-trimmed \
-            umdns-trimmed \
-            busybox-udhcpd-tailored \
-            hostapd-wpa-supplicant-tailored \
-            luci-mod-status-tailored; do
-            grep -q "^Package: $package$" tmp/.packageinfo || {
-              echo "Package metadata missing: $package" >&2
-              exit 1
-            }
-          done
+          while IFS= read -r makefile; do
+            while IFS= read -r package; do
+              grep -q "^Package: $package$" tmp/.packageinfo || {
+                echo "Package metadata missing: $package" >&2
+                exit 1
+              }
+            done < <(sed -n 's/^define Package\/\([^[:space:]]*\).*/\1/p' "$makefile")
+          done < <(find "$workspace" -name Makefile -type f | sort)

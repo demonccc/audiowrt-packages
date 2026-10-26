@@ -1,149 +1,135 @@
 name: Build AudioWRT Packages
-run-name: Packages ${{ inputs.audiowrt_profile }} / ${{ inputs.package }}
+run-name: Build packages / ${{ github.ref_name }} / ${{ inputs.package || 'pending' }}
 
 on:
+  push:
+    branches:
+      - testing
   workflow_dispatch:
     inputs:
-      audiowrt_profile:
-        description: "AudioWRT profile used to select architecture and exact OpenWrt SDK"
-        required: true
-        default: tplink-tl-wdr4300-v1-minimal-usb-bluetooth-25.12.5
-        type: string
       package:
-        description: "Space-separated package names/APK filenames, or 'all' for every AudioWRT package selected by the profile"
-        required: true
-        default: all
-        type: string
-      audiowrt_ref:
-        description: "AudioWRT builder branch, tag or commit"
-        required: true
-        default: main
+        description: "Package source directory name, 'all', or empty for pending packages"
+        required: false
+        default: ''
         type: string
       jobs:
-        description: "Parallel SDK build jobs"
+        description: "Parallel make jobs inside each SDK build"
         required: true
         default: '4'
         type: string
-      verbosity:
-        description: "SDK build log detail"
-        required: true
-        default: normal
-        type: choice
-        options:
-          - normal
-          - verbose
-          - debug
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.audiowrt_profile }}-${{ inputs.package }}
-  cancel-in-progress: false
+  group: package-build-${{ github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 180
+  validate:
+    uses: ./.github/workflows/validate.yml
 
+  plan:
+    needs: validate
+    if: github.ref_name == 'testing' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      should_build: ${{ steps.plan.outputs.should_build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: plan
+        shell: bash
+        env:
+          REQUESTED: ${{ inputs.package || '' }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$REQUESTED" ]]; then
+            matrix="$(python3 scripts/plan-package-builds-matrix.py --package "$REQUESTED" --head "$GITHUB_SHA")"
+          else
+            matrix=""
+            for attempt in 1 2 3 4 5; do
+              if matrix="$(python3 scripts/plan-package-builds-matrix.py \
+                --repository "$GITHUB_REPOSITORY" \
+                --channel testing \
+                --head "$GITHUB_SHA")"; then
+                break
+              fi
+              if (( attempt == 5 )); then
+                echo "ERROR: package planner failed after $attempt attempts" >&2
+                exit 1
+              fi
+              delay=$((5 * (2 ** (attempt - 1))))
+              echo "WARNING: planner failed; retrying in ${delay}s ($attempt/5)" >&2
+              sleep "$delay"
+            done
+          fi
+
+          count="$(python3 -c 'import json,sys; print(len(json.load(sys.stdin)["include"]))' <<<"$matrix")"
+          tasks="$(python3 -c 'import json,sys; print(sum(x["task_count"] for x in json.load(sys.stdin)["include"]))' <<<"$matrix")"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          if (( count > 0 )); then
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Planned $tasks pending package task(s) in $count independent build job(s)"
+          python3 -m json.tool <<<"$matrix"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.should_build == 'true'
+    name: ${{ matrix.release }} / ${{ matrix.arch }} / ${{ matrix.task_count }} pending task(s)
+    runs-on: ubuntu-24.04
+    container:
+      image: demonccc/openwrt-builder:latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - name: Checkout AudioWRT packages
         uses: actions/checkout@v4
 
-      - name: Checkout AudioWRT build engine
-        uses: actions/checkout@v4
-        with:
-          repository: demonccc/audiowrt
-          ref: ${{ inputs.audiowrt_ref }}
-          path: builder
-
-      - name: Restore SDK download cache
+      - name: Restore OpenWrt SDK archive cache
         uses: actions/cache@v4
         with:
-          path: builder/.cache/audiowrt
-          key: audiowrt-packages-${{ runner.os }}-${{ inputs.audiowrt_profile }}-${{ inputs.audiowrt_ref }}
+          path: .cache/audiowrt-packages
+          key: audiowrt-packages-v11-isolated-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
           restore-keys: |
-            audiowrt-packages-${{ runner.os }}-${{ inputs.audiowrt_profile }}-
+            audiowrt-packages-v11-isolated-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
 
-      - name: Build package APKs
+      - name: Build selected packages using the Python SDK builder
         shell: bash
+        env:
+          RELEASE: ${{ matrix.release }}
+          ARCH: ${{ matrix.arch }}
+          TASKS_JSON: ${{ matrix.tasks_json }}
+          MAKE_JOBS: ${{ inputs.jobs || '4' }}
+          PYTHONUNBUFFERED: '1'
+          HOME: /tmp
         run: |
           set -euo pipefail
-          package_ref="$(git rev-parse HEAD)"
-          requested_packages='${{ inputs.package }}'
-          read -r -a requested <<< "$requested_packages"
-          if (( ${#requested[@]} == 0 )); then
-            echo "ERROR: package input must be 'all' or one or more space-separated package names/APK filenames." >&2
-            exit 2
-          fi
-          if [[ " ${requested[*]} " == *" all "* && ${#requested[@]} -ne 1 ]]; then
-            echo "ERROR: 'all' cannot be combined with explicit package names." >&2
-            exit 2
-          fi
+          python3 scripts/build.py build \
+            --release "$RELEASE" \
+            --arch "$ARCH" \
+            --tasks-json "$TASKS_JSON" \
+            --jobs "$MAKE_JOBS" \
+            --output output \
+            --cache-dir .cache/audiowrt-packages \
+            --log-file "logs/build-${RELEASE}-${ARCH}.log"
 
-          normalized=()
-          declare -A seen=()
-          for requested_package in "${requested[@]}"; do
-            package="$requested_package"
-
-            # Accept APK filenames from previous builds as a convenience.
-            # Resolve each one back to the longest matching AudioWRT package name.
-            if [[ "$requested_package" == *.apk ]]; then
-              stem="${requested_package%.apk}"
-              package=""
-              while IFS='|' read -r candidate _; do
-                [[ -n "$candidate" && "$candidate" != \#* ]] || continue
-                if [[ "$stem" == "$candidate" || "$stem" == "$candidate"-* ]]; then
-                  if (( ${#candidate} > ${#package} )); then
-                    package="$candidate"
-                  fi
-                fi
-              done < builder/config/build/package-build-targets
-              if [[ -z "$package" ]]; then
-                echo "ERROR: could not map APK filename to an AudioWRT package: $requested_package" >&2
-                exit 2
-              fi
-              echo "Normalized package input: $requested_package -> $package"
-            fi
-
-            if [[ -z "${seen[$package]+x}" ]]; then
-              normalized+=("$package")
-              seen["$package"]=1
-            fi
-          done
-          package="${normalized[*]}"
-
-          make -C builder packages \
-            AUDIOWRT_PROFILE='${{ inputs.audiowrt_profile }}' \
-            PACKAGE="$package" \
-            AUDIOWRT_PACKAGES_REF="$package_ref" \
-            JOBS='${{ inputs.jobs }}' \
-            VERBOSITY='${{ inputs.verbosity }}' \
-            CACHE_DIR='.cache/audiowrt'
-
-      - name: Show produced APKs
-        if: success()
-        shell: bash
-        run: |
-          find "builder/output/packages/${{ inputs.audiowrt_profile }}/packages" \
-            -maxdepth 1 -type f -name '*.apk' -printf '%f\n' | sort
-
-      - name: Upload APKs
-        if: success()
+      - name: Upload architecture build artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: audiowrt-packages-${{ inputs.audiowrt_profile }}-${{ inputs.package }}
-          path: builder/output/packages/${{ inputs.audiowrt_profile }}/
-          if-no-files-found: error
-          retention-days: 14
-
-      - name: Upload failure diagnostics
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: audiowrt-packages-failure-${{ inputs.audiowrt_profile }}-${{ inputs.package }}
+          name: packages-${{ matrix.release }}-${{ matrix.arch }}
           path: |
-            builder/output/
-            builder/.work/packages/
+            output/
+            logs/
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 30

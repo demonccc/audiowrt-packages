@@ -3,7 +3,7 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=dbus-trimmed
 AUDIOWRT_REPACKAGE_VERSION_SOURCE:=$(TOPDIR)/feeds/packages/utils/dbus/Makefile
 PKG_VERSION:=$(shell sed -n 's/^PKG_VERSION:=//p' $(AUDIOWRT_REPACKAGE_VERSION_SOURCE) 2>/dev/null | head -n1)
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=AFL-2.1
 PKG_MAINTAINER:=AudioWRT
 
@@ -18,8 +18,6 @@ define Package/dbus-trimmed
   CATEGORY:=Utilities
   TITLE:=Trimmed D-Bus system daemon package
   DEPENDS:=+libexpat +libdbus
-  PROVIDES:=dbus
-  CONFLICTS:=dbus
   USERID:=dbus=91:dbus=91
 endef
 
@@ -28,6 +26,8 @@ define Package/dbus-trimmed/description
  current release and architecture. It keeps the system-bus daemon,
  dbus-uuidgen, service activation helper, init script and D-Bus configuration,
  while omitting the unused session-bus launch and cleanup utilities.
+ AudioWRT packages depend on dbus-trimmed explicitly instead of declaring it
+ as a virtual provider for the official dbus package.
 endef
 
 define Build/Prepare

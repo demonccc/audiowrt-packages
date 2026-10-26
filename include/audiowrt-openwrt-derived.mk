@@ -13,7 +13,19 @@ ifndef AUDIOWRT_CANONICAL_RECIPE
   $(error AUDIOWRT_CANONICAL_RECIPE is required)
 endif
 
-AUDIOWRT_DERIVED_ROOT:=$(TOPDIR)/feeds/audiowrt/$(AUDIOWRT_DERIVED_NAME)
+# AudioWRT is a regular recursive OpenWrt feed. Packages are grouped by
+# ownership/type in audiowrt/, ported/, trimmed/ and tailored/. Keep a flat-path
+# fallback for older checkouts while resolving the real nested package root.
+AUDIOWRT_DERIVED_ROOT:=$(firstword $(wildcard \
+  $(TOPDIR)/feeds/audiowrt/$(AUDIOWRT_DERIVED_NAME) \
+  $(TOPDIR)/feeds/audiowrt/audiowrt/$(AUDIOWRT_DERIVED_NAME) \
+  $(TOPDIR)/feeds/audiowrt/ported/$(AUDIOWRT_DERIVED_NAME) \
+  $(TOPDIR)/feeds/audiowrt/trimmed/$(AUDIOWRT_DERIVED_NAME) \
+  $(TOPDIR)/feeds/audiowrt/tailored/$(AUDIOWRT_DERIVED_NAME)))
+ifeq ($(AUDIOWRT_DERIVED_ROOT),)
+  $(error AudioWRT derived package root is missing for $(AUDIOWRT_DERIVED_NAME))
+endif
+
 AUDIOWRT_DERIVED_WORK:=$(TMP_DIR)/audiowrt-derived/$(AUDIOWRT_DERIVED_NAME)
 AUDIOWRT_DERIVED_PREAMBLE:=$(AUDIOWRT_DERIVED_WORK)/upstream-preamble.mk
 AUDIOWRT_DERIVED_RELEASE_RECIPE:=$(AUDIOWRT_DERIVED_WORK)/release-recipe.mk
@@ -34,22 +46,15 @@ ifneq ($(findstring $(TOPDIR)/feeds/base/,$(AUDIOWRT_CANONICAL_RECIPE)),)
 endif
 endif
 
-# Core recipes can already be present in a full OpenWrt checkout or in some SDK
-# layouts under $(TOPDIR)/package. Prefer that tree when available.
+# Core recipes are provided as sparse exact-release source inputs by the
+# package builder under $(TOPDIR)/feeds/base. They are source material only:
+# base is not enabled in feeds.conf and is never indexed or installed.
 AUDIOWRT_CANONICAL_RECIPE_RESOLVED:=$(AUDIOWRT_CANONICAL_RECIPE)
 ifneq ($(findstring $(TOPDIR)/feeds/base/,$(AUDIOWRT_CANONICAL_RECIPE)),)
-  AUDIOWRT_CORE_RECIPE:=$(patsubst $(TOPDIR)/feeds/base/%,$(TOPDIR)/package/%,$(AUDIOWRT_CANONICAL_RECIPE))
-  ifneq ($(wildcard $(AUDIOWRT_CORE_RECIPE)),)
-    AUDIOWRT_CANONICAL_RECIPE_RESOLVED:=$(AUDIOWRT_CORE_RECIPE)
-  else
-    # Official SDKs do not necessarily ship the full core package source tree.
-    # Materialize only the exact SDK-pinned base source checkout so derived
-    # packages can read canonical recipes and patches while the AudioWRT feed is
-    # being indexed. This deliberately does NOT run `scripts/feeds update base`:
-    # no base feed index is generated and no package is installed or compiled.
-    $(shell python3 '$(TOPDIR)/feeds/audiowrt/scripts/materialize-openwrt-base.py' '$(TOPDIR)')
-    ifneq ($(wildcard $(AUDIOWRT_CANONICAL_RECIPE)),)
-      AUDIOWRT_CANONICAL_RECIPE_RESOLVED:=$(AUDIOWRT_CANONICAL_RECIPE)
+  ifeq ($(wildcard $(AUDIOWRT_CANONICAL_RECIPE)),)
+    AUDIOWRT_CORE_RECIPE:=$(patsubst $(TOPDIR)/feeds/base/%,$(TOPDIR)/package/%,$(AUDIOWRT_CANONICAL_RECIPE))
+    ifneq ($(wildcard $(AUDIOWRT_CORE_RECIPE)),)
+      AUDIOWRT_CANONICAL_RECIPE_RESOLVED:=$(AUDIOWRT_CORE_RECIPE)
     endif
   endif
 endif
@@ -71,10 +76,9 @@ endif
 # include/version.mk is loaded, so the helper also receives TOPDIR and resolves
 # the version from that selected source tree/SDK when necessary.
 #
-# prepare-openwrt-derived.py emits only the canonical pre-package.mk preamble
-# (source identity/build flags), canonical patches/files/source overlays and
-# AudioWRT deltas. It never imports upstream Package/* definitions, DEPENDS or
-# BuildPackage calls.
+# Context-specific AudioWRT patches are selected from ARCH_PACKAGES and
+# BOARD/SUBTARGET. Empty values during feed indexing are valid; the normal build
+# evaluation prepares the package again with the concrete build context.
 $(shell \
 	mkdir -p '$(AUDIOWRT_DERIVED_WORK)' && \
 	rm -f '$(AUDIOWRT_DERIVED_STAMP)' && \
@@ -83,6 +87,9 @@ $(shell \
 		'$(AUDIOWRT_DERIVED_ROOT)' \
 		'$(VERSION_NUMBER)' \
 		'$(TOPDIR)' \
+		'$(ARCH_PACKAGES)' \
+		'$(BOARD)' \
+		'$(SUBTARGET)' \
 		'$(AUDIOWRT_DERIVED_PREAMBLE)' \
 		'$(AUDIOWRT_DERIVED_RELEASE_RECIPE)' \
 		'$(AUDIOWRT_DERIVED_PATCH_DIR)' \
@@ -101,7 +108,6 @@ include $(AUDIOWRT_DERIVED_PREAMBLE)
 # patch set from the exact selected OpenWrt release plus only explicit 9xx
 # AudioWRT patches.
 PATCH_DIR:=$(AUDIOWRT_DERIVED_PATCH_DIR)
-
 
 # OpenWrt's default Build/Prepare copies a package-local ./src overlay into the
 # unpacked source tree before applying patches. Derived packages keep the

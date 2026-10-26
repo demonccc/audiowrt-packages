@@ -84,7 +84,7 @@ Consumer modules such as the DLNA renderer choose a preferred/default player in 
 
 The constrained Bluetooth stack is composed from:
 
-- `kmod-bluetooth-trimmed` — exact-release OpenWrt Bluetooth core/USB HCI module subset;
+- `kmod-bluetooth-tailored` — recombines the exact-release OpenWrt Bluetooth core and USB HCI modules needed by AudioWRT from the official `kmod-bluetooth`, `kmod-btmtk` and `kmod-btusb` packages;
 - `bluez-trimmed` — selected-release BlueZ with unused features removed;
 - `sbc-trimmed` — selected-release SBC runtime library only;
 - `bluez-alsa` — upstream BlueALSA port packaged for OpenWrt;

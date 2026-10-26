@@ -1,0 +1,73 @@
+name: Publish AudioWRT Packages to Testing
+run-name: Publish testing / build run ${{ inputs.run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Build AudioWRT Packages workflow run ID to publish"
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: package-publish-testing
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository tooling
+        uses: actions/checkout@v4
+
+      - name: Verify source build run
+        id: source
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.run_id }}
+        run: |
+          set -euo pipefail
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+          workflow_path="$(jq -r '.path' <<<"$run")"
+          event="$(jq -r '.event' <<<"$run")"
+          head_branch="$(jq -r '.head_branch' <<<"$run")"
+          head_sha="$(jq -r '.head_sha' <<<"$run")"
+          status="$(jq -r '.status' <<<"$run")"
+
+          [[ "$workflow_path" == ".github/workflows/build-packages.yml" ]] || {
+            echo "ERROR: run $RUN_ID is not a Build AudioWRT Packages run" >&2
+            exit 1
+          }
+          [[ "$head_branch" == "testing" ]] || {
+            echo "ERROR: run $RUN_ID was built from '$head_branch', not testing" >&2
+            exit 1
+          }
+          [[ "$status" == "completed" ]] || {
+            echo "ERROR: build run $RUN_ID is not completed" >&2
+            exit 1
+          }
+
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "Publishing successful artifacts from testing build $RUN_ID ($head_sha, event=$event)"
+
+      - name: Download successful package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+          pattern: packages-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish exact build artifacts to testing
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: bash scripts/publish-build-artifacts.sh artifacts

@@ -2,8 +2,10 @@
 """Prepare exact-release OpenWrt metadata/source/files/patches for an AudioWRT package.
 
 The caller owns only the AudioWRT recipe body. Version, source, hash, build
-flags, canonical source overlays, runtime files and OpenWrt patches are inherited from
-the package recipe that exists in the selected OpenWrt SDK/feed checkout.
+flags, canonical source overlays, runtime files and OpenWrt patches are inherited
+from the package recipe that exists in the selected OpenWrt SDK/feed checkout.
+AudioWRT patches may additionally be scoped by package architecture or
+OpenWrt target/subtarget.
 """
 
 from __future__ import annotations
@@ -26,14 +28,6 @@ def fail(message: str) -> None:
 
 
 def resolve_openwrt_version(version: str, topdir: Path) -> str:
-    """Return the exact OpenWrt version even while a feed is being indexed.
-
-    scripts/feeds update evaluates package Makefiles before the normal package
-    build context has included include/version.mk, so VERSION_NUMBER can be
-    empty there. The selected source tree/SDK still carries its authoritative
-    release value in include/version.mk. Reading that fallback keeps package
-    indexing and normal builds tied to the same selected OpenWrt context.
-    """
     value = version.strip()
     if value:
         return value
@@ -110,17 +104,39 @@ def overlay_patches(source: Path, destination: Path) -> None:
             )
         target = destination / patch.name
         if target.exists():
-            fail(f"AudioWRT patch collides with canonical patch: {target}")
+            fail(f"AudioWRT patch collides with canonical/AudioWRT patch: {target}")
         destination.mkdir(parents=True, exist_ok=True)
         shutil.copy2(patch, target)
 
 
+def overlay_context_patches(
+    root: Path,
+    destination: Path,
+    arch: str,
+    target: str,
+    subtarget: str,
+) -> None:
+    """Overlay common, architecture and target-specific AudioWRT patches.
+
+    Existing patches directly under patches/ remain common. New scoped layouts:
+      patches/arch/<arch>/*.patch
+      patches/target/<target>/<subtarget>/*.patch
+    The same layout is valid below releases/<major.minor>/patches/.
+    """
+    overlay_patches(root, destination)
+    if arch:
+        overlay_patches(root / "arch" / arch, destination)
+    if target and subtarget:
+        overlay_patches(root / "target" / target / subtarget, destination)
+
+
 def main() -> int:
-    if len(sys.argv) != 11:
+    if len(sys.argv) != 14:
         print(
             "usage: prepare-openwrt-derived.py <canonical-makefile> <delta-root> "
-            "<openwrt-version> <openwrt-topdir> <preamble-out> "
-            "<release-recipe-out> <patch-dir> <files-dir> <src-dir> <stamp>",
+            "<openwrt-version> <openwrt-topdir> <arch-packages> <target> "
+            "<subtarget> <preamble-out> <release-recipe-out> <patch-dir> "
+            "<files-dir> <src-dir> <stamp>",
             file=sys.stderr,
         )
         return 2
@@ -129,12 +145,15 @@ def main() -> int:
     delta_root = Path(sys.argv[2]).resolve()
     topdir = Path(sys.argv[4]).resolve()
     version = resolve_openwrt_version(sys.argv[3], topdir)
-    preamble_out = Path(sys.argv[5])
-    release_recipe_out = Path(sys.argv[6])
-    patch_dir = Path(sys.argv[7])
-    files_dir = Path(sys.argv[8])
-    src_dir = Path(sys.argv[9])
-    stamp = Path(sys.argv[10])
+    arch = sys.argv[5].strip()
+    target = sys.argv[6].strip()
+    subtarget = sys.argv[7].strip()
+    preamble_out = Path(sys.argv[8])
+    release_recipe_out = Path(sys.argv[9])
+    patch_dir = Path(sys.argv[10])
+    files_dir = Path(sys.argv[11])
+    src_dir = Path(sys.argv[12])
+    stamp = Path(sys.argv[13])
 
     if not canonical_makefile.is_file():
         fail(f"canonical OpenWrt recipe is missing: {canonical_makefile}")
@@ -148,9 +167,6 @@ def main() -> int:
     preamble_out.parent.mkdir(parents=True, exist_ok=True)
     preamble_out.write_text(extract_preamble(canonical_makefile), encoding="utf-8")
 
-    # A release-specific recipe fragment is optional. It contains only AudioWRT
-    # compatibility overrides when a feature/configure interface differs between
-    # OpenWrt release families; it never carries upstream version/source data.
     release_recipe_out.parent.mkdir(parents=True, exist_ok=True)
     recipe_fragment = release_delta / "recipe.mk"
     if recipe_fragment.is_file():
@@ -168,29 +184,26 @@ def main() -> int:
     files_dir.mkdir(parents=True, exist_ok=True)
     src_dir.mkdir(parents=True, exist_ok=True)
 
-    # OpenWrt owns the base patch, runtime-file and source-overlay sets. They
-    # always come from the exact canonical recipe selected by the SDK/feed
-    # checkout. OpenWrt's default Build/Prepare copies ./src into PKG_BUILD_DIR
-    # before applying patches, so preserving this tree is part of reproducing
-    # the canonical package source exactly.
     copy_tree(canonical_root / "patches", patch_dir)
     copy_tree(canonical_root / "files", files_dir)
     copy_tree(canonical_root / "src", src_dir)
 
-    # AudioWRT overlays are intentionally small. Source patches use 9xx names so
-    # it is impossible to silently replace an OpenWrt-owned patch.
     copy_tree(delta_root / "files", files_dir)
     copy_tree(delta_root / "src", src_dir)
-    overlay_patches(delta_root / "patches", patch_dir)
+    overlay_context_patches(delta_root / "patches", patch_dir, arch, target, subtarget)
+
     copy_tree(release_delta / "files", files_dir)
     copy_tree(release_delta / "src", src_dir)
-    overlay_patches(release_delta / "patches", patch_dir)
+    overlay_context_patches(release_delta / "patches", patch_dir, arch, target, subtarget)
 
     stamp.parent.mkdir(parents=True, exist_ok=True)
     stamp.write_text(
         f"canonical={canonical_makefile}\n"
         f"openwrt_version={version}\n"
-        f"release_family={release_family}\n",
+        f"release_family={release_family}\n"
+        f"arch={arch}\n"
+        f"target={target}\n"
+        f"subtarget={subtarget}\n",
         encoding="utf-8",
     )
     return 0

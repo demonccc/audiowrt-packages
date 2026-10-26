@@ -16,8 +16,6 @@ define Package/luci-mod-status-tailored
   SUBMENU:=2. Modules
   TITLE:=Tailored lightweight LuCI status pages
   DEPENDS:=+luci-base +libiwinfo +rpcd-mod-iwinfo
-  PROVIDES:=luci-mod-status
-  CONFLICTS:=luci-mod-status
 endef
 
 define Package/luci-mod-status-tailored/description
