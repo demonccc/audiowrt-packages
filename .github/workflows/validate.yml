@@ -7,7 +7,8 @@ on:
     inputs:
       openwrt_ref:
         description: Exact OpenWrt release tag used for package metadata validation
-        required: true
+        required: false
+        default: v25.12.5
         type: string
 
 permissions:
@@ -143,7 +144,10 @@ jobs:
           set -euo pipefail
           workspace="$PWD"
           openwrt=/tmp/openwrt
-          git clone --depth=1 --branch '${{ inputs.openwrt_ref }}' https://github.com/openwrt/openwrt.git "$openwrt"
+          openwrt_ref="${{ inputs.openwrt_ref }}"
+          openwrt_ref="${openwrt_ref:-v25.12.5}"
+          printf 'Validating OpenWrt metadata using %s\n' "$openwrt_ref"
+          git clone --depth=1 --branch "$openwrt_ref" https://github.com/openwrt/openwrt.git "$openwrt"
           cd "$openwrt"
           mkdir -p feeds
           ln -s ../package feeds/base
