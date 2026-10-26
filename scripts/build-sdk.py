@@ -259,7 +259,7 @@ def sanitize_cross_meson_includes(sdk):
         raise RuntimeError(f"Expected one configured target GLib Ninja build: {builds}")
     ninja = builds[0]
     original = ninja.read_text()
-    sanitized = re.sub(r"(?<!\\S)-I/usr/include(?=\\s|$)", "", original, flags=re.M)
+    sanitized = re.sub(r"(?<!\S)-I/usr/include(?=\s|$)", "", original, flags=re.M)
     host_zlib = str(sdk / "staging_dir/host/lib/libz.a")
     if host_zlib in sanitized:
         targets = list((sdk / "staging_dir").glob("target-*/usr/lib/libz.so"))
@@ -269,7 +269,7 @@ def sanitize_cross_meson_includes(sdk):
     if sanitized != original:
         ninja.write_text(sanitized)
         print(f"Sanitized GLib host paths in {ninja}", flush=True)
-    if re.search(r"(?<!\\S)-I/usr/include(?=\\s|$)", sanitized, re.M) or host_zlib in sanitized:
+    if re.search(r"(?<!\S)-I/usr/include(?=\s|$)", sanitized, re.M) or host_zlib in sanitized:
         raise RuntimeError("GLib cross build still contains host development paths")
 
 
