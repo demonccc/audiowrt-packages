@@ -129,6 +129,10 @@ def register_upstream_sdk_sources(sdk, cache, requirements):
 
 def stage_official_link_libraries(sdk, cache, release, arch, packages):
     """Stage link-only stubs built from exact official release APK symbols."""
+    # PKGARCH=all describes the output packages, not an OpenWrt binary ABI.
+    # This job uses x86/64 as its SDK context for shared-library inputs.
+    if arch == "all":
+        arch = "x86_64"
     target_dirs = list((sdk / "staging_dir").glob("target-*"))
     tools = list((sdk / "staging_dir").glob("toolchain-*/bin/*-readelf"))
     pairs = {}

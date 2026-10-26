@@ -83,7 +83,7 @@ jobs:
   build:
     needs: plan
     if: needs.plan.outputs.should_build == 'true'
-    name: ${{ matrix.release }} / ${{ matrix.arch }} / ${{ matrix.task_count }} pending task(s)
+    name: ${{ matrix.release }} / ${{ matrix.arch == 'all' && 'no-arch' || matrix.arch }} / ${{ matrix.task_count }} pending task(s)
     runs-on: ubuntu-24.04
     container:
       image: demonccc/openwrt-builder:latest
