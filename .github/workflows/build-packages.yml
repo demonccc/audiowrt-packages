@@ -95,13 +95,31 @@ jobs:
       - name: Checkout AudioWRT packages
         uses: actions/checkout@v4
 
-      - name: Restore OpenWrt SDK archive cache
-        uses: actions/cache@v4
+      - name: Restore OpenWrt SDK workspace
+        id: sdk-cache
+        uses: actions/cache/restore@v4
         with:
           path: .cache/audiowrt-packages
-          key: audiowrt-packages-v11-isolated-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.sha }}
+          key: audiowrt-packages-v12-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            audiowrt-packages-v11-isolated-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
+            audiowrt-packages-v12-${{ runner.os }}-${{ matrix.release }}-${{ matrix.arch }}-
+
+      - name: Validate planned tasks against executor
+        shell: bash
+        env:
+          TASKS_JSON: ${{ matrix.tasks_json }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys
+          sys.path.insert(0, "scripts")
+          import build
+          known = build.packages()
+          tasks = json.loads(os.environ["TASKS_JSON"])
+          unknown = sorted({task["package"] for task in tasks} - known.keys())
+          if unknown:
+              raise SystemExit(f"Planner referenced unknown packages: {unknown}")
+          print(f"Validated {len(tasks)} planned tasks against canonical package names")
+          PY
 
       - name: Build selected packages using the Python SDK builder
         shell: bash
@@ -122,6 +140,13 @@ jobs:
             --output output \
             --cache-dir .cache/audiowrt-packages \
             --log-file "logs/build-${RELEASE}-${ARCH}.log"
+
+      - name: Save OpenWrt SDK workspace
+        if: ${{ always() && steps.sdk-cache.outcome == 'success' && steps.sdk-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/audiowrt-packages
+          key: ${{ steps.sdk-cache.outputs.cache-primary-key }}
 
       - name: Upload architecture build artifacts
         if: always()
