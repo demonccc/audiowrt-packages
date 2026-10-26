@@ -36,6 +36,20 @@ while IFS= read -r makefile; do
     # Kernel packages are versioned by the OpenWrt kernel ABI/release machinery.
     grep -q 'KernelPackage/' "$makefile" && continue
 
+    # kmod-bluetooth-tailored repackages verified official kernel objects
+    # without KernelPackage. It must inherit the running OpenWrt kernel
+    # version, not declare an unrelated semver.
+    if [[ "$name" == "kmod-bluetooth-tailored" ]]; then
+        version="$(sed -n 's/^PKG_VERSION:=//p' "$makefile" | head -n 1)"
+        [[ "$version" == '$(LINUX_VERSION)' ]] ||
+            fail "$name must follow the exact OpenWrt kernel version"
+        grep -Fq 'include $(INCLUDE_DIR)/kernel.mk' "$makefile" ||
+            fail "$name must include OpenWrt kernel version definitions"
+        [[ -z "$release" || "$release" =~ ^[1-9][0-9]*$ ]] ||
+            fail "$name has invalid PKG_RELEASE '${release}'"
+        continue
+    fi
+
     version="$(sed -n 's/^PKG_VERSION:=//p' "$makefile" | head -n 1)"
 
     [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
