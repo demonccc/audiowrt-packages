@@ -242,6 +242,21 @@ def main() -> int:
 
     repo = Path.cwd().resolve()
     sources = source_dirs(repo)
+    # The build executor accepts canonical package names; a recipe directory
+    # can be different (e.g. luci-app-audiowrt-dlna -> ...-dlna-renderer).
+    canonical_by_source = {}
+    for raw in (repo / "config/build/package-build-targets").read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        canonical, target = line.split("|", 1)
+        directory = target.removeprefix("package/feeds/audiowrt/").removesuffix("/compile")
+        if directory in canonical_by_source:
+            raise ValueError(f"Duplicate package mapping for {directory}")
+        canonical_by_source[directory] = canonical
+    unmapped = sorted(set(sources) - canonical_by_source.keys())
+    if unmapped:
+        raise ValueError(f"Unmapped package source directories: {unmapped}")
     arch_ctx, kernel_ctx = load_contexts(repo / args.matrix)
     rules_path = repo / args.rules
     rules = json.loads(rules_path.read_text(encoding="utf-8")) if rules_path.is_file() else {}
@@ -308,7 +323,7 @@ def main() -> int:
             "tasks": [],
         })
         task = {
-            "package": source,
+            "package": canonical_by_source[source],
             "scope": scope,
             "target": context["target"],
             "subtarget": context["subtarget"],
