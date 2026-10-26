@@ -253,31 +253,25 @@ def stage_official_bluetooth_modules(sdk, cache, release, target, subtarget):
 
 
 def sanitize_cross_meson_includes(sdk):
-    """Keep host headers and host ELF objects out of GLib's MIPS build.
-
-    Meson's generated Ninja rules may resolve zlib through the SDK host's
-    pkg-config data, even though the actual target zlib was compiled and
-    staged. Correct both leaks using the SDK target development library.
-    """
+    """Remove Docker host include paths and host zlib from target GLib Ninja rules."""
     builds = list((sdk / "build_dir").glob("target-*/glib-*/openwrt-build/build.ninja"))
     if len(builds) != 1:
         raise RuntimeError(f"Expected one configured target GLib Ninja build: {builds}")
-    targets = list((sdk / "staging_dir").glob("target-*/usr/lib/libz.so"))
-    if len(targets) != 1 or not targets[0].exists():
-        raise RuntimeError(f"Expected one staged MIPS zlib development library: {targets}")
     ninja = builds[0]
     original = ninja.read_text()
     sanitized = re.sub(r"(?<!\\S)-I/usr/include(?=\\s|$)", "", original, flags=re.M)
     host_zlib = str(sdk / "staging_dir/host/lib/libz.a")
     if host_zlib in sanitized:
+        targets = list((sdk / "staging_dir").glob("target-*/usr/lib/libz.so"))
+        if len(targets) != 1 or not targets[0].exists():
+            raise RuntimeError(f"Host zlib leaked into GLib, but target zlib missing: {targets}")
         sanitized = sanitized.replace(host_zlib, str(targets[0]))
     if sanitized != original:
         ninja.write_text(sanitized)
-        print(f"Sanitized host headers and zlib linkage in {ninja}", flush=True)
-    if re.search(r"(?<!\\S)-I/usr/include(?=\\s|$)", sanitized, re.M):
-        raise RuntimeError("Host /usr/include leaked into the GLib cross build")
-    if host_zlib in sanitized:
-        raise RuntimeError("Host x86 zlib archive leaked into the MIPS linker")
+        print(f"Sanitized GLib host paths in {ninja}", flush=True)
+    if re.search(r"(?<!\\S)-I/usr/include(?=\\s|$)", sanitized, re.M) or host_zlib in sanitized:
+        raise RuntimeError("GLib cross build still contains host development paths")
+
 
 def development_recipes(dependencies):
     recipes = []
@@ -428,7 +422,7 @@ def compile_sdk(args):
                 # including pcre2/host and libiconv-full/host. Register their
                 # pinned base recipes before resolving Make dependencies.
                 if "glib2" in deps:
-                    register_upstream_sdk_sources(sdk, cache, [
+                    glib_base_targets = register_upstream_sdk_sources(sdk, cache, [
                         ("base", "libs/zlib"),
                         ("base", "libs/pcre2"),
                         ("base", "libs/libiconv-full"),
@@ -456,6 +450,19 @@ def compile_sdk(args):
                     "rust/host": "package/feeds/packages/rust/host/compile",
                     "openssl": openssl_target if "openssl" in deps else None,
                 }
+                if "glib2" in deps:
+                    # An empty CI SDK lacks zlib and libffi development files.
+                    # Build target providers first, before Meson configures
+                    # GLib, so it does not use unsupported fallback subprojects.
+                    for provider in (
+                        glib_base_targets[("base", "libs/zlib")],
+                        "package/feeds/packages/libffi/compile",
+                    ):
+                        print(f"Staging GLib target dependency: {provider}", flush=True)
+                        run("make", f"VERSION_NUMBER={args.release}",
+                            "CONFIG_PACKAGE_kmod-bluetooth=n",
+                            "CONFIG_PACKAGE_kmod-bluetooth-tailored=n",
+                            provider, "-j1", "V=s", cwd=sdk)
                 for dep in dict.fromkeys(deps):
                     target = development_targets.get(dep)
                     if target is None:
